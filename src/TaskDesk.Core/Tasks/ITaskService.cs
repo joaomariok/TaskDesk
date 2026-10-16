@@ -45,4 +45,35 @@ public interface ITaskService
     /// </summary>
     /// <exception cref="InvalidOperationException">A Task with this id exists already.</exception>
     Task<TaskItem> RestoreTaskAsync(DeletedTask deleted, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds a Subtask (1 to 500 characters) at the end of the Task's checklist.</summary>
+    /// <exception cref="KeyNotFoundException">No Task has this id.</exception>
+    /// <exception cref="ArgumentException">The title is empty or too long.</exception>
+    Task<Subtask> AddSubtaskAsync(Guid taskId, string title, CancellationToken cancellationToken = default);
+
+    /// <exception cref="KeyNotFoundException">No Subtask has this id.</exception>
+    /// <exception cref="ArgumentException">The title is empty or too long.</exception>
+    Task<Subtask> RenameSubtaskAsync(Guid subtaskId, string title, CancellationToken cancellationToken = default);
+
+    /// <summary>Ticks or un-ticks a Subtask. Never changes the completion of the Task.</summary>
+    /// <exception cref="KeyNotFoundException">No Subtask has this id.</exception>
+    Task<Subtask> SetSubtaskCompletedAsync(
+        Guid subtaskId, bool isCompleted, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Moves a Subtask to <paramref name="newIndex"/> within its Task's checklist and returns the whole
+    /// checklist in its new order.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No Subtask has this id.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The index is outside the checklist.</exception>
+    Task<IReadOnlyList<Subtask>> MoveSubtaskAsync(Guid subtaskId, int newIndex, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes a Subtask and returns it so <see cref="RestoreSubtaskAsync"/> can undo that.</summary>
+    /// <exception cref="KeyNotFoundException">No Subtask has this id.</exception>
+    Task<Subtask> DeleteSubtaskAsync(Guid subtaskId, CancellationToken cancellationToken = default);
+
+    /// <summary>Re-inserts a deleted Subtask with the same id and position.</summary>
+    /// <exception cref="KeyNotFoundException">Its Task does not exist any more.</exception>
+    /// <exception cref="InvalidOperationException">A Subtask with this id exists already.</exception>
+    Task<Subtask> RestoreSubtaskAsync(Subtask deleted, CancellationToken cancellationToken = default);
 }

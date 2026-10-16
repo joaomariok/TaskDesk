@@ -59,6 +59,33 @@ namespace TaskDesk.Data.Migrations
                     b.ToTable("TaskTags", (string)null);
                 });
 
+            modelBuilder.Entity("TaskDesk.Core.Tasks.Subtask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("SortOrder")
+                        .HasColumnType("REAL");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId", "SortOrder");
+
+                    b.ToTable("Subtasks", (string)null);
+                });
+
             modelBuilder.Entity("TaskDesk.Core.Tasks.TaskItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -150,6 +177,15 @@ namespace TaskDesk.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TaskDesk.Core.Tasks.Subtask", b =>
+                {
+                    b.HasOne("TaskDesk.Core.Tasks.TaskItem", null)
+                        .WithMany("Subtasks")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TaskDesk.Core.Tasks.TaskItem", b =>
                 {
                     b.HasOne("TaskDesk.Core.Tasks.TaskList", null)
@@ -157,6 +193,11 @@ namespace TaskDesk.Data.Migrations
                         .HasForeignKey("ListId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TaskDesk.Core.Tasks.TaskItem", b =>
+                {
+                    b.Navigation("Subtasks");
                 });
 #pragma warning restore 612, 618
         }

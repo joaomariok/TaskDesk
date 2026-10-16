@@ -133,13 +133,14 @@ internal sealed class TaskService(
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var task = await FindAsync(context, taskId, cancellationToken);
         var tagIds = task.Tags.ConvertAll(t => t.Id);
+        var subtasks = task.Subtasks.ConvertAll(CopySubtask);
 
-        // Removing the Task also removes its Tag links (cascade); the snapshot keeps their ids for Undo.
+        // Removing the Task also removes its Tag links and Subtasks (cascade); the snapshot keeps them for Undo.
         context.Tasks.Remove(task);
         await context.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation("Task {TaskId} deleted", taskId);
-        return new DeletedTask(task, tagIds);
+        logger.LogInformation("Task {TaskId} deleted with {SubtaskCount} Subtasks", taskId, subtasks.Count);
+        return new DeletedTask(task, tagIds, subtasks);
     }
 
     public async Task<TaskItem> RestoreTaskAsync(DeletedTask deleted, CancellationToken cancellationToken = default)
@@ -171,18 +172,149 @@ internal sealed class TaskService(
             CreatedUtc = snapshot.CreatedUtc,
             UpdatedUtc = snapshot.UpdatedUtc,
             Tags = tags,
+            Subtasks = [.. deleted.Subtasks.OrderBy(s => s.SortOrder).Select(CopySubtask)],
         };
         context.Tasks.Add(restored);
         await context.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation("Task {TaskId} restored with {TagCount} Tags", restored.Id, tags.Count);
+        logger.LogInformation("Task {TaskId} restored with {TagCount} Tags and {SubtaskCount} Subtasks",
+            restored.Id, tags.Count, restored.Subtasks.Count);
         return restored;
     }
+
+    // ---- Subtasks ----
+
+    public async Task<Subtask> AddSubtaskAsync(
+        Guid taskId, string title, CancellationToken cancellationToken = default)
+    {
+        var normalizedTitle = TaskTitle.Normalize(title);
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        if (!await context.Tasks.AnyAsync(t => t.Id == taskId, cancellationToken))
+        {
+            throw new KeyNotFoundException($"Task {taskId} does not exist.");
+        }
+
+        var lastOrder = await context.Subtasks
+            .Where(s => s.TaskId == taskId)
+            .MaxAsync(s => (double?)s.SortOrder, cancellationToken);
+        var subtask = new Subtask
+        {
+            Id = Guid.CreateVersion7(),
+            TaskId = taskId,
+            Title = normalizedTitle,
+            SortOrder = (lastOrder ?? 0) + 1,
+        };
+        context.Subtasks.Add(subtask);
+        await context.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Subtask {SubtaskId} added to Task {TaskId}", subtask.Id, taskId);
+        return subtask;
+    }
+
+    public async Task<Subtask> RenameSubtaskAsync(
+        Guid subtaskId, string title, CancellationToken cancellationToken = default)
+    {
+        var normalizedTitle = TaskTitle.Normalize(title);
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var subtask = await FindSubtaskAsync(context, subtaskId, cancellationToken);
+        if (subtask.Title != normalizedTitle)
+        {
+            subtask.Title = normalizedTitle;
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        return subtask;
+    }
+
+    public async Task<Subtask> SetSubtaskCompletedAsync(
+        Guid subtaskId, bool isCompleted, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var subtask = await FindSubtaskAsync(context, subtaskId, cancellationToken);
+        if (subtask.IsCompleted != isCompleted)
+        {
+            subtask.IsCompleted = isCompleted;
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        return subtask;
+    }
+
+    public async Task<IReadOnlyList<Subtask>> MoveSubtaskAsync(
+        Guid subtaskId, int newIndex, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var taskId = (await FindSubtaskAsync(context, subtaskId, cancellationToken)).TaskId;
+        var subtasks = await context.Subtasks
+            .Where(s => s.TaskId == taskId)
+            .OrderBy(s => s.SortOrder)
+            .ToListAsync(cancellationToken);
+
+        var oldIndex = subtasks.FindIndex(s => s.Id == subtaskId);
+        var newOrders = ManualOrder.Move(subtasks.ConvertAll(s => s.SortOrder), oldIndex, newIndex);
+        var moved = subtasks[oldIndex];
+        subtasks.RemoveAt(oldIndex);
+        subtasks.Insert(newIndex, moved);
+        for (var i = 0; i < subtasks.Count; i++)
+        {
+            subtasks[i].SortOrder = newOrders[i];
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+        return subtasks;
+    }
+
+    public async Task<Subtask> DeleteSubtaskAsync(Guid subtaskId, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var subtask = await FindSubtaskAsync(context, subtaskId, cancellationToken);
+        context.Subtasks.Remove(subtask);
+        await context.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Subtask {SubtaskId} deleted", subtaskId);
+        return subtask;
+    }
+
+    public async Task<Subtask> RestoreSubtaskAsync(Subtask deleted, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        if (!await context.Tasks.AnyAsync(t => t.Id == deleted.TaskId, cancellationToken))
+        {
+            throw new KeyNotFoundException($"Task {deleted.TaskId} does not exist.");
+        }
+
+        if (await context.Subtasks.AnyAsync(s => s.Id == deleted.Id, cancellationToken))
+        {
+            throw new InvalidOperationException($"Subtask {deleted.Id} exists already.");
+        }
+
+        var restored = CopySubtask(deleted);
+        context.Subtasks.Add(restored);
+        await context.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Subtask {SubtaskId} restored", restored.Id);
+        return restored;
+    }
+
+    private static Subtask CopySubtask(Subtask source) => new()
+    {
+        Id = source.Id,
+        TaskId = source.TaskId,
+        Title = source.Title,
+        IsCompleted = source.IsCompleted,
+        SortOrder = source.SortOrder,
+    };
+
+    private static async Task<Subtask> FindSubtaskAsync(
+        TaskDeskDbContext context, Guid subtaskId, CancellationToken cancellationToken)
+        => await context.Subtasks.SingleOrDefaultAsync(s => s.Id == subtaskId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Subtask {subtaskId} does not exist.");
 
     private static async Task<TaskItem> FindAsync(
         TaskDeskDbContext context, Guid taskId, CancellationToken cancellationToken)
         => await context.Tasks
             .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
+            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder))
             .SingleOrDefaultAsync(t => t.Id == taskId, cancellationToken)
             ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
 
@@ -193,6 +325,7 @@ internal sealed class TaskService(
         return await context.Tasks
             .AsNoTracking()
             .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
+            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder))
             .Where(t => context.Lists.Any(l => l.IsDefault && l.Id == t.ListId))
             .OrderBy(t => t.SortOrder)
             .ThenBy(t => t.CreatedUtc)

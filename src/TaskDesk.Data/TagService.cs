@@ -77,6 +77,7 @@ internal sealed class TagService(
         return await context.Tasks
             .AsNoTracking()
             .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
+            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder))
             .Where(t => t.Tags.Any(g => g.Id == tagId))
             .OrderBy(t => t.SortOrder)
             .ThenBy(t => t.CreatedUtc)

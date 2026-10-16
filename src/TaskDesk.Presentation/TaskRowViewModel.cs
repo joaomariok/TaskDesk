@@ -33,6 +33,16 @@ public sealed partial class TaskRowViewModel : ObservableObject
     [ObservableProperty]
     private IReadOnlyList<Tag> _tags = [];
 
+    /// <summary>The Subtasks in their manual order; the source of the progress shown on the row.</summary>
+    public List<Subtask> Subtasks { get; } = [];
+
+    /// <summary>"done/total" of the Subtasks, or empty when there are none. Display only.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSubtasks))]
+    private string _subtaskProgress = "";
+
+    public bool HasSubtasks => SubtaskProgress.Length > 0;
+
     /// <summary>The marker on the row: nothing, "!", "!!" or "!!!".</summary>
     public string PriorityMarker => new('!', (int)Priority);
 
@@ -43,5 +53,10 @@ public sealed partial class TaskRowViewModel : ObservableObject
         Priority = item.Priority;
         IsCompleted = item.IsCompleted;
         Tags = item.Tags;
+        Subtasks.Clear();
+        Subtasks.AddRange(item.Subtasks);
+        RefreshSubtaskProgress();
     }
+
+    internal void RefreshSubtaskProgress() => SubtaskProgress = Core.Tasks.SubtaskProgress.Format(Subtasks);
 }

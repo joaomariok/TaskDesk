@@ -16,4 +16,7 @@ public sealed class TaskItem
 
     /// <summary>Tags, loaded only by queries that include them.</summary>
     public List<TaskDesk.Core.Tags.Tag> Tags { get; set; } = [];
+
+    /// <summary>Subtasks in their manual order, loaded only by queries that include them.</summary>
+    public List<Subtask> Subtasks { get; set; } = [];
 }

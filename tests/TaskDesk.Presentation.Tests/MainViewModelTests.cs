@@ -386,7 +386,7 @@ public class MainViewModelTests
             Deleted.Add(taskId);
             var task = _tasks.Single(t => t.Id == taskId);
             _tasks.Remove(task);
-            return Task.FromResult(new DeletedTask(task, task.Tags.ConvertAll(t => t.Id)));
+            return Task.FromResult(new DeletedTask(task, task.Tags.ConvertAll(t => t.Id), [.. task.Subtasks]));
         }
 
         public Task<TaskItem> RestoreTaskAsync(DeletedTask deleted, CancellationToken cancellationToken = default)
@@ -412,9 +412,87 @@ public class MainViewModelTests
                 CreatedUtc = source.CreatedUtc,
                 UpdatedUtc = source.UpdatedUtc,
                 Tags = source.Tags,
+                Subtasks = source.Subtasks,
             };
             change(copy);
             return copy;
+        }
+
+        public List<Guid> DeletedSubtasks { get; } = [];
+        public List<Guid> RestoredSubtasks { get; } = [];
+
+        private static Subtask Clone(Subtask s) => new()
+        {
+            Id = s.Id,
+            TaskId = s.TaskId,
+            Title = s.Title,
+            IsCompleted = s.IsCompleted,
+            SortOrder = s.SortOrder,
+        };
+
+        private TaskItem OwnerOf(Guid subtaskId)
+            => _tasks.Single(t => t.Subtasks.Exists(s => s.Id == subtaskId));
+
+        public Task<Subtask> AddSubtaskAsync(Guid taskId, string title, CancellationToken cancellationToken = default)
+        {
+            var task = _tasks.Single(t => t.Id == taskId);
+            var subtask = new Subtask
+            {
+                Id = Guid.NewGuid(),
+                TaskId = taskId,
+                Title = TaskTitle.Normalize(title),
+                SortOrder = task.Subtasks.Count == 0 ? 1 : task.Subtasks.Max(s => s.SortOrder) + 1,
+            };
+            task.Subtasks.Add(subtask);
+            return Task.FromResult(Clone(subtask));
+        }
+
+        public Task<Subtask> RenameSubtaskAsync(Guid subtaskId, string title, CancellationToken cancellationToken = default)
+        {
+            var subtask = OwnerOf(subtaskId).Subtasks.Single(s => s.Id == subtaskId);
+            subtask.Title = TaskTitle.Normalize(title);
+            return Task.FromResult(Clone(subtask));
+        }
+
+        public Task<Subtask> SetSubtaskCompletedAsync(
+            Guid subtaskId, bool isCompleted, CancellationToken cancellationToken = default)
+        {
+            var subtask = OwnerOf(subtaskId).Subtasks.Single(s => s.Id == subtaskId);
+            subtask.IsCompleted = isCompleted;
+            return Task.FromResult(Clone(subtask));
+        }
+
+        public Task<IReadOnlyList<Subtask>> MoveSubtaskAsync(
+            Guid subtaskId, int newIndex, CancellationToken cancellationToken = default)
+        {
+            var list = OwnerOf(subtaskId).Subtasks;
+            var moved = list.Single(s => s.Id == subtaskId);
+            list.Remove(moved);
+            list.Insert(newIndex, moved);
+            for (var i = 0; i < list.Count; i++)
+            {
+                list[i].SortOrder = i + 1;
+            }
+
+            return Task.FromResult<IReadOnlyList<Subtask>>([.. list.Select(Clone)]);
+        }
+
+        public Task<Subtask> DeleteSubtaskAsync(Guid subtaskId, CancellationToken cancellationToken = default)
+        {
+            DeletedSubtasks.Add(subtaskId);
+            var list = OwnerOf(subtaskId).Subtasks;
+            var subtask = list.Single(s => s.Id == subtaskId);
+            list.Remove(subtask);
+            return Task.FromResult(subtask);
+        }
+
+        public Task<Subtask> RestoreSubtaskAsync(Subtask deleted, CancellationToken cancellationToken = default)
+        {
+            RestoredSubtasks.Add(deleted.Id);
+            var list = _tasks.Single(t => t.Id == deleted.TaskId).Subtasks;
+            list.Add(deleted);
+            list.Sort((a, b) => a.SortOrder.CompareTo(b.SortOrder));
+            return Task.FromResult(deleted);
         }
 
         public Task<TaskItem> CreateTaskAsync(string title, CancellationToken cancellationToken = default)

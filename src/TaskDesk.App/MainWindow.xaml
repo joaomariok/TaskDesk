@@ -18,6 +18,10 @@
                           CommandParameter="{Binding}" />
                 <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" FontWeight="Bold" Foreground="OrangeRed"
                            Text="{Binding PriorityMarker}" />
+                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Foreground="Gray"
+                           AutomationProperties.Name="Subtask progress"
+                           Text="{Binding SubtaskProgress}"
+                           Visibility="{Binding HasSubtasks, Converter={StaticResource BoolToVisibility}}" />
                 <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Tags}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -101,8 +105,10 @@
             </DockPanel>
         </Grid>
         <!-- Detail pane -->
-        <StackPanel DockPanel.Dock="Right" Width="260" Margin="12,0,0,0"
-                    Visibility="{Binding IsDetailPaneVisible, Converter={StaticResource BoolToVisibility}}">
+        <ScrollViewer DockPanel.Dock="Right" Width="260" Margin="12,0,0,0"
+                      VerticalScrollBarVisibility="Auto"
+                      Visibility="{Binding IsDetailPaneVisible, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel Margin="0,0,8,0">
             <DockPanel Margin="0,0,0,8">
                 <Button DockPanel.Dock="Right" Content="Close" Command="{Binding CloseDetailPaneCommand}"
                         AutomationProperties.Name="Close detail pane" />
@@ -120,16 +126,57 @@
                      VerticalScrollBarVisibility="Auto" MaxLength="10000"
                      AutomationProperties.Name="Task notes"
                      Text="{Binding DetailNotes, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Text="Subtasks" />
+            <ItemsControl ItemsSource="{Binding SubtaskItems}" Margin="0,2,0,4"
+                          AutomationProperties.Name="Subtasks">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel Margin="0,1">
+                            <Button DockPanel.Dock="Right" Content="x" Padding="5,0" Margin="2,0,0,0"
+                                    AutomationProperties.Name="Delete subtask" ToolTip="Delete subtask"
+                                    Command="{Binding DataContext.DeleteSubtaskCommand,
+                                              RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" />
+                            <Button DockPanel.Dock="Right" Content="&#x25BC;" Padding="4,0" Margin="2,0,0,0"
+                                    AutomationProperties.Name="Move subtask down" ToolTip="Move down"
+                                    Command="{Binding DataContext.MoveSubtaskDownCommand,
+                                              RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" />
+                            <Button DockPanel.Dock="Right" Content="&#x25B2;" Padding="4,0" Margin="2,0,0,0"
+                                    AutomationProperties.Name="Move subtask up" ToolTip="Move up"
+                                    Command="{Binding DataContext.MoveSubtaskUpCommand,
+                                              RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" />
+                            <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,6,0"
+                                      AutomationProperties.Name="Subtask done"
+                                      IsChecked="{Binding IsCompleted}" />
+                            <TextBox MaxLength="500" Padding="2" AutomationProperties.Name="Subtask title"
+                                     Text="{Binding Title, UpdateSourceTrigger=LostFocus}" />
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <DockPanel Margin="0,0,0,8">
+                <Button DockPanel.Dock="Right" Content="Add" Margin="4,0,0,0" Padding="8,2"
+                        Command="{Binding AddSubtaskCommand}" />
+                <TextBox Padding="4" MaxLength="500" AutomationProperties.Name="New subtask title"
+                         Text="{Binding NewSubtaskTitle, UpdateSourceTrigger=PropertyChanged}">
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Return" Command="{Binding AddSubtaskCommand}" />
+                    </TextBox.InputBindings>
+                </TextBox>
+            </DockPanel>
             <Button Content="Delete" HorizontalAlignment="Left" Padding="12,4"
                     Command="{Binding DeleteSelectedCommand}" />
             <TextBlock Foreground="Firebrick" TextWrapping="Wrap" Margin="0,8,0,0" Text="{Binding ErrorMessage}" />
         </StackPanel>
+        </ScrollViewer>
         <!-- Undo bar -->
         <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="10,6" Background="#333"
                 Visibility="{Binding IsUndoBarVisible, Converter={StaticResource BoolToVisibility}}">
             <DockPanel>
                 <Button DockPanel.Dock="Right" Content="Undo" Command="{Binding UndoCommand}" Padding="10,2" />
-                <TextBlock Foreground="White" VerticalAlignment="Center" Text="Task deleted &#x2014;" />
+                <TextBlock Foreground="White" VerticalAlignment="Center" Text="{Binding UndoBarText, StringFormat={}{0} &#x2014;}" />
             </DockPanel>
         </Border>
         <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">

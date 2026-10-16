@@ -9,6 +9,7 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
     public DbSet<TaskList> Lists => Set<TaskList>();
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
     public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<Subtask> Subtasks => Set<Subtask>();
     public DbSet<TaskTag> TaskTags => Set<TaskTag>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -44,6 +45,16 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
                     join.ToTable("TaskTags");
                     join.HasKey(l => new { l.TaskId, l.TagId });
                 });
+        });
+
+        modelBuilder.Entity<Subtask>(subtask =>
+        {
+            subtask.ToTable("Subtasks");
+            subtask.HasKey(s => s.Id);
+            subtask.Property(s => s.Title).IsRequired().HasMaxLength(TaskTitle.MaxLength);
+            subtask.HasOne<TaskItem>().WithMany(t => t.Subtasks).HasForeignKey(s => s.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+            subtask.HasIndex(s => new { s.TaskId, s.SortOrder });
         });
 
         modelBuilder.Entity<Tag>(tag =>
