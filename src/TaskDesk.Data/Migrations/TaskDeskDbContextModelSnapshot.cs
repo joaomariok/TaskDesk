@@ -120,7 +120,16 @@ namespace TaskDesk.Data.Migrations
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("ReminderFiredUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReminderUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("SeriesId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SnoozedUntilUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<double>("SortOrder")
@@ -137,6 +146,8 @@ namespace TaskDesk.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DueDate");
+
+                    b.HasIndex("ReminderUtc");
 
                     b.HasIndex("SeriesId");
 

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using TaskDesk.Core.Backups;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Paths;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
@@ -17,9 +18,13 @@ public static class DataServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddSingleton(paths);
-        services.AddDbContextFactory<TaskDeskDbContext>(options =>
+        services.AddSingleton<TaskChangeInterceptor>();
+        services.AddSingleton<ITaskChangeNotifier>(sp => sp.GetRequiredService<TaskChangeInterceptor>());
+        services.AddDbContextFactory<TaskDeskDbContext>((sp, options) => options
             // Pooling=False so the file is released as soon as a context is disposed.
-            options.UseSqlite($"Data Source={paths.DatabaseFile};Pooling=False"));
+            .UseSqlite($"Data Source={paths.DatabaseFile};Pooling=False")
+            .AddInterceptors(sp.GetRequiredService<TaskChangeInterceptor>()));
+        services.AddSingleton<IReminderService, ReminderService>();
         services.AddSingleton<IBackupService, BackupService>();
         services.AddSingleton<IDatabaseInitializer, DatabaseInitializer>();
         services.AddSingleton<ITaskService, TaskService>();

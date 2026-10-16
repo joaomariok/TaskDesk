@@ -172,6 +172,14 @@
                          Text="{Binding DetailDueTime, UpdateSourceTrigger=LostFocus}" />
                 <DatePicker SelectedDate="{Binding DetailDueDate}" AutomationProperties.Name="Due date" />
             </DockPanel>
+            <TextBlock Text="Reminder" />
+            <DockPanel Margin="0,2,0,8">
+                <TextBox DockPanel.Dock="Right" Width="60" Padding="4" Margin="6,0,0,0" MaxLength="5"
+                         AutomationProperties.Name="Reminder time"
+                         ToolTip="Reminder time as HH:mm (empty means 09:00)"
+                         Text="{Binding DetailReminderTime, UpdateSourceTrigger=LostFocus}" />
+                <DatePicker SelectedDate="{Binding DetailReminderDate}" AutomationProperties.Name="Reminder date" />
+            </DockPanel>
             <TextBlock Text="Repeat" />
             <StackPanel Margin="0,2,0,8" DataContext="{Binding Repeat}">
                 <ComboBox AutomationProperties.Name="Repeat"
@@ -259,6 +267,16 @@
             <TextBlock Foreground="Firebrick" TextWrapping="Wrap" Margin="0,8,0,0" Text="{Binding ErrorMessage}" />
         </StackPanel>
         </ScrollViewer>
+        <!-- Shown when Reminders fall back to tray balloons -->
+        <Border DockPanel.Dock="Top" Margin="0,0,0,8" Padding="10,6" BorderThickness="1" BorderBrush="Goldenrod"
+                AutomationProperties.Name="Notifications unavailable"
+                Visibility="{Binding HasNotificationBanner, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Dismiss" Padding="10,2" Margin="8,0,0,0"
+                        Command="{Binding DismissNotificationBannerCommand}" />
+                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding NotificationBanner}" />
+            </DockPanel>
+        </Border>
         <!-- Undo bar -->
         <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="10,6" Background="#333"
                 Visibility="{Binding IsUndoBarVisible, Converter={StaticResource BoolToVisibility}}">
@@ -313,6 +331,10 @@
                               AutomationProperties.Name="Has due filter"
                               IsChecked="{Binding HasDueFilter, Mode=OneWay}"
                               Command="{Binding ToggleHasDueFilterCommand}" />
+                <ToggleButton Content="Has reminder" Padding="8,2" Margin="0,0,6,0"
+                              AutomationProperties.Name="Has reminder filter"
+                              IsChecked="{Binding HasReminderFilter, Mode=OneWay}"
+                              Command="{Binding ToggleHasReminderFilterCommand}" />
                 <ItemsControl ItemsSource="{Binding FilterTagChips}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>

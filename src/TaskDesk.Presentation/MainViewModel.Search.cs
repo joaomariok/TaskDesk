@@ -27,6 +27,11 @@ public sealed partial class MainViewModel
     [NotifyPropertyChangedFor(nameof(IsFilterActive))]
     private bool _hasDueFilter;
 
+    /// <summary>Only show Tasks that have a Reminder.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFilterActive))]
+    private bool _hasReminderFilter;
+
     /// <summary>The Tags a Task must all carry to be shown.</summary>
     public ObservableCollection<Tag> FilterTags { get; } = [];
 
@@ -42,6 +47,8 @@ public sealed partial class MainViewModel
 
     partial void OnHasDueFilterChanged(bool value) => UpdateReorderEnabled();
 
+    partial void OnHasReminderFilterChanged(bool value) => UpdateReorderEnabled();
+
     private TaskSearchQuery BuildSearchQuery(int skip) => new(
         SearchText,
         MinPriorityFilter,
@@ -49,7 +56,8 @@ public sealed partial class MainViewModel
         HasDueFilter,
         CurrentView,
         CurrentView is null ? TagFilter?.Id : null,
-        skip);
+        skip,
+        HasReminderFilter);
 
     // Re-selects the chips of Tags that still exist, dropping those that were deleted.
     private void PruneFilterTags()
@@ -109,6 +117,7 @@ public sealed partial class MainViewModel
         SearchText = "";
         MinPriorityFilter = null;
         HasDueFilter = false;
+        HasReminderFilter = false;
         FilterTags.Clear();
         await LoadAsync(cancellationToken);
     }
@@ -124,6 +133,13 @@ public sealed partial class MainViewModel
     private async Task ToggleHasDueFilterAsync(CancellationToken cancellationToken)
     {
         HasDueFilter = !HasDueFilter;
+        await LoadAsync(cancellationToken);
+    }
+
+    [RelayCommand]
+    private async Task ToggleHasReminderFilterAsync(CancellationToken cancellationToken)
+    {
+        HasReminderFilter = !HasReminderFilter;
         await LoadAsync(cancellationToken);
     }
 

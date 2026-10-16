@@ -11,6 +11,9 @@ internal sealed class HNotifyTrayIcon : ITrayIcon
 {
     private readonly TaskbarIcon _icon;
 
+    // True while the last balloon shown is a Reminder (a click on a hint balloon opens nothing).
+    private bool _reminderBalloon;
+
     public HNotifyTrayIcon()
     {
         var stream = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/TaskDesk.ico")).Stream;
@@ -23,6 +26,13 @@ internal sealed class HNotifyTrayIcon : ITrayIcon
             NoLeftClickDelay = true,
         };
         _icon.TrayLeftMouseUp += (_, _) => LeftClicked?.Invoke();
+        _icon.TrayBalloonTipClicked += (_, _) =>
+        {
+            if (_reminderBalloon)
+            {
+                BalloonClicked?.Invoke();
+            }
+        };
     }
 
     public event Action? LeftClicked;
@@ -33,8 +43,21 @@ internal sealed class HNotifyTrayIcon : ITrayIcon
 
     public void Show() => _icon.ForceCreate();
 
-    public void ShowHint(string message) =>
+    /// <summary>Raised when the owner clicks a balloon shown by <see cref="ShowBalloon"/>.</summary>
+    public event Action? BalloonClicked;
+
+    public void ShowHint(string message) => _icon.Dispatcher.Invoke(() =>
+    {
+        _reminderBalloon = false;
         _icon.ShowNotification("TaskDesk", message);
+    });
+
+    /// <summary>Shows a Reminder balloon (the notification fallback); safe to call from any thread.</summary>
+    public void ShowBalloon(string title, string message) => _icon.Dispatcher.Invoke(() =>
+    {
+        _reminderBalloon = true;
+        _icon.ShowNotification(title, message);
+    });
 
     public void Dispose() => _icon.Dispose();
 

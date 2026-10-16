@@ -110,6 +110,20 @@ public class TaskSearchServiceTests
     }
 
     [Fact]
+    public async Task Has_reminder_filter_keeps_only_tasks_with_a_reminder()
+    {
+        using var db = await StartAsync();
+        await AddAsync(db, "plain");
+        var reminded = await AddAsync(db, "reminded");
+        await db.Get<TaskDesk.Core.Reminders.IReminderService>().SetReminderAsync(
+            reminded.Id, new DateTime(2026, 10, 20, 12, 0, 0, DateTimeKind.Utc), Ct);
+
+        Assert.Equal(["reminded"], await SearchAsync(db, new(HasReminder: true)));
+        Assert.Equal(["reminded"], await SearchAsync(db, new(HasReminder: true, View: SmartView.All)));
+        Assert.False(new TaskSearchQuery(HasReminder: true).IsEmpty);
+    }
+
+    [Fact]
     public async Task Conditions_combine_and_results_carry_tags_and_subtasks()
     {
         using var db = await StartAsync();

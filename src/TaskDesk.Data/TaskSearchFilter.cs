@@ -15,6 +15,7 @@ internal static class TaskSearchFilter
         var minPriority = query.MinPriority;
         var tagIds = query.TagIds?.Distinct().ToList() ?? [];
         var hasDue = query.HasDue;
+        var hasReminder = query.HasReminder;
 
         return tasks =>
         {
@@ -35,6 +36,11 @@ internal static class TaskSearchFilter
             {
                 var id = tagId;
                 tasks = tasks.Where(t => t.Tags.Any(g => g.Id == id));
+            }
+
+            if (hasReminder)
+            {
+                tasks = tasks.Where(t => t.ReminderUtc != null);
             }
 
             return hasDue ? tasks.Where(t => t.DueDate != null) : tasks;

@@ -363,6 +363,11 @@ public class MainViewModelTests
         {
             Completions.Add((taskId, isCompleted));
             var index = _tasks.FindIndex(t => t.Id == taskId);
+            if (index < 0)
+            {
+                throw new KeyNotFoundException($"Task {taskId} does not exist.");
+            }
+
             var completedUtc = new DateTime(2026, 10, 16, 9, 30, 0, DateTimeKind.Utc).AddMinutes(Completions.Count);
             _tasks[index] = Copy(_tasks[index], t =>
             {
@@ -445,6 +450,9 @@ public class MainViewModelTests
                 CompletedUtc = source.CompletedUtc,
                 DueDate = source.DueDate,
                 DueTime = source.DueTime,
+                ReminderUtc = source.ReminderUtc,
+                SnoozedUntilUtc = source.SnoozedUntilUtc,
+                ReminderFiredUtc = source.ReminderFiredUtc,
                 Recurrence = source.Recurrence,
                 SeriesId = source.SeriesId,
                 NextOccurrenceId = source.NextOccurrenceId,

@@ -39,6 +39,7 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
             task.HasIndex(t => new { t.ListId, t.IsCompleted, t.SortOrder });
             task.HasIndex(t => t.DueDate);
             task.HasIndex(t => t.SeriesId);
+            task.HasIndex(t => t.ReminderUtc);
             task.OwnsOne(t => t.Recurrence, recurrence =>
             {
                 recurrence.Property(r => r.Frequency).HasColumnName("RecurrenceFrequency");

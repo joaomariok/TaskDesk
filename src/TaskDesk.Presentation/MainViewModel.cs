@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
@@ -14,7 +15,8 @@ public sealed partial class MainViewModel(
     IDueService? dueService = null,
     ITaskSearchService? searchService = null,
     IRecurrenceService? recurrenceService = null,
-    IOccurrenceDialogs? occurrenceDialogs = null) : ObservableObject
+    IOccurrenceDialogs? occurrenceDialogs = null,
+    IReminderService? reminderService = null) : ObservableObject
 {
     /// <summary>How long text edits wait for further typing before they are saved.</summary>
     public static readonly TimeSpan SaveDebounce = TimeSpan.FromMilliseconds(500);
@@ -41,6 +43,10 @@ public sealed partial class MainViewModel(
 
     private IOccurrenceDialogs OccurrenceDialogs => occurrenceDialogs
         ?? throw new InvalidOperationException("No Occurrence dialogs were supplied.");
+
+    // Needed for Reminder edits only.
+    private IReminderService Reminders => reminderService
+        ?? throw new InvalidOperationException("No Reminder service was supplied.");
 
     private int _completedFetched;
     private bool _completedHasMore;
@@ -570,6 +576,7 @@ public sealed partial class MainViewModel(
         DetailPriority = value?.Priority ?? Priority.None;
         DetailDueDate = value?.Item.DueDate?.ToDateTime(TimeOnly.MinValue);
         DetailDueTime = value?.Item.DueTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "";
+        LoadReminderDetail(value?.Item);
         _loadingDetail = false;
         Repeat.Load(value?.Item.Recurrence, value?.Item.DueDate);
         RebuildSubtaskItems();

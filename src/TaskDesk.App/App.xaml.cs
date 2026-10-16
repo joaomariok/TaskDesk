@@ -2,9 +2,13 @@ using System.Reflection;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Win32;
+using TaskDesk.App.Notifications;
 using TaskDesk.App.Shell;
 using TaskDesk.Core.Backups;
 using TaskDesk.Core.Paths;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Shell;
 using TaskDesk.Data;
 using TaskDesk.Data.Logging;
@@ -19,6 +23,8 @@ public partial class App : Application
     private SettingsWindow? _settingsWindow;
     private QuickAddWindow? _quickAddWindow;
     private HotkeyService? _hotkeys;
+    private NotificationDelivery? _notifications;
+    private ReminderScheduler? _reminders;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -50,7 +56,17 @@ public partial class App : Application
         builder.Services.AddSingleton<IMainWindow>(sp => sp.GetRequiredService<WpfMainWindow>());
         builder.Services.AddSingleton<IAppShutdown>(sp => sp.GetRequiredService<WpfMainWindow>());
         builder.Services.AddSingleton<ISingleInstance>(singleInstance);
-        builder.Services.AddSingleton<ITrayIcon, HNotifyTrayIcon>();
+        builder.Services.AddSingleton<HNotifyTrayIcon>();
+        builder.Services.AddSingleton<ITrayIcon>(sp => sp.GetRequiredService<HNotifyTrayIcon>());
+        builder.Services.AddSingleton<AppSdkNotificationService>();
+        builder.Services.AddSingleton<TrayBalloonNotificationService>();
+        builder.Services.AddSingleton(sp => new NotificationDelivery(
+            sp.GetRequiredService<AppSdkNotificationService>(),
+            sp.GetRequiredService<TrayBalloonNotificationService>(),
+            sp.GetRequiredService<ILogger<NotificationDelivery>>()));
+        builder.Services.AddSingleton<INotificationService>(sp => sp.GetRequiredService<NotificationDelivery>());
+        builder.Services.AddSingleton<ReminderScheduler>();
+        builder.Services.AddSingleton<ReminderActivationHandler>();
         builder.Services.AddSingleton<IRunKey, RegistryRunKey>();
         builder.Services.AddSingleton<AutoStartService>();
         builder.Services.AddSingleton<IShellSettingsStore>(_ => new JsonShellSettingsStore(paths.SettingsFile));
@@ -117,9 +133,48 @@ public partial class App : Application
         _hotkeys.Triggered += () => _ = ShowQuickAddAsync();
         _hotkeys.Start();
 
-        var minimized = e.Args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
+        // Rich notifications, or the tray balloon fallback with a banner explaining why (SPEC 7.3).
+        _notifications = _host.Services.GetRequiredService<NotificationDelivery>();
+        _notifications.FellBack += reason =>
+            Dispatcher.InvokeAsync(() => window.ViewModel.ShowNotificationBanner(reason));
+        _notifications.Activated += activation => Dispatcher.InvokeAsync(() => HandleActivationAsync(activation));
+        _notifications.Register();
+        var launch = _notifications.GetLaunchActivation();
+
+        // Launched by "Mark done" on a toast: complete the Task without opening the window.
+        var minimized = e.Args.Contains("--minimized", StringComparer.OrdinalIgnoreCase)
+            || launch?.Action == ReminderAction.MarkDone;
         var exePath = Environment.ProcessPath ?? throw new InvalidOperationException("No process path.");
         await _shell.StartAsync(minimized, exePath);
+        if (launch is not null)
+        {
+            await HandleActivationAsync(launch);
+        }
+
+        // Checks on start, every 30 s, on every Task change and on resume from sleep (SPEC 7.4).
+        _reminders = _host.Services.GetRequiredService<ReminderScheduler>();
+        _ = _reminders.StartAsync();
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
+    }
+
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == PowerModes.Resume)
+        {
+            _reminders?.RequestCheck();
+        }
+    }
+
+    private async Task HandleActivationAsync(NotificationActivation activation)
+    {
+        try
+        {
+            await _host!.Services.GetRequiredService<ReminderActivationHandler>().HandleAsync(activation);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _host!.Services.GetRequiredService<ILogger<App>>().LogError(ex, "Reminder notification action failed");
+        }
     }
 
     private async Task ShowQuickAddAsync()
@@ -174,6 +229,17 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        _reminders?.Dispose();
+        try
+        {
+            _notifications?.Unregister();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _host?.Services.GetRequiredService<ILogger<App>>().LogWarning(ex, "Unregistering notifications failed");
+        }
+
         _hotkeys?.Dispose();
         _shell?.Dispose();
 

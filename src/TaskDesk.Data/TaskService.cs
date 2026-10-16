@@ -101,6 +101,10 @@ internal sealed class TaskService(
             task.IsCompleted = isCompleted;
             task.CompletedUtc = isCompleted ? now : null;
             task.UpdatedUtc = now;
+            if (isCompleted)
+            {
+                task.SnoozedUntilUtc = null; // a Snooze never outlives completion
+            }
 
             // Completing an Occurrence produces the next one (at most once) in the same transaction.
             // Un-completing never touches the next Occurrence.
@@ -201,6 +205,9 @@ internal sealed class TaskService(
             CompletedUtc = snapshot.CompletedUtc,
             DueDate = snapshot.DueDate,
             DueTime = snapshot.DueTime,
+            ReminderUtc = snapshot.ReminderUtc,
+            SnoozedUntilUtc = snapshot.SnoozedUntilUtc,
+            ReminderFiredUtc = snapshot.ReminderFiredUtc,
             Recurrence = snapshot.Recurrence is { } recurrence ? recurrence with { } : null,
             SeriesId = snapshot.SeriesId,
             NextOccurrenceId = snapshot.NextOccurrenceId,

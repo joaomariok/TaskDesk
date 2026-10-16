@@ -17,6 +17,15 @@ public sealed class TaskItem
     /// <summary>Due time: a local wall-clock time; only allowed when <see cref="DueDate"/> is set.</summary>
     public TimeOnly? DueTime { get; set; }
 
+    /// <summary>The planned Reminder instant (UTC), independent of Due. Never changed by a Snooze.</summary>
+    public DateTime? ReminderUtc { get; set; }
+
+    /// <summary>When set, the Reminder fires at this instant (UTC) instead of <see cref="ReminderUtc"/>.</summary>
+    public DateTime? SnoozedUntilUtc { get; set; }
+
+    /// <summary>When the Reminder notification was shown (UTC); null while it is armed.</summary>
+    public DateTime? ReminderFiredUtc { get; set; }
+
     /// <summary>How the Task repeats, or null. Requires a <see cref="DueDate"/>. Never shared between Tasks.</summary>
     public Recurrence? Recurrence { get; set; }
 
