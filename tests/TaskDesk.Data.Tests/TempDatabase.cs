@@ -53,6 +53,29 @@ public sealed class TempDatabase : IDisposable
         await context.SaveChangesAsync();
     }
 
+    public async Task AddTaskAsync(Guid listId, string title, bool completed)
+    {
+        await using var context = await Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync();
+        context.Tasks.Add(new Core.Tasks.TaskItem
+        {
+            Id = Guid.CreateVersion7(),
+            ListId = listId,
+            Title = title,
+            IsCompleted = completed,
+            CreatedUtc = Clock.GetUtcNow().UtcDateTime,
+            UpdatedUtc = Clock.GetUtcNow().UtcDateTime,
+        });
+        await context.SaveChangesAsync();
+    }
+
+    public async Task CompleteTaskAsync(Guid taskId)
+    {
+        await using var context = await Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync();
+        var task = await context.Tasks.SingleAsync(t => t.Id == taskId);
+        task.IsCompleted = true;
+        await context.SaveChangesAsync();
+    }
+
     public void Dispose()
     {
         _provider.Dispose();

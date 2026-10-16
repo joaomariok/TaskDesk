@@ -12,16 +12,22 @@ public partial class MainWindow : Window
 {
     private const string DragFormat = "TaskDesk.TaskItem";
     private Point _dragStart;
+    private Point _listDragStart;
     private bool _syncingTagSelection;
 
-    public MainWindow(MainViewModel viewModel)
+    public MainWindow(MainViewModel viewModel, ListsViewModel lists)
     {
         ViewModel = viewModel;
+        Lists = lists;
         DataContext = viewModel;
         InitializeComponent();
+
+        // Open-Task counts change when Tasks are added.
+        viewModel.Tasks.CollectionChanged += async (_, _) => await lists.LoadAsync();
     }
 
     public MainViewModel ViewModel { get; }
+    public ListsViewModel Lists { get; }
 
     private async void OnTagSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -66,6 +72,79 @@ public partial class MainWindow : Window
         if (answer == MessageBoxResult.Yes)
         {
             await ViewModel.DeleteTagAsync(tag);
+        }
+    }
+
+    // The context menu belongs to a list row; its placement target carries the row's view model.
+    private static ListItemViewModel? ItemOf(object sender)
+        => ((sender as MenuItem)?.Parent as ContextMenu)?.PlacementTarget is FrameworkElement target
+            ? target.DataContext as ListItemViewModel
+            : null;
+
+    // The Default List cannot be deleted, so its Delete entry is disabled.
+    private void OnMenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is ContextMenu { PlacementTarget: FrameworkElement { DataContext: ListItemViewModel item } } menu)
+        {
+            foreach (var entry in menu.Items.OfType<MenuItem>().Where(m => m.Tag is "delete"))
+            {
+                entry.IsEnabled = !item.IsDefault;
+            }
+        }
+    }
+
+    private async void OnRenameClick(object sender, RoutedEventArgs e)
+    {
+        if (ItemOf(sender) is { } item)
+        {
+            await Lists.RenameCommand.ExecuteAsync(item);
+        }
+    }
+
+    private async void OnDeleteClick(object sender, RoutedEventArgs e)
+    {
+        if (ItemOf(sender) is { } item)
+        {
+            await Lists.DeleteCommand.ExecuteAsync(item);
+        }
+    }
+
+    private async void OnColorClick(object sender, RoutedEventArgs e)
+    {
+        if (ItemOf(sender) is { } item && sender is MenuItem { Tag: string hex })
+        {
+            await Lists.SetColorAsync(item, hex);
+        }
+    }
+
+    private void OnListMouseDown(object sender, MouseButtonEventArgs e) => _listDragStart = e.GetPosition(null);
+
+    private void OnListMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || sender is not ListBox box)
+        {
+            return;
+        }
+
+        var delta = e.GetPosition(null) - _listDragStart;
+        if (Math.Abs(delta.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(delta.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        if (box.SelectedItem is ListItemViewModel item)
+        {
+            DragDrop.DoDragDrop(box, item, DragDropEffects.Move);
+        }
+    }
+
+    private async void OnListDrop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(typeof(ListItemViewModel)) is ListItemViewModel dragged
+            && (e.OriginalSource as FrameworkElement)?.DataContext is ListItemViewModel target)
+        {
+            await Lists.MoveAsync(dragged, target);
         }
     }
 

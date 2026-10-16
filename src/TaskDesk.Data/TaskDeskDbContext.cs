@@ -24,6 +24,7 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
             list.ToTable("Lists");
             list.HasKey(l => l.Id);
             list.Property(l => l.Name).IsRequired().HasMaxLength(100).UseCollation("NOCASE");
+            list.Property(l => l.ColorHex).HasMaxLength(7);
             list.HasIndex(l => l.Name).IsUnique();
         });
 

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using TaskDesk.Core.Lists;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
@@ -21,6 +22,7 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<IDatabaseInitializer, DatabaseInitializer>();
         services.AddSingleton<ITaskService, TaskService>();
         services.AddSingleton<ITagService, TagService>();
+        services.AddSingleton<IListService, ListService>();
         return services;
     }
 }

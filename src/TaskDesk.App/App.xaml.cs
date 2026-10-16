@@ -37,6 +37,8 @@ public partial class App : Application
         builder.Logging.AddTaskDeskFileLogging(paths);
         builder.Services.AddTaskDeskData(paths);
         builder.Services.AddSingleton<MainViewModel>();
+        builder.Services.AddSingleton<IListDialogs, WpfListDialogs>();
+        builder.Services.AddSingleton<ListsViewModel>();
         builder.Services.AddSingleton<MainWindow>();
         builder.Services.AddSingleton<WpfMainWindow>();
         builder.Services.AddSingleton<IMainWindow>(sp => sp.GetRequiredService<WpfMainWindow>());
@@ -54,6 +56,7 @@ public partial class App : Application
 
         var window = _host.Services.GetRequiredService<MainWindow>();
         await window.ViewModel.LoadAsync();
+        await window.Lists.LoadAsync();
 
         _shell = _host.Services.GetRequiredService<ShellController>();
         window.Closing += (_, args) => args.Cancel = _shell.OnWindowClosing();
