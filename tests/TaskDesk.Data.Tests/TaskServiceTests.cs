@@ -91,4 +91,85 @@ public class TaskServiceTests
             Assert.Equal(DateTimeKind.Utc, list.CreatedUtc.Kind);
         }
     }
+
+    [Fact]
+    public async Task Moved_Task_takes_its_new_position_and_the_order_persists_across_a_restart()
+    {
+        using var first = new TempDatabase();
+        var ct = TestContext.Current.CancellationToken;
+        await first.Get<IDatabaseInitializer>().InitializeAsync(ct);
+        var service = first.Get<ITaskService>();
+        var a = await service.CreateTaskAsync("a", ct);
+        await service.CreateTaskAsync("b", ct);
+        await service.CreateTaskAsync("c", ct);
+
+        await service.MoveTaskAsync(a.Id, 2, ct);
+
+        using var second = new TempDatabase(first.Paths);
+        await second.Get<IDatabaseInitializer>().InitializeAsync(ct);
+        var titles = (await second.Get<ITaskService>().ListDefaultListTasksAsync(ct)).Select(t => t.Title);
+        Assert.Equal(["b", "c", "a"], titles);
+    }
+
+    [Fact]
+    public async Task Moving_between_two_Tasks_only_changes_the_moved_Task()
+    {
+        var (db, service) = await StartAsync();
+        using (db)
+        {
+            var ct = TestContext.Current.CancellationToken;
+            await service.CreateTaskAsync("a", ct);
+            await service.CreateTaskAsync("b", ct);
+            var c = await service.CreateTaskAsync("c", ct);
+
+            await service.MoveTaskAsync(c.Id, 1, ct);
+
+            var tasks = await service.ListDefaultListTasksAsync(ct);
+            Assert.Equal(["a", "c", "b"], tasks.Select(t => t.Title));
+            Assert.Equal([1.0, 1.5, 2.0], tasks.Select(t => t.SortOrder));
+        }
+    }
+
+    [Fact]
+    public async Task Repeated_moves_into_the_same_gap_renormalise_and_keep_the_order_correct()
+    {
+        var (db, service) = await StartAsync();
+        using (db)
+        {
+            var ct = TestContext.Current.CancellationToken;
+            await service.CreateTaskAsync("first", ct);
+            await service.CreateTaskAsync("last", ct);
+            const int movers = 40; // each halves the gap after "first"; 2^-40 is far below 1e-6
+
+            for (var i = 1; i <= movers; i++)
+            {
+                var mover = await service.CreateTaskAsync($"m{i}", ct);
+                await service.MoveTaskAsync(mover.Id, 1, ct); // right after "first"
+            }
+
+            var tasks = await service.ListDefaultListTasksAsync(ct);
+            var expected = new[] { "first" }
+                .Concat(Enumerable.Range(1, movers).Reverse().Select(i => $"m{i}"))
+                .Append("last");
+            Assert.Equal(expected, tasks.Select(t => t.Title));
+            for (var i = 1; i < tasks.Count; i++)
+            {
+                Assert.True(tasks[i].SortOrder - tasks[i - 1].SortOrder >= 1e-6);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Moving_an_unknown_Task_or_to_an_invalid_index_is_rejected()
+    {
+        var (db, service) = await StartAsync();
+        using (db)
+        {
+            var ct = TestContext.Current.CancellationToken;
+            var a = await service.CreateTaskAsync("a", ct);
+
+            await Assert.ThrowsAsync<KeyNotFoundException>(() => service.MoveTaskAsync(Guid.NewGuid(), 0, ct));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.MoveTaskAsync(a.Id, 1, ct));
+        }
+    }
 }

@@ -9,4 +9,12 @@ public interface ITaskService
 
     /// <summary>Lists the Tasks of the Default List in their manual order.</summary>
     Task<IReadOnlyList<TaskItem>> ListDefaultListTasksAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Moves a Task to <paramref name="newIndex"/> within its List's manual order (zero-based, in the
+    /// List's full order after the move). Persists the new position; renormalises when gaps get too small.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No Task has this id.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The index is outside the List.</exception>
+    Task MoveTaskAsync(Guid taskId, int newIndex, CancellationToken cancellationToken = default);
 }

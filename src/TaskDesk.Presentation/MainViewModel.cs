@@ -35,5 +35,26 @@ public sealed partial class MainViewModel(ITaskService taskService) : Observable
         QuickAddTitle = "";
     }
 
+    /// <summary>
+    /// Whether drag-and-drop reordering is allowed. True in a List view; Smart Views and search
+    /// results must set it to false.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isReorderEnabled = true;
+
+    /// <summary>Moves the Task at <paramref name="oldIndex"/> to <paramref name="newIndex"/> and persists it.</summary>
+    public async Task MoveTaskAsync(int oldIndex, int newIndex, CancellationToken cancellationToken = default)
+    {
+        if (!IsReorderEnabled || oldIndex == newIndex
+            || oldIndex < 0 || oldIndex >= Tasks.Count
+            || newIndex < 0 || newIndex >= Tasks.Count)
+        {
+            return;
+        }
+
+        await taskService.MoveTaskAsync(Tasks[oldIndex].Id, newIndex, cancellationToken);
+        Tasks.Move(oldIndex, newIndex);
+    }
+
     private bool CanAddTask() => TaskTitle.IsValid(QuickAddTitle);
 }

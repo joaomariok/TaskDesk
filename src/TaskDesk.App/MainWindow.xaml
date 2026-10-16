@@ -11,6 +11,9 @@
                 <KeyBinding Key="Return" Command="{Binding AddTaskCommand}" />
             </TextBox.InputBindings>
         </TextBox>
-        <ListBox ItemsSource="{Binding Tasks}" DisplayMemberPath="Title" />
+        <ListBox ItemsSource="{Binding Tasks}" DisplayMemberPath="Title" AllowDrop="True"
+                 PreviewMouseLeftButtonDown="TaskList_PreviewMouseLeftButtonDown"
+                 PreviewMouseMove="TaskList_PreviewMouseMove"
+                 DragOver="TaskList_DragOver" Drop="TaskList_Drop" />
     </DockPanel>
 </Window>
