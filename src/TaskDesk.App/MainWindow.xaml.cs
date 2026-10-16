@@ -21,13 +21,55 @@ public partial class MainWindow : Window
         Lists = lists;
         DataContext = viewModel;
         InitializeComponent();
+        PriorityBox.ItemsSource = Enum.GetValues<Priority>();
 
-        // Open-Task counts change when Tasks are added.
-        viewModel.Tasks.CollectionChanged += async (_, _) => await lists.LoadAsync();
+        // Open-Task counts change when Tasks are added, completed, un-completed, deleted or restored.
+        viewModel.OpenTaskCountsChanged += async (_, _) => await lists.LoadAsync();
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.SelectedTask))
+            {
+                SyncTaskListSelection();
+            }
+        };
     }
 
     public MainViewModel ViewModel { get; }
     public ListsViewModel Lists { get; }
+
+    // Only one of the two lists (open / completed) has a selection at a time.
+    private void TaskList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Removals happen when a row moves between groups; the selection then follows the row.
+        if (e.AddedItems.Count == 0 || e.AddedItems[0] is not TaskRowViewModel row)
+        {
+            return;
+        }
+
+        var other = ReferenceEquals(sender, OpenList) ? CompletedList : OpenList;
+        other.SelectedItem = null;
+        ViewModel.SelectedTask = row;
+    }
+
+    // Shows the view model's selection (for example after a reload) in whichever list holds the row.
+    private void SyncTaskListSelection()
+    {
+        var row = ViewModel.SelectedTask;
+        OpenList.SelectedItem = row is not null && ViewModel.Tasks.Contains(row) ? row : null;
+        CompletedList.SelectedItem = row is not null && ViewModel.CompletedTasks.Contains(row) ? row : null;
+    }
+
+    // F2 edits the title of the selected Task in the detail pane.
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.F2 && ViewModel.SelectedTask is not null)
+        {
+            ViewModel.IsDetailPaneOpen = true;
+            DetailTitleBox.Focus();
+            DetailTitleBox.SelectAll();
+            e.Handled = true;
+        }
+    }
 
     private async void OnTagSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -165,7 +207,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (ItemUnder(e.OriginalSource) is { DataContext: TaskItem task } item)
+        if (ItemUnder(e.OriginalSource) is { DataContext: TaskRowViewModel task } item)
         {
             DragDrop.DoDragDrop(item, new DataObject(DragFormat, task), DragDropEffects.Move);
         }
@@ -181,13 +223,13 @@ public partial class MainWindow : Window
 
     private async void TaskList_Drop(object sender, DragEventArgs e)
     {
-        if (!ViewModel.IsReorderEnabled || e.Data.GetData(DragFormat) is not TaskItem dragged)
+        if (!ViewModel.IsReorderEnabled || e.Data.GetData(DragFormat) is not TaskRowViewModel dragged)
         {
             return;
         }
 
         var oldIndex = ViewModel.Tasks.IndexOf(dragged);
-        var newIndex = ItemUnder(e.OriginalSource)?.DataContext is TaskItem over
+        var newIndex = ItemUnder(e.OriginalSource)?.DataContext is TaskRowViewModel over
             ? ViewModel.Tasks.IndexOf(over)
             : ViewModel.Tasks.Count - 1; // dropped on empty space: move to the end
 

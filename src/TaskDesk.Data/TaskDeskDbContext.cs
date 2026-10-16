@@ -33,6 +33,7 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
             task.ToTable("Tasks");
             task.HasKey(t => t.Id);
             task.Property(t => t.Title).IsRequired().HasMaxLength(TaskTitle.MaxLength);
+            task.Property(t => t.Notes).HasMaxLength(TaskNotes.MaxLength);
             task.HasOne<TaskList>().WithMany().HasForeignKey(t => t.ListId).OnDelete(DeleteBehavior.Cascade);
             task.HasIndex(t => new { t.ListId, t.IsCompleted, t.SortOrder });
             task.HasMany(t => t.Tags).WithMany().UsingEntity<TaskTag>(

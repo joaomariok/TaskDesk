@@ -65,6 +65,9 @@ namespace TaskDesk.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("CompletedUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("TEXT");
 
@@ -73,6 +76,13 @@ namespace TaskDesk.Data.Migrations
 
                     b.Property<Guid>("ListId")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(10000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("INTEGER");
 
                     b.Property<double>("SortOrder")
                         .HasColumnType("REAL");

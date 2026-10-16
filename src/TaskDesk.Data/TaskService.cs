@@ -76,6 +76,109 @@ internal sealed class TaskService(
         logger.LogInformation("Task {TaskId} moved to index {Index}", taskId, newIndex);
     }
 
+    public async Task<TaskItem> SetCompletedAsync(
+        Guid taskId, bool isCompleted, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await FindAsync(context, taskId, cancellationToken);
+
+        if (task.IsCompleted != isCompleted)
+        {
+            var now = clock.GetUtcNow().UtcDateTime;
+            task.IsCompleted = isCompleted;
+            task.CompletedUtc = isCompleted ? now : null;
+            task.UpdatedUtc = now;
+            await context.SaveChangesAsync(cancellationToken);
+            logger.LogInformation("Task {TaskId} completion set to {IsCompleted}", taskId, isCompleted);
+        }
+
+        return task;
+    }
+
+    public async Task<TaskItem> UpdateTaskAsync(
+        Guid taskId, string title, string? notes, Priority priority, CancellationToken cancellationToken = default)
+    {
+        var normalizedTitle = TaskTitle.Normalize(title);
+        var normalizedNotes = TaskNotes.Normalize(notes);
+        if (!Enum.IsDefined(priority))
+        {
+            throw new ArgumentOutOfRangeException(nameof(priority));
+        }
+
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await FindAsync(context, taskId, cancellationToken);
+
+        if (task.Title != normalizedTitle || task.Notes != normalizedNotes || task.Priority != priority)
+        {
+            task.Title = normalizedTitle;
+            task.Notes = normalizedNotes;
+            task.Priority = priority;
+            task.UpdatedUtc = clock.GetUtcNow().UtcDateTime;
+            await context.SaveChangesAsync(cancellationToken);
+            logger.LogInformation("Task {TaskId} edited", taskId);
+        }
+
+        return task;
+    }
+
+    public async Task<DeletedTask> DeleteTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await FindAsync(context, taskId, cancellationToken);
+        var tagIds = task.Tags.ConvertAll(t => t.Id);
+
+        // Removing the Task also removes its Tag links (cascade); the snapshot keeps their ids for Undo.
+        context.Tasks.Remove(task);
+        await context.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Task {TaskId} deleted", taskId);
+        return new DeletedTask(task, tagIds);
+    }
+
+    public async Task<TaskItem> RestoreTaskAsync(DeletedTask deleted, CancellationToken cancellationToken = default)
+    {
+        var snapshot = deleted.Task;
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        if (await context.Tasks.AnyAsync(t => t.Id == snapshot.Id, cancellationToken))
+        {
+            throw new InvalidOperationException($"Task {snapshot.Id} exists already.");
+        }
+
+        // A Tag deleted since the Task was deleted is not re-created.
+        var tagIds = deleted.TagIds.ToList();
+        var tags = await context.Tags
+            .Where(t => tagIds.Contains(t.Id))
+            .OrderBy(t => t.NormalizedName)
+            .ToListAsync(cancellationToken);
+
+        var restored = new TaskItem
+        {
+            Id = snapshot.Id,
+            ListId = snapshot.ListId,
+            Title = snapshot.Title,
+            Notes = snapshot.Notes,
+            Priority = snapshot.Priority,
+            IsCompleted = snapshot.IsCompleted,
+            CompletedUtc = snapshot.CompletedUtc,
+            SortOrder = snapshot.SortOrder,
+            CreatedUtc = snapshot.CreatedUtc,
+            UpdatedUtc = snapshot.UpdatedUtc,
+            Tags = tags,
+        };
+        context.Tasks.Add(restored);
+        await context.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Task {TaskId} restored with {TagCount} Tags", restored.Id, tags.Count);
+        return restored;
+    }
+
+    private static async Task<TaskItem> FindAsync(
+        TaskDeskDbContext context, Guid taskId, CancellationToken cancellationToken)
+        => await context.Tasks
+            .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
+            .SingleOrDefaultAsync(t => t.Id == taskId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
+
     public async Task<IReadOnlyList<TaskItem>> ListDefaultListTasksAsync(
         CancellationToken cancellationToken = default)
     {

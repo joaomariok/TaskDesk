@@ -6,7 +6,10 @@ public sealed class TaskItem
     public Guid Id { get; set; }
     public Guid ListId { get; set; }
     public string Title { get; set; } = "";
+    public string? Notes { get; set; }
+    public Priority Priority { get; set; }
     public bool IsCompleted { get; set; }
+    public DateTime? CompletedUtc { get; set; }
     public double SortOrder { get; set; }
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }

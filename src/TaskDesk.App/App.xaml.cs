@@ -140,6 +140,7 @@ public partial class App : Application
 
         if (_host is not null)
         {
+            await _host.Services.GetRequiredService<MainViewModel>().FlushPendingSaveAsync();
             await _host.StopAsync();
             _host.Dispose();
         }

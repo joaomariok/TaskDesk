@@ -200,7 +200,86 @@ public class MainViewModelTests
         Assert.Equal(2, vm.Tasks.Count);
     }
 
-    private sealed class FakeTagService(FakeTaskService tasks) : ITagService
+    [Fact]
+    public async Task Adding_completing_un_completing_deleting_and_restoring_a_Task_signal_open_count_changes()
+    {
+        var service = new FakeTaskService();
+        var vm = new MainViewModel(service, new FakeTagService(service));
+        await vm.LoadAsync(Ct);
+        var signals = 0;
+        vm.OpenTaskCountsChanged += (_, _) => signals++;
+
+        vm.QuickAddTitle = "a";
+        await vm.AddTaskCommand.ExecuteAsync(null);
+        Assert.Equal(1, signals);
+
+        await vm.ToggleCompleteCommand.ExecuteAsync(vm.Tasks.Single());
+        Assert.Equal(2, signals);
+
+        await vm.ToggleCompleteCommand.ExecuteAsync(vm.CompletedTasks.Single());
+        Assert.Equal(3, signals);
+
+        await vm.DeleteCommand.ExecuteAsync(vm.Tasks.Single());
+        Assert.Equal(4, signals);
+
+        await vm.UndoCommand.ExecuteAsync(null);
+        Assert.Equal(5, signals);
+    }
+
+    [Fact]
+    public async Task A_completed_Task_keeps_its_Tag_chips_and_shows_in_the_Completed_group_of_a_Tag_filter()
+    {
+        var service = new FakeTaskService();
+        var tags = new FakeTagService(service);
+        var task = await service.CreateTaskAsync("tagged", Ct);
+        await tags.AddTagToTaskAsync(task.Id, "work", Ct);
+        var vm = new MainViewModel(service, tags);
+        await vm.LoadAsync(Ct);
+
+        await vm.ToggleCompleteCommand.ExecuteAsync(vm.Tasks.Single());
+        Assert.Equal(["work"], vm.CompletedTasks.Single().Tags.Select(t => t.Name));
+
+        await vm.FilterByTagAsync(vm.Tags.Single(), Ct);
+
+        Assert.Empty(vm.Tasks);
+        Assert.Equal(["tagged"], vm.CompletedTasks.Select(t => t.Title));
+        Assert.Equal(["work"], vm.CompletedTasks.Single().Tags.Select(t => t.Name));
+    }
+
+    [Fact]
+    public async Task Undo_after_delete_shows_the_restored_Task_with_its_Tag_chips()
+    {
+        var service = new FakeTaskService();
+        var tags = new FakeTagService(service);
+        var task = await service.CreateTaskAsync("tagged", Ct);
+        await tags.AddTagToTaskAsync(task.Id, "work", Ct);
+        var vm = new MainViewModel(service, tags);
+        await vm.LoadAsync(Ct);
+
+        await vm.DeleteCommand.ExecuteAsync(vm.Tasks.Single());
+        await vm.UndoCommand.ExecuteAsync(null);
+
+        Assert.Equal(["work"], vm.Tasks.Single().Tags.Select(t => t.Name));
+    }
+
+    [Fact]
+    public async Task Adding_a_Tag_keeps_the_selected_Task_and_a_closed_detail_pane_closed()
+    {
+        var service = new FakeTaskService();
+        await service.CreateTaskAsync("one", Ct);
+        var vm = new MainViewModel(service, new FakeTagService(service));
+        await vm.LoadAsync(Ct);
+        vm.SelectedTask = vm.Tasks.Single();
+        vm.CloseDetailPaneCommand.Execute(null);
+        vm.NewTagName = "work";
+
+        await vm.AddTagCommand.ExecuteAsync(null);
+
+        Assert.Same(vm.Tasks.Single(), vm.SelectedTask);
+        Assert.False(vm.IsDetailPaneOpen);
+    }
+
+    internal sealed class FakeTagService(FakeTaskService tasks) : ITagService
     {
         private readonly List<Tag> _tags = [];
         private readonly List<(Guid TaskId, Guid TagId)> _links = [];
@@ -258,7 +337,7 @@ public class MainViewModelTests
         }
     }
 
-    private sealed class FakeTaskService : ITaskService
+    internal sealed class FakeTaskService : ITaskService
     {
         private readonly List<TaskItem> _tasks = [];
         public List<string> Created { get; } = [];
@@ -274,9 +353,73 @@ public class MainViewModelTests
             return Task.CompletedTask;
         }
 
+        public List<(Guid TaskId, string Title, string? Notes, Priority Priority)> Updates { get; } = [];
+        public List<(Guid TaskId, bool IsCompleted)> Completions { get; } = [];
+        public List<Guid> Deleted { get; } = [];
+        public List<Guid> Restored { get; } = [];
+        private double _nextOrder = 1;
+
+        public Task<TaskItem> SetCompletedAsync(Guid taskId, bool isCompleted, CancellationToken cancellationToken = default)
+        {
+            Completions.Add((taskId, isCompleted));
+            var index = _tasks.FindIndex(t => t.Id == taskId);
+            var completedUtc = new DateTime(2026, 10, 16, 9, 30, 0, DateTimeKind.Utc).AddMinutes(Completions.Count);
+            _tasks[index] = Copy(_tasks[index], t =>
+            {
+                t.IsCompleted = isCompleted;
+                t.CompletedUtc = isCompleted ? completedUtc : null;
+            });
+            return Task.FromResult(_tasks[index]);
+        }
+
+        public Task<TaskItem> UpdateTaskAsync(
+            Guid taskId, string title, string? notes, Priority priority, CancellationToken cancellationToken = default)
+        {
+            Updates.Add((taskId, title, notes, priority));
+            var index = _tasks.FindIndex(t => t.Id == taskId);
+            _tasks[index] = Copy(_tasks[index], t => { t.Title = title; t.Notes = notes; t.Priority = priority; });
+            return Task.FromResult(_tasks[index]);
+        }
+
+        public Task<DeletedTask> DeleteTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
+        {
+            Deleted.Add(taskId);
+            var task = _tasks.Single(t => t.Id == taskId);
+            _tasks.Remove(task);
+            return Task.FromResult(new DeletedTask(task, task.Tags.ConvertAll(t => t.Id)));
+        }
+
+        public Task<TaskItem> RestoreTaskAsync(DeletedTask deleted, CancellationToken cancellationToken = default)
+        {
+            Restored.Add(deleted.Task.Id);
+            _tasks.Add(deleted.Task);
+            _tasks.Sort((a, b) => a.SortOrder.CompareTo(b.SortOrder));
+            return Task.FromResult(deleted.Task);
+        }
+
+        private static TaskItem Copy(TaskItem source, Action<TaskItem> change)
+        {
+            var copy = new TaskItem
+            {
+                Id = source.Id,
+                ListId = source.ListId,
+                Title = source.Title,
+                Notes = source.Notes,
+                Priority = source.Priority,
+                IsCompleted = source.IsCompleted,
+                CompletedUtc = source.CompletedUtc,
+                SortOrder = source.SortOrder,
+                CreatedUtc = source.CreatedUtc,
+                UpdatedUtc = source.UpdatedUtc,
+                Tags = source.Tags,
+            };
+            change(copy);
+            return copy;
+        }
+
         public Task<TaskItem> CreateTaskAsync(string title, CancellationToken cancellationToken = default)
         {
-            var task = new TaskItem { Id = Guid.NewGuid(), Title = TaskTitle.Normalize(title) };
+            var task = new TaskItem { Id = Guid.NewGuid(), Title = TaskTitle.Normalize(title), SortOrder = _nextOrder++ };
             _tasks.Add(task);
             Created.Add(task.Title);
             return Task.FromResult(task);
