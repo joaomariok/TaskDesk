@@ -3,6 +3,7 @@ using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using TaskDesk.App.Shell;
+using TaskDesk.Core.Backups;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Shell;
 using TaskDesk.Data;
@@ -61,11 +62,23 @@ public partial class App : Application
             sp.GetRequiredService<IFolderOpener>(),
             sp.GetRequiredService<IAppPaths>(),
             Environment.ProcessPath ?? "",
-            AppVersion()));
+            AppVersion(),
+            sp.GetRequiredService<IBackupService>()));
         _host = builder.Build();
 
         await _host.StartAsync();
-        await _host.Services.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
+        try
+        {
+            await _host.Services.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
+        }
+        catch (DatabaseStartupException ex)
+        {
+            MessageBox.Show(
+                $"{ex.Message}\n\nNothing was deleted.\n\nLog folder: {ex.LogsDirectory}\nBackups folder: {ex.BackupsDirectory}",
+                "TaskDesk", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+            return;
+        }
 
         _host.Services.GetRequiredService<IThemeService>()
             .Apply(_host.Services.GetRequiredService<IShellSettingsStore>().Load().Theme);

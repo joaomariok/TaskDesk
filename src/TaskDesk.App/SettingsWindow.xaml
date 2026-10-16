@@ -39,5 +39,8 @@
         <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding LogFolder, StringFormat=Log folder: {0}}" />
         <Button Content="Open data folder" Margin="0,12,0,0" Padding="12,4" HorizontalAlignment="Left"
                 Command="{Binding OpenDataFolderCommand}" />
+        <Button Content="Back up now" Margin="0,8,0,0" Padding="12,4" HorizontalAlignment="Left"
+                Command="{Binding BackUpNowCommand}" />
+        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Opacity="0.7" Text="{Binding BackupStatus}" />
     </StackPanel>
 </Window>

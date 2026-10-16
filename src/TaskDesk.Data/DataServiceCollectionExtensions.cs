@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using TaskDesk.Core.Backups;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Tags;
@@ -19,6 +20,7 @@ public static class DataServiceCollectionExtensions
         services.AddDbContextFactory<TaskDeskDbContext>(options =>
             // Pooling=False so the file is released as soon as a context is disposed.
             options.UseSqlite($"Data Source={paths.DatabaseFile};Pooling=False"));
+        services.AddSingleton<IBackupService, BackupService>();
         services.AddSingleton<IDatabaseInitializer, DatabaseInitializer>();
         services.AddSingleton<ITaskService, TaskService>();
         services.AddSingleton<ITagService, TagService>();

@@ -37,7 +37,46 @@ public sealed class SettingsViewModelTests
         public void Open(string path) => Opened.Add(path);
     }
 
-    private const string Exe = @"C:\TaskDesk\TaskDesk.exe";
+    private sealed class FakeBackups(Exception? failure = null) : TaskDesk.Core.Backups.IBackupService
+    {
+        public int Calls { get; private set; }
+
+        public Task<string> BackUpNowAsync(CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return failure is null ? Task.FromResult(@"C:\b\x.db") : Task.FromException<string>(failure);
+        }
+
+        public Task<string?> BackUpIfDueAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(null);
+    }
+
+    [Fact]
+    public async Task Back_up_now_runs_a_backup_and_reports_the_file()
+    {
+        var backups = new FakeBackups();
+        var vm = new SettingsViewModel(
+            _store, new AutoStartService(_runKey), _theme, _opener, _paths, Exe, "1.2.3", backups);
+
+        await vm.BackUpNowCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, backups.Calls);
+        Assert.Contains(@"C:\b\x.db", vm.BackupStatus);
+    }
+
+    [Fact]
+    public async Task A_failed_backup_is_reported_not_thrown()
+    {
+        var vm = new SettingsViewModel(
+            _store, new AutoStartService(_runKey), _theme, _opener, _paths, Exe, "1.2.3",
+            new FakeBackups(new IOException("disk full")));
+
+        await vm.BackUpNowCommand.ExecuteAsync(null);
+
+        Assert.Contains("disk full", vm.BackupStatus);
+    }
+
+    private const string Exe =@"C:\TaskDesk\TaskDesk.exe";
     private readonly FakeStore _store = new();
     private readonly FakeRunKey _runKey = new();
     private readonly FakeTheme _theme = new();

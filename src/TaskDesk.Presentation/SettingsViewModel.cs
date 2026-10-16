@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TaskDesk.Core.Backups;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Shell;
 
@@ -14,6 +15,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IThemeService _themeService;
     private readonly IFolderOpener _folderOpener;
     private readonly string _exePath;
+    private readonly IBackupService? _backups;
     private readonly bool _loading = true;
 
     public SettingsViewModel(
@@ -23,8 +25,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         IFolderOpener folderOpener,
         IAppPaths paths,
         string exePath,
-        string version)
+        string version,
+        IBackupService? backups = null)
     {
+        _backups = backups;
         _store = store;
         _autoStart = autoStart;
         _themeService = themeService;
@@ -67,6 +71,29 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [RelayCommand]
     private void OpenDataFolder() => _folderOpener.Open(DataFolder);
+
+    /// <summary>Outcome of the last "Back up now"; empty until one runs.</summary>
+    [ObservableProperty]
+    private string _backupStatus = "";
+
+    [RelayCommand]
+    private async Task BackUpNowAsync()
+    {
+        if (_backups is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var path = await _backups.BackUpNowAsync();
+            BackupStatus = $"Backed up to {path}";
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            BackupStatus = $"Backup failed: {ex.Message}";
+        }
+    }
 
     partial void OnThemeChanged(ThemeChoice value)
     {
