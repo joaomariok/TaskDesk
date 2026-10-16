@@ -10,13 +10,18 @@ internal sealed class TaskService(
     ILogger<TaskService> logger) : ITaskService, ITaskCreator
 {
     public Task<TaskItem> CreateTaskAsync(string title, CancellationToken cancellationToken = default) =>
-        CreateAsync(title, null, cancellationToken);
+        CreateAsync(title, null, null, cancellationToken);
 
     public Task<TaskItem> CreateTaskInListAsync(
         string title, Guid listId, CancellationToken cancellationToken = default) =>
-        CreateAsync(title, listId, cancellationToken);
+        CreateAsync(title, listId, null, cancellationToken);
 
-    private async Task<TaskItem> CreateAsync(string title, Guid? requestedListId, CancellationToken cancellationToken)
+    public Task<TaskItem> CreateTaskInListAsync(
+        string title, Guid listId, DateOnly? dueDate, CancellationToken cancellationToken = default) =>
+        CreateAsync(title, listId, dueDate, cancellationToken);
+
+    private async Task<TaskItem> CreateAsync(
+        string title, Guid? requestedListId, DateOnly? dueDate, CancellationToken cancellationToken)
     {
         var normalizedTitle = TaskTitle.Normalize(title);
 
@@ -36,6 +41,7 @@ internal sealed class TaskService(
             Id = Guid.CreateVersion7(),
             ListId = listId,
             Title = normalizedTitle,
+            DueDate = dueDate,
             SortOrder = (lastOrder ?? 0) + 1,
             CreatedUtc = now,
             UpdatedUtc = now,
@@ -168,6 +174,8 @@ internal sealed class TaskService(
             Priority = snapshot.Priority,
             IsCompleted = snapshot.IsCompleted,
             CompletedUtc = snapshot.CompletedUtc,
+            DueDate = snapshot.DueDate,
+            DueTime = snapshot.DueTime,
             SortOrder = snapshot.SortOrder,
             CreatedUtc = snapshot.CreatedUtc,
             UpdatedUtc = snapshot.UpdatedUtc,

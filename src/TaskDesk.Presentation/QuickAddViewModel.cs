@@ -17,7 +17,7 @@ public sealed partial class QuickAddViewModel(ITaskCreator creator, IListService
     [ObservableProperty]
     private TaskList? _selectedList;
 
-    /// <summary>Optional. Stored with the Task once due dates exist (ticket #6); not persisted yet.</summary>
+    /// <summary>Optional. Saved as the Task's Due date (the calendar date only; the time of day is ignored).</summary>
     [ObservableProperty]
     private DateTime? _dueDate;
 
@@ -47,7 +47,8 @@ public sealed partial class QuickAddViewModel(ITaskCreator creator, IListService
             return;
         }
 
-        await creator.CreateTaskInListAsync(Title, SelectedList.Id);
+        DateOnly? due = DueDate is { } picked ? DateOnly.FromDateTime(picked) : null;
+        await creator.CreateTaskInListAsync(Title, SelectedList.Id, due);
         TaskCreated?.Invoke();
         CloseRequested?.Invoke();
     }

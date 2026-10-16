@@ -7,4 +7,10 @@ public interface ITaskCreator
     /// <exception cref="ArgumentException">The title is empty or too long.</exception>
     /// <exception cref="KeyNotFoundException">No such List.</exception>
     Task<TaskItem> CreateTaskInListAsync(string title, Guid listId, CancellationToken cancellationToken = default);
+
+    /// <summary>Creates a Task at the end of the given List with an optional Due date.</summary>
+    /// <exception cref="ArgumentException">The title is empty or too long.</exception>
+    /// <exception cref="KeyNotFoundException">No such List.</exception>
+    Task<TaskItem> CreateTaskInListAsync(
+        string title, Guid listId, DateOnly? dueDate, CancellationToken cancellationToken = default);
 }

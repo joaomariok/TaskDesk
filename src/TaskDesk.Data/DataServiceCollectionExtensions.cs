@@ -24,6 +24,7 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<IDatabaseInitializer, DatabaseInitializer>();
         services.AddSingleton<ITaskService, TaskService>();
         services.AddSingleton<ITaskCreator>(sp => (TaskService)sp.GetRequiredService<ITaskService>());
+        services.AddSingleton<IDueService, DueService>();
         services.AddSingleton<ITagService, TagService>();
         services.AddSingleton<IListService, ListService>();
         return services;

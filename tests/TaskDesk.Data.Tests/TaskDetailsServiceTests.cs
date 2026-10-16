@@ -169,6 +169,7 @@ public class TaskDetailsServiceTests
             await service.CreateTaskAsync("c", Ct);
             await service.UpdateTaskAsync(b.Id, "b", "notes", Priority.Medium, Ct);
             await service.SetCompletedAsync(b.Id, true, Ct);
+            await db.Get<IDueService>().SetDueAsync(b.Id, new DateOnly(2026, 10, 24), new TimeOnly(8, 15), Ct);
             var before = (await service.ListDefaultListTasksAsync(Ct)).Single(t => t.Id == b.Id);
 
             var snapshot = await service.DeleteTaskAsync(b.Id, Ct);
@@ -184,6 +185,8 @@ public class TaskDetailsServiceTests
             Assert.Equal(before.Priority, after.Priority);
             Assert.Equal(before.IsCompleted, after.IsCompleted);
             Assert.Equal(before.CompletedUtc, after.CompletedUtc);
+            Assert.Equal(new DateOnly(2026, 10, 24), after.DueDate);
+            Assert.Equal(new TimeOnly(8, 15), after.DueTime);
             Assert.Equal(before.SortOrder, after.SortOrder);
             Assert.Equal(before.CreatedUtc, after.CreatedUtc);
             Assert.Equal(before.UpdatedUtc, after.UpdatedUtc);

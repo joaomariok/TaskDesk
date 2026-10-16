@@ -7,8 +7,11 @@ namespace TaskDesk.Presentation;
 /// <summary>A Task as shown in the List: the last saved state of a <see cref="TaskItem"/>.</summary>
 public sealed partial class TaskRowViewModel : ObservableObject
 {
-    public TaskRowViewModel(TaskItem item)
+    private readonly TimeProvider _clock;
+
+    public TaskRowViewModel(TaskItem item, TimeProvider? clock = null)
     {
+        _clock = clock ?? TimeProvider.System;
         Id = item.Id;
         Item = item;
         Apply(item);
@@ -43,6 +46,14 @@ public sealed partial class TaskRowViewModel : ObservableObject
 
     public bool HasSubtasks => SubtaskProgress.Length > 0;
 
+    /// <summary>The Due as shown on the row ("20/10/2026" or "20/10/2026 14:30"), or empty.</summary>
+    [ObservableProperty]
+    private string _dueText = "";
+
+    /// <summary>True when the Task is Overdue; the row shows its Due in red.</summary>
+    [ObservableProperty]
+    private bool _isOverdue;
+
     /// <summary>The marker on the row: nothing, "!", "!!" or "!!!".</summary>
     public string PriorityMarker => new('!', (int)Priority);
 
@@ -56,6 +67,11 @@ public sealed partial class TaskRowViewModel : ObservableObject
         Subtasks.Clear();
         Subtasks.AddRange(item.Subtasks);
         RefreshSubtaskProgress();
+        DueText = item.DueDate is { } date
+            ? item.DueTime is { } time ? $"{date:d} {time:t}" : $"{date:d}"
+            : "";
+        IsOverdue = DueCalculator.IsOverdue(
+            item.DueDate, item.DueTime, item.IsCompleted, _clock.GetUtcNow(), _clock.LocalTimeZone);
     }
 
     internal void RefreshSubtaskProgress() => SubtaskProgress = Core.Tasks.SubtaskProgress.Format(Subtasks);

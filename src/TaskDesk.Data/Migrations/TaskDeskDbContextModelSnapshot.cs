@@ -98,6 +98,12 @@ namespace TaskDesk.Data.Migrations
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<TimeOnly?>("DueTime")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("INTEGER");
 
@@ -123,6 +129,8 @@ namespace TaskDesk.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DueDate");
 
                     b.HasIndex("ListId", "IsCompleted", "SortOrder");
 

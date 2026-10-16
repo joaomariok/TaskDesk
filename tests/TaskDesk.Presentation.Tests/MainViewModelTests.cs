@@ -408,6 +408,8 @@ public class MainViewModelTests
                 Priority = source.Priority,
                 IsCompleted = source.IsCompleted,
                 CompletedUtc = source.CompletedUtc,
+                DueDate = source.DueDate,
+                DueTime = source.DueTime,
                 SortOrder = source.SortOrder,
                 CreatedUtc = source.CreatedUtc,
                 UpdatedUtc = source.UpdatedUtc,

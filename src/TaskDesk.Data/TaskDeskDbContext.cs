@@ -37,6 +37,7 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
             task.Property(t => t.Notes).HasMaxLength(TaskNotes.MaxLength);
             task.HasOne<TaskList>().WithMany().HasForeignKey(t => t.ListId).OnDelete(DeleteBehavior.Cascade);
             task.HasIndex(t => new { t.ListId, t.IsCompleted, t.SortOrder });
+            task.HasIndex(t => t.DueDate);
             task.HasMany(t => t.Tags).WithMany().UsingEntity<TaskTag>(
                 join => join.HasOne<Tag>().WithMany().HasForeignKey(l => l.TagId).OnDelete(DeleteBehavior.Cascade),
                 join => join.HasOne<TaskItem>().WithMany().HasForeignKey(l => l.TaskId).OnDelete(DeleteBehavior.Cascade),

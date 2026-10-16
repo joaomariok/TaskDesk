@@ -31,13 +31,20 @@ public partial class MainWindow : Window
             {
                 SyncTaskListSelection();
             }
+            else if (e.PropertyName == nameof(MainViewModel.CurrentView) && viewModel.CurrentView is not null)
+            {
+                // A Smart View replaces the Tag filter.
+                _syncingTagSelection = true;
+                TagList.SelectedItem = null;
+                _syncingTagSelection = false;
+            }
         };
     }
 
     public MainViewModel ViewModel { get; }
     public ListsViewModel Lists { get; }
 
-    // Only one of the two lists (open / completed) has a selection at a time.
+    // Only one of the three lists (overdue / open / completed) has a selection at a time.
     private void TaskList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         // Removals happen when a row moves between groups; the selection then follows the row.
@@ -46,8 +53,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        var other = ReferenceEquals(sender, OpenList) ? CompletedList : OpenList;
-        other.SelectedItem = null;
+        foreach (var other in new[] { OverdueList, OpenList, CompletedList })
+        {
+            if (!ReferenceEquals(sender, other))
+            {
+                other.SelectedItem = null;
+            }
+        }
+
         ViewModel.SelectedTask = row;
     }
 
@@ -55,6 +68,7 @@ public partial class MainWindow : Window
     private void SyncTaskListSelection()
     {
         var row = ViewModel.SelectedTask;
+        OverdueList.SelectedItem = row is not null && ViewModel.OverdueTasks.Contains(row) ? row : null;
         OpenList.SelectedItem = row is not null && ViewModel.Tasks.Contains(row) ? row : null;
         CompletedList.SelectedItem = row is not null && ViewModel.CompletedTasks.Contains(row) ? row : null;
     }

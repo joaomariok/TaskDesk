@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TaskDesk.Core.Tags;
@@ -7,7 +8,10 @@ using TaskDesk.Core.Tasks;
 namespace TaskDesk.Presentation;
 
 public sealed partial class MainViewModel(
-    ITaskService taskService, ITagService tagService, TimeProvider? timeProvider = null) : ObservableObject
+    ITaskService taskService,
+    ITagService tagService,
+    TimeProvider? timeProvider = null,
+    IDueService? dueService = null) : ObservableObject
 {
     /// <summary>How long text edits wait for further typing before they are saved.</summary>
     public static readonly TimeSpan SaveDebounce = TimeSpan.FromMilliseconds(500);
@@ -19,6 +23,13 @@ public sealed partial class MainViewModel(
     public const string SubtaskUndoBarMessage = "Subtask deleted — Undo";
 
     private readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
+
+    // Needed for Due edits and Smart Views only.
+    private IDueService Due => dueService
+        ?? throw new InvalidOperationException("No Due service was supplied.");
+
+    private int _completedFetched;
+    private bool _completedHasMore;
 
     // Every Task of the current view in manual order, completed ones included.
     private readonly List<TaskRowViewModel> _all = [];
@@ -39,6 +50,16 @@ public sealed partial class MainViewModel(
 
     /// <summary>The completed Tasks (the "Completed (N)" group), most recently completed first.</summary>
     public ObservableCollection<TaskRowViewModel> CompletedTasks { get; } = [];
+
+    /// <summary>
+    /// The Overdue group at the top of the Today view (Overdue Tasks per <see cref="DueCalculator"/>);
+    /// empty in every other view.
+    /// </summary>
+    public ObservableCollection<TaskRowViewModel> OverdueTasks { get; } = [];
+
+    public bool HasOverdueTasks => OverdueTasks.Count > 0;
+
+    public string OverdueHeader => $"Overdue ({OverdueTasks.Count})";
 
     public bool HasCompletedTasks => CompletedTasks.Count > 0;
 
@@ -61,8 +82,17 @@ public sealed partial class MainViewModel(
     [ObservableProperty]
     private Tag? _tagFilter;
 
-    // Positions in a Tag-filtered view are not List positions, so reordering is off there.
-    partial void OnTagFilterChanged(Tag? value) => IsReorderEnabled = value is null;
+    /// <summary>The Smart View being shown, or null for the Default List / Tag filter.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMoreCompleted))]
+    private SmartView? _currentView;
+
+    // Positions in a Tag-filtered view or a Smart View are not List positions, so reordering is off there.
+    partial void OnTagFilterChanged(Tag? value) => UpdateReorderEnabled();
+
+    partial void OnCurrentViewChanged(SmartView? value) => UpdateReorderEnabled();
+
+    private void UpdateReorderEnabled() => IsReorderEnabled = TagFilter is null && CurrentView is null;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddTagCommand))]
@@ -88,17 +118,22 @@ public sealed partial class MainViewModel(
             TagFilter = Tags.FirstOrDefault(t => t.Id == filterId);
         }
 
-        var tasks = TagFilter is null
-            ? await taskService.ListDefaultListTasksAsync(cancellationToken)
-            : await tagService.ListTasksByTagAsync(TagFilter.Id, cancellationToken);
+        var tasks = CurrentView is { } view
+            ? await Due.ListSmartViewAsync(view, 0, cancellationToken)
+            : TagFilter is null
+                ? await taskService.ListDefaultListTasksAsync(cancellationToken)
+                : await tagService.ListTasksByTagAsync(TagFilter.Id, cancellationToken);
         _all.Clear();
         Tasks.Clear();
+        OverdueTasks.Clear();
         CompletedTasks.Clear();
+        _completedFetched = CurrentView == SmartView.Completed ? tasks.Count : 0;
+        _completedHasMore = CurrentView == SmartView.Completed && tasks.Count == IDueService.CompletedPageSize;
         foreach (var task in tasks)
         {
-            var row = new TaskRowViewModel(task);
+            var row = new TaskRowViewModel(task, _clock);
             _all.Add(row);
-            (task.IsCompleted ? CompletedTasks : Tasks).Add(row);
+            GroupOf(row).Add(row);
         }
 
         SortCompleted();
@@ -112,8 +147,56 @@ public sealed partial class MainViewModel(
     /// <summary>Filters Tasks by the Tag, or shows the Default List again when null.</summary>
     public async Task FilterByTagAsync(Tag? tag, CancellationToken cancellationToken = default)
     {
+        CurrentView = null;
         TagFilter = tag;
         await LoadAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Shows a Smart View across all Lists, or the Default List again when null. Smart Views are not
+    /// Tag-filtered, and they turn reordering off.
+    /// </summary>
+    public async Task ShowSmartViewAsync(SmartView? view, CancellationToken cancellationToken = default)
+    {
+        TagFilter = null;
+        CurrentView = view;
+        if (view == SmartView.Completed)
+        {
+            IsCompletedExpanded = true;
+        }
+
+        await LoadAsync(cancellationToken);
+    }
+
+    /// <summary>Switches to a Smart View (Ctrl+1 to Ctrl+5).</summary>
+    [RelayCommand]
+    private Task SelectSmartViewAsync(SmartView view, CancellationToken cancellationToken)
+        => ShowSmartViewAsync(view, cancellationToken);
+
+    /// <summary>True when the Completed view may have more Tasks than the pages loaded so far.</summary>
+    public bool HasMoreCompleted => CurrentView == SmartView.Completed && _completedHasMore;
+
+    /// <summary>Loads the next page of 100 in the Completed view.</summary>
+    [RelayCommand]
+    private async Task LoadMoreCompletedAsync(CancellationToken cancellationToken)
+    {
+        if (CurrentView != SmartView.Completed)
+        {
+            return;
+        }
+
+        var page = await Due.ListSmartViewAsync(SmartView.Completed, _completedFetched, cancellationToken);
+        _completedFetched += page.Count;
+        _completedHasMore = page.Count == IDueService.CompletedPageSize;
+        foreach (var task in page)
+        {
+            var row = new TaskRowViewModel(task, _clock);
+            _all.Add(row);
+            CompletedTasks.Add(row);
+        }
+
+        SortCompleted();
+        NotifyCompletedChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanAddTask))]
@@ -124,11 +207,23 @@ public sealed partial class MainViewModel(
             return; // ExecuteAsync does not honour CanExecute, so guard here too.
         }
 
+        // In a Smart View the Task goes to the Default List; in Today it is also due today.
         var task = await taskService.CreateTaskAsync(QuickAddTitle, cancellationToken);
-        if (TagFilter is null)
+        if (CurrentView is { } view)
+        {
+            if (view == SmartView.Today)
+            {
+                await Due.SetDueAsync(
+                    task.Id, DueCalculator.LocalToday(_clock.GetUtcNow(), _clock.LocalTimeZone), null,
+                    cancellationToken);
+            }
+
+            await LoadAsync(cancellationToken);
+        }
+        else if (TagFilter is null)
         {
             // A new Task has no Tags, so it never belongs in a Tag-filtered view.
-            var row = new TaskRowViewModel(task);
+            var row = new TaskRowViewModel(task, _clock);
             _all.Add(row);
             Tasks.Add(row);
         }
@@ -254,6 +349,7 @@ public sealed partial class MainViewModel(
 
         _all.Remove(row);
         Tasks.Remove(row);
+        OverdueTasks.Remove(row);
         CompletedTasks.Remove(row);
         NotifyCompletedChanged();
         OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty);
@@ -287,7 +383,7 @@ public sealed partial class MainViewModel(
                 break;
             case DeleteUndo delete:
                 var restored = await taskService.RestoreTaskAsync(delete.Snapshot, cancellationToken);
-                var restoredRow = new TaskRowViewModel(restored);
+                var restoredRow = new TaskRowViewModel(restored, _clock);
                 var at = _all.FindIndex(r => r.Item.SortOrder > restored.SortOrder);
                 _all.Insert(at < 0 ? _all.Count : at, restoredRow);
                 Place(restoredRow);
@@ -379,6 +475,14 @@ public sealed partial class MainViewModel(
     [ObservableProperty]
     private Priority _detailPriority;
 
+    /// <summary>The Due date of the selected Task (a calendar date); null when it has none.</summary>
+    [ObservableProperty]
+    private DateTime? _detailDueDate;
+
+    /// <summary>The Due time of the selected Task as "H:mm" text; empty when it has none.</summary>
+    [ObservableProperty]
+    private string _detailDueTime = "";
+
     /// <summary>Completes when every save started so far has finished.</summary>
     public Task PendingSave => _pendingSave;
 
@@ -390,6 +494,8 @@ public sealed partial class MainViewModel(
         DetailTitle = value?.Title ?? "";
         DetailNotes = value?.Item.Notes ?? "";
         DetailPriority = value?.Priority ?? Priority.None;
+        DetailDueDate = value?.Item.DueDate?.ToDateTime(TimeOnly.MinValue);
+        DetailDueTime = value?.Item.DueTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "";
         _loadingDetail = false;
         RebuildSubtaskItems();
         if (value is not null)
@@ -403,6 +509,78 @@ public sealed partial class MainViewModel(
     partial void OnDetailNotesChanged(string value) => ScheduleSave(immediate: false);
 
     partial void OnDetailPriorityChanged(Priority value) => ScheduleSave(immediate: true);
+
+    partial void OnDetailDueDateChanged(DateTime? value)
+    {
+        if (_loadingDetail)
+        {
+            return;
+        }
+
+        if (value is null && DetailDueTime.Length > 0)
+        {
+            // A Due time cannot outlive its Due date.
+            _loadingDetail = true;
+            DetailDueTime = "";
+            _loadingDetail = false;
+        }
+
+        ScheduleDueSave();
+    }
+
+    partial void OnDetailDueTimeChanged(string value) => ScheduleDueSave();
+
+    private void ScheduleDueSave()
+    {
+        if (_loadingDetail || SelectedTask is not { } row)
+        {
+            return;
+        }
+
+        DateOnly? date = DetailDueDate is { } picked ? DateOnly.FromDateTime(picked) : null;
+        TimeOnly? time = null;
+        var text = DetailDueTime?.Trim() ?? "";
+        if (text.Length > 0)
+        {
+            if (!TimeOnly.TryParseExact(
+                    text, ["H:mm", "HH:mm"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            {
+                ErrorMessage = "Enter the Due time as HH:mm, for example 14:30.";
+                return;
+            }
+
+            time = parsed;
+        }
+
+        if (time is not null && date is null)
+        {
+            ErrorMessage = "A Due time needs a Due date.";
+            return;
+        }
+
+        ErrorMessage = null;
+        _pendingSave = SaveDueAsync(_pendingSave, row, date, time);
+    }
+
+    private async Task SaveDueAsync(Task previous, TaskRowViewModel row, DateOnly? date, TimeOnly? time)
+    {
+        await previous; // saves of one Task never overlap
+        try
+        {
+            var updated = await Due.SetDueAsync(row.Id, date, time);
+            row.Apply(updated);
+            if (InOverdueGroup(row) != OverdueTasks.Contains(row))
+            {
+                Place(row);
+            }
+
+            ErrorMessage = null;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            ErrorMessage = "Could not save the changes: " + ex.Message;
+        }
+    }
 
     [RelayCommand]
     private void CloseDetailPane()
@@ -658,6 +836,7 @@ public sealed partial class MainViewModel(
     private void Place(TaskRowViewModel row)
     {
         Tasks.Remove(row);
+        OverdueTasks.Remove(row);
         CompletedTasks.Remove(row);
         if (row.IsCompleted)
         {
@@ -666,15 +845,25 @@ public sealed partial class MainViewModel(
         }
         else
         {
-            var index = _all.TakeWhile(r => r != row).Count(r => !r.IsCompleted);
-            Tasks.Insert(index, row);
+            var group = GroupOf(row);
+            var index = _all.TakeWhile(r => r != row).Count(r => !r.IsCompleted && GroupOf(r) == group);
+            group.Insert(index, row);
         }
 
         NotifyCompletedChanged();
     }
 
+    // Only the Today view has an Overdue group; elsewhere an Overdue Task sits with the others.
+    private bool InOverdueGroup(TaskRowViewModel row) => CurrentView == SmartView.Today && row.IsOverdue;
+
+    private ObservableCollection<TaskRowViewModel> GroupOf(TaskRowViewModel row) =>
+        row.IsCompleted ? CompletedTasks : InOverdueGroup(row) ? OverdueTasks : Tasks;
+
     private void NotifyCompletedChanged()
     {
+        OnPropertyChanged(nameof(OverdueHeader));
+        OnPropertyChanged(nameof(HasOverdueTasks));
+        OnPropertyChanged(nameof(HasMoreCompleted));
         OnPropertyChanged(nameof(CompletedHeader));
         OnPropertyChanged(nameof(HasCompletedTasks));
     }

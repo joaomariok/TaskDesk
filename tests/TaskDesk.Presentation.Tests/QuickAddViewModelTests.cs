@@ -9,10 +9,17 @@ public sealed class QuickAddViewModelTests
     {
         public List<(string Title, Guid ListId)> Created { get; } = [];
 
+        public List<DateOnly?> CreatedDue { get; } = [];
+
         public Task<TaskItem> CreateTaskInListAsync(string title, Guid listId, CancellationToken cancellationToken = default)
+            => CreateTaskInListAsync(title, listId, null, cancellationToken);
+
+        public Task<TaskItem> CreateTaskInListAsync(
+            string title, Guid listId, DateOnly? dueDate, CancellationToken cancellationToken = default)
         {
             Created.Add((title, listId));
-            return Task.FromResult(new TaskItem { Id = Guid.NewGuid(), ListId = listId, Title = title });
+            CreatedDue.Add(dueDate);
+            return Task.FromResult(new TaskItem { Id = Guid.NewGuid(), ListId = listId, Title = title, DueDate = dueDate });
         }
     }
 
@@ -106,5 +113,28 @@ public sealed class QuickAddViewModelTests
         await vm.SaveCommand.ExecuteAsync(null);
 
         Assert.Single(_creator.Created);
+    }
+
+    [Fact]
+    public async Task Save_passes_the_picked_Due_date_to_the_creator_as_a_calendar_date()
+    {
+        var vm = await LoadedAsync();
+        vm.Title = "with date";
+        vm.DueDate = new DateTime(2026, 11, 1, 15, 45, 0);
+
+        await vm.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal([new DateOnly(2026, 11, 1)], _creator.CreatedDue);
+    }
+
+    [Fact]
+    public async Task Save_without_a_Due_date_passes_none()
+    {
+        var vm = await LoadedAsync();
+        vm.Title = "no date";
+
+        await vm.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal([(DateOnly?)null], _creator.CreatedDue);
     }
 }
