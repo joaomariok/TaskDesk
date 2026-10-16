@@ -16,6 +16,9 @@ public sealed class ShellController(
     private bool _exiting;
     private bool _disposed;
 
+    /// <summary>Raised by the tray menu's "Quick add"; the App opens the quick-add window.</summary>
+    public event Action? QuickAddRequested;
+
     /// <summary>Raised by the tray menu; the App opens the Settings window in response.</summary>
     public event Action? SettingsRequested;
 
@@ -36,6 +39,7 @@ public sealed class ShellController(
 
         tray.LeftClicked += OnLeftClicked;
         tray.OpenRequested += window.ShowAndFocus;
+        tray.QuickAddRequested += OnQuickAddRequested;
         tray.SettingsRequested += OnSettingsRequested;
         tray.ExitRequested += Exit;
         tray.Show();
@@ -95,6 +99,7 @@ public sealed class ShellController(
         _disposed = true;
         tray.LeftClicked -= OnLeftClicked;
         tray.OpenRequested -= window.ShowAndFocus;
+        tray.QuickAddRequested -= OnQuickAddRequested;
         tray.SettingsRequested -= OnSettingsRequested;
         tray.ExitRequested -= Exit;
         tray.Dispose();
@@ -112,6 +117,8 @@ public sealed class ShellController(
             window.ShowAndFocus();
         }
     }
+
+    private void OnQuickAddRequested() => QuickAddRequested?.Invoke();
 
     private void OnSettingsRequested() => SettingsRequested?.Invoke();
 }

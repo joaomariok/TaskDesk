@@ -56,7 +56,7 @@ public sealed class SettingsViewModelTests
     {
         var backups = new FakeBackups();
         var vm = new SettingsViewModel(
-            _store, new AutoStartService(_runKey), _theme, _opener, _paths, Exe, "1.2.3", backups);
+            _store, new AutoStartService(_runKey), _theme, _opener, _paths, Exe, "1.2.3", Hotkeys, backups);
 
         await vm.BackUpNowCommand.ExecuteAsync(null);
 
@@ -68,7 +68,7 @@ public sealed class SettingsViewModelTests
     public async Task A_failed_backup_is_reported_not_thrown()
     {
         var vm = new SettingsViewModel(
-            _store, new AutoStartService(_runKey), _theme, _opener, _paths, Exe, "1.2.3",
+            _store, new AutoStartService(_runKey), _theme, _opener, _paths, Exe, "1.2.3", Hotkeys,
             new FakeBackups(new IOException("disk full")));
 
         await vm.BackUpNowCommand.ExecuteAsync(null);
@@ -83,8 +83,13 @@ public sealed class SettingsViewModelTests
     private readonly FakeOpener _opener = new();
     private readonly IAppPaths _paths = AppPaths.ForRoot(@"C:\Data\TaskDesk");
 
+    private readonly FakeRegistrar _registrar = new();
+    private HotkeyService? _hotkeyService;
+
+    private HotkeyService Hotkeys => _hotkeyService ??= new HotkeyService(_registrar, _store);
+
     private SettingsViewModel Create() =>
-        new(_store, new AutoStartService(_runKey), _theme, _opener, _paths, Exe, "1.2.3");
+        new(_store, new AutoStartService(_runKey), _theme, _opener, _paths, Exe, "1.2.3", Hotkeys);
 
     [Fact]
     public void Shows_the_stored_values_without_writing_anything()
@@ -173,5 +178,86 @@ public sealed class SettingsViewModelTests
         vm.OpenDataFolderCommand.Execute(null);
 
         Assert.Equal([_paths.DataDirectory], _opener.Opened);
+    }
+
+    private static readonly Hotkey Custom = new(HotkeyModifiers.Ctrl | HotkeyModifiers.Shift, 'K');
+
+    [Fact]
+    public void Shows_the_stored_hotkey_or_disabled()
+    {
+        Assert.Equal("Ctrl+Alt+Space", Create().HotkeyText);
+
+        _store.Current = _store.Current with { Hotkey = null };
+        Assert.Equal("Disabled", Create().HotkeyText);
+    }
+
+    [Fact]
+    public void Capturing_a_free_hotkey_registers_it_and_saves_it_without_clobbering_other_fields()
+    {
+        _store.Current = new ShellSettings(Theme: ThemeChoice.Dark);
+        var vm = Create();
+
+        var ok = vm.TryCaptureHotkey(Custom);
+
+        Assert.True(ok);
+        Assert.Equal(Custom, _registrar.Current);
+        Assert.Equal(Custom, _store.Current.Hotkey);
+        Assert.Equal(ThemeChoice.Dark, _store.Current.Theme);
+        Assert.Equal("Ctrl+Shift+K", vm.HotkeyText);
+        Assert.Null(vm.HotkeyError);
+    }
+
+    [Fact]
+    public void Capturing_a_hotkey_owned_by_another_app_reports_it_and_keeps_the_previous_one()
+    {
+        var vm = Create();
+        Hotkeys.Start();
+        _registrar.TakenByOtherApps.Add(Custom);
+
+        var ok = vm.TryCaptureHotkey(Custom);
+
+        Assert.False(ok);
+        Assert.Equal(HotkeyService.ConflictMessage, vm.HotkeyError);
+        Assert.Equal(Hotkey.Default, _registrar.Current);
+        Assert.Equal(Hotkey.Default, _store.Current.Hotkey);
+        Assert.Equal("Ctrl+Alt+Space", vm.HotkeyText);
+    }
+
+    [Fact]
+    public void Capturing_a_shortcut_without_a_modifier_is_refused()
+    {
+        var vm = Create();
+
+        var ok = vm.TryCaptureHotkey(new Hotkey(HotkeyModifiers.None, 'A'));
+
+        Assert.False(ok);
+        Assert.NotNull(vm.HotkeyError);
+        Assert.Equal(0, _store.Saves);
+    }
+
+    [Fact]
+    public void Disable_unregisters_and_stores_the_hotkey_as_disabled()
+    {
+        _store.Current = new ShellSettings(Theme: ThemeChoice.Light);
+        var vm = Create();
+        Hotkeys.Start();
+
+        vm.DisableHotkeyCommand.Execute(null);
+
+        Assert.Null(_registrar.Current);
+        Assert.Null(_store.Current.Hotkey);
+        Assert.Equal(ThemeChoice.Light, _store.Current.Theme);
+        Assert.Equal("Disabled", vm.HotkeyText);
+    }
+
+    [Fact]
+    public void A_start_up_conflict_is_shown_when_Settings_opens()
+    {
+        _registrar.TakenByOtherApps.Add(Hotkey.Default);
+        Hotkeys.Start();
+
+        var vm = Create();
+
+        Assert.Equal(HotkeyService.ConflictMessage, vm.HotkeyError);
     }
 }

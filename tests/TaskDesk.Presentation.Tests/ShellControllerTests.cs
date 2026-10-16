@@ -8,6 +8,7 @@ public sealed class ShellControllerTests
     {
         public event Action? LeftClicked;
         public event Action? OpenRequested;
+        public event Action? QuickAddRequested;
         public event Action? SettingsRequested;
         public event Action? ExitRequested;
 
@@ -21,6 +22,7 @@ public sealed class ShellControllerTests
 
         public void ClickLeft() => LeftClicked?.Invoke();
         public void ClickOpen() => OpenRequested?.Invoke();
+        public void ClickQuickAdd() => QuickAddRequested?.Invoke();
         public void ClickSettings() => SettingsRequested?.Invoke();
         public void ClickExit() => ExitRequested?.Invoke();
     }
@@ -281,5 +283,30 @@ public sealed class ShellControllerTests
         Assert.True(_window.IsVisible);
         Assert.Equal(1, _lifetime.ShutdownCount);
         Assert.Empty(_tray.Hints);
+    }
+
+    [Fact]
+    public async Task Quick_add_menu_item_raises_quick_add_requested()
+    {
+        var controller = await StartedAsync();
+        var raised = 0;
+        controller.QuickAddRequested += () => raised++;
+
+        _tray.ClickQuickAdd();
+
+        Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public async Task Quick_add_requests_stop_after_dispose()
+    {
+        var controller = await StartedAsync();
+        var raised = 0;
+        controller.QuickAddRequested += () => raised++;
+        controller.Dispose();
+
+        _tray.ClickQuickAdd();
+
+        Assert.Equal(0, raised);
     }
 }

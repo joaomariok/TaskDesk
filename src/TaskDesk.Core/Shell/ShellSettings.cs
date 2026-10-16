@@ -18,6 +18,9 @@ public sealed record ShellSettings(
     /// <summary>Time used for date-only Reminders; 09:00 unless the owner changed it.</summary>
     public TimeOnly DefaultReminderTime { get; init; } =
         DefaultReminderTime == default ? InitialReminderTime : DefaultReminderTime;
+
+    /// <summary>The global quick-add shortcut; null means the owner disabled it.</summary>
+    public Hotkey? Hotkey { get; init; } = Hotkey.Default;
 }
 
 public interface IShellSettingsStore
@@ -38,6 +41,7 @@ public sealed class JsonShellSettingsStore(string path) : IShellSettingsStore
     private const string CloseKey = "closeBehavior";
     private const string ReminderKey = "defaultReminderTime";
     private const string LayoutKey = "windowLayout";
+    private const string HotkeyKey = "globalHotkey";
 
     public ShellSettings Load()
     {
@@ -48,7 +52,10 @@ public sealed class JsonShellSettingsStore(string path) : IShellSettingsStore
             ReadEnum(root[ThemeKey], ThemeChoice.System),
             ReadEnum(root[CloseKey], CloseBehavior.HideToTray),
             ReadTime(root[ReminderKey]),
-            ReadLayout(root[LayoutKey]));
+            ReadLayout(root[LayoutKey]))
+        {
+            Hotkey = ReadHotkey(root[HotkeyKey]),
+        };
     }
 
     public void Save(ShellSettings settings)
@@ -60,6 +67,7 @@ public sealed class JsonShellSettingsStore(string path) : IShellSettingsStore
         root[CloseKey] = settings.CloseBehavior.ToString();
         root[ReminderKey] = settings.DefaultReminderTime.ToString("HH:mm", CultureInfo.InvariantCulture);
         root[LayoutKey] = WriteLayout(settings.Layout);
+        root[HotkeyKey] = settings.Hotkey?.ToString() ?? "";
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + ".tmp";
@@ -72,6 +80,12 @@ public sealed class JsonShellSettingsStore(string path) : IShellSettingsStore
         && Enum.TryParse<T>(text, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
             ? parsed
             : fallback;
+
+    // Missing or unreadable means the default; an empty string means the owner disabled it.
+    private static Hotkey? ReadHotkey(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text)
+            ? text.Length == 0 ? null : Hotkey.TryParse(text) ?? Hotkey.Default
+            : Hotkey.Default;
 
     private static TimeOnly ReadTime(JsonNode? node) =>
         node is JsonValue value && value.TryGetValue<string>(out var text)

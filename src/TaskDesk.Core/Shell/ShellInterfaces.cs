@@ -5,6 +5,7 @@ public interface ITrayIcon : IDisposable
 {
     event Action? LeftClicked;
     event Action? OpenRequested;
+    event Action? QuickAddRequested;
     event Action? SettingsRequested;
     event Action? ExitRequested;
 

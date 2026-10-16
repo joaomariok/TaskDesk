@@ -17,6 +17,8 @@ public partial class App : Application
     private IHost? _host;
     private ShellController? _shell;
     private SettingsWindow? _settingsWindow;
+    private QuickAddWindow? _quickAddWindow;
+    private HotkeyService? _hotkeys;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -52,6 +54,9 @@ public partial class App : Application
         builder.Services.AddSingleton<AutoStartService>();
         builder.Services.AddSingleton<IShellSettingsStore>(_ => new JsonShellSettingsStore(paths.SettingsFile));
         builder.Services.AddSingleton<ShellController>();
+        builder.Services.AddSingleton<IHotkeyRegistrar, Win32HotkeyRegistrar>();
+        builder.Services.AddSingleton<HotkeyService>();
+        builder.Services.AddTransient<QuickAddViewModel>();
         builder.Services.AddSingleton<IThemeService, WpfThemeService>();
         builder.Services.AddSingleton<IFolderOpener, ExplorerFolderOpener>();
         builder.Services.AddSingleton<WindowLayoutService>();
@@ -63,6 +68,7 @@ public partial class App : Application
             sp.GetRequiredService<IAppPaths>(),
             Environment.ProcessPath ?? "",
             AppVersion(),
+            sp.GetRequiredService<HotkeyService>(),
             sp.GetRequiredService<IBackupService>()));
         _host = builder.Build();
 
@@ -103,10 +109,41 @@ public partial class App : Application
             args.Cancel = _shell.OnWindowClosing();
         };
         _shell.SettingsRequested += () => Dispatcher.Invoke(ShowSettings);
+        _shell.QuickAddRequested += () => Dispatcher.InvokeAsync(ShowQuickAddAsync);
+
+        // A conflict is logged and shown in Settings; it never blocks start-up.
+        _hotkeys = _host.Services.GetRequiredService<HotkeyService>();
+        _hotkeys.Triggered += () => _ = ShowQuickAddAsync();
+        _hotkeys.Start();
 
         var minimized = e.Args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
         var exePath = Environment.ProcessPath ?? throw new InvalidOperationException("No process path.");
         await _shell.StartAsync(minimized, exePath);
+    }
+
+    private async Task ShowQuickAddAsync()
+    {
+        if (_quickAddWindow is not null)
+        {
+            _quickAddWindow.Activate();
+            return;
+        }
+
+        var viewModel = _host!.Services.GetRequiredService<QuickAddViewModel>();
+        var main = _host.Services.GetRequiredService<MainWindow>();
+        viewModel.TaskCreated += async () =>
+        {
+            // MainViewModel.LoadAsync does not raise OpenTaskCountsChanged, so reload the Lists
+            // explicitly to refresh their open-Task counts.
+            await main.ViewModel.LoadAsync();
+            await main.Lists.LoadAsync();
+        };
+        await viewModel.LoadAsync();
+
+        _quickAddWindow = new QuickAddWindow(viewModel);
+        _quickAddWindow.Closed += (_, _) => _quickAddWindow = null;
+        _quickAddWindow.Show();
+        _quickAddWindow.Activate();
     }
 
     private void ShowSettings()
@@ -136,6 +173,7 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        _hotkeys?.Dispose();
         _shell?.Dispose();
 
         if (_host is not null)

@@ -15,6 +15,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IThemeService _themeService;
     private readonly IFolderOpener _folderOpener;
     private readonly string _exePath;
+    private readonly HotkeyService _hotkeys;
     private readonly IBackupService? _backups;
     private readonly bool _loading = true;
 
@@ -26,9 +27,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         IAppPaths paths,
         string exePath,
         string version,
+        HotkeyService hotkeys,
         IBackupService? backups = null)
     {
         _backups = backups;
+        _hotkeys = hotkeys;
         _store = store;
         _autoStart = autoStart;
         _themeService = themeService;
@@ -43,6 +46,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         _startWithWindows = settings.StartWithWindows;
         _closeBehavior = settings.CloseBehavior;
         _defaultReminderTimeText = FormatTime(settings.DefaultReminderTime);
+        _hotkeyText = FormatHotkey(settings.Hotkey);
+        _hotkeyError = hotkeys.Error;
         _loading = false;
     }
 
@@ -68,6 +73,47 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     /// <summary>False while the text is not a valid HH:mm time; the last valid value stays saved.</summary>
     public bool IsReminderTimeValid => TryParseTime(DefaultReminderTimeText, out _);
+
+    /// <summary>The global quick-add shortcut as text, or "Disabled".</summary>
+    [ObservableProperty]
+    private string _hotkeyText;
+
+    /// <summary>Why the shortcut could not be used (for example, owned by another app); null when fine.</summary>
+    [ObservableProperty]
+    private string? _hotkeyError;
+
+    /// <summary>
+    /// Applies a captured shortcut and stores it. On failure nothing is saved and the previous
+    /// working shortcut stays active; <see cref="HotkeyError"/> says why.
+    /// </summary>
+    public bool TryCaptureHotkey(Hotkey hotkey)
+    {
+        if (!hotkey.IsValid)
+        {
+            HotkeyError = "Use Ctrl, Alt, Shift or Win with a letter, digit, F-key, Space or navigation key.";
+            return false;
+        }
+
+        if (!_hotkeys.Apply(hotkey))
+        {
+            HotkeyError = _hotkeys.Error;
+            return false;
+        }
+
+        _store.Save(_store.Load() with { Hotkey = hotkey });
+        HotkeyText = FormatHotkey(hotkey);
+        HotkeyError = null;
+        return true;
+    }
+
+    [RelayCommand]
+    private void DisableHotkey()
+    {
+        _hotkeys.Apply(null);
+        _store.Save(_store.Load() with { Hotkey = null });
+        HotkeyText = FormatHotkey(null);
+        HotkeyError = null;
+    }
 
     [RelayCommand]
     private void OpenDataFolder() => _folderOpener.Open(DataFolder);
@@ -132,6 +178,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             _store.Save(_store.Load() with { DefaultReminderTime = time });
         }
     }
+
+    private static string FormatHotkey(Hotkey? hotkey) => hotkey?.ToString() ?? "Disabled";
 
     private static string FormatTime(TimeOnly time) => time.ToString("HH:mm", CultureInfo.InvariantCulture);
 

@@ -27,6 +27,7 @@ internal sealed class HNotifyTrayIcon : ITrayIcon
 
     public event Action? LeftClicked;
     public event Action? OpenRequested;
+    public event Action? QuickAddRequested;
     public event Action? SettingsRequested;
     public event Action? ExitRequested;
 
@@ -41,6 +42,7 @@ internal sealed class HNotifyTrayIcon : ITrayIcon
     {
         var menu = new ContextMenu();
         menu.Items.Add(Item("Open TaskDesk", () => OpenRequested?.Invoke()));
+        menu.Items.Add(Item("Quick add", () => QuickAddRequested?.Invoke()));
         menu.Items.Add(Item("Settings", () => SettingsRequested?.Invoke()));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Exit", () => ExitRequested?.Invoke()));

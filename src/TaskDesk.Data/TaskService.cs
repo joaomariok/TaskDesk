@@ -7,17 +7,24 @@ namespace TaskDesk.Data;
 internal sealed class TaskService(
     IDbContextFactory<TaskDeskDbContext> contextFactory,
     TimeProvider clock,
-    ILogger<TaskService> logger) : ITaskService
+    ILogger<TaskService> logger) : ITaskService, ITaskCreator
 {
-    public async Task<TaskItem> CreateTaskAsync(string title, CancellationToken cancellationToken = default)
+    public Task<TaskItem> CreateTaskAsync(string title, CancellationToken cancellationToken = default) =>
+        CreateAsync(title, null, cancellationToken);
+
+    public Task<TaskItem> CreateTaskInListAsync(
+        string title, Guid listId, CancellationToken cancellationToken = default) =>
+        CreateAsync(title, listId, cancellationToken);
+
+    private async Task<TaskItem> CreateAsync(string title, Guid? requestedListId, CancellationToken cancellationToken)
     {
         var normalizedTitle = TaskTitle.Normalize(title);
 
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        var listId = await context.Lists
-            .Where(l => l.IsDefault)
-            .Select(l => l.Id)
-            .SingleAsync(cancellationToken);
+        var listId = requestedListId is { } chosen
+            ? await context.Lists.Where(l => l.Id == chosen).Select(l => (Guid?)l.Id).SingleOrDefaultAsync(cancellationToken)
+                ?? throw new KeyNotFoundException($"List {chosen} does not exist.")
+            : await context.Lists.Where(l => l.IsDefault).Select(l => l.Id).SingleAsync(cancellationToken);
 
         var lastOrder = await context.Tasks
             .Where(t => t.ListId == listId)

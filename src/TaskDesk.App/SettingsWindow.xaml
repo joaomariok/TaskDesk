@@ -33,6 +33,28 @@
             </TextBlock.Style>
         </TextBlock>
 
+        <TextBlock Text="Global quick-add shortcut" Margin="0,12,0,4" />
+        <StackPanel Orientation="Horizontal">
+            <TextBox IsReadOnly="True" Padding="4" Width="200" IsReadOnlyCaretVisible="False"
+                     AutomationProperties.Name="Global hotkey (press a key combination)"
+                     Text="{Binding HotkeyText, Mode=OneWay}"
+                     PreviewKeyDown="OnHotkeyPreviewKeyDown" />
+            <Button Content="Disable" Margin="8,0,0,0" Padding="12,4"
+                    Command="{Binding DisableHotkeyCommand}" />
+        </StackPanel>
+        <TextBlock Text="Click the box and press a key combination." Margin="0,4,0,0" Opacity="0.7" />
+        <TextBlock Text="{Binding HotkeyError}" Margin="0,4,0,0" Foreground="Firebrick" TextWrapping="Wrap">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HotkeyError}" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+
         <TextBlock Text="About" FontWeight="SemiBold" Margin="0,20,0,4" />
         <TextBlock Text="{Binding Version, StringFormat=Version {0}}" />
         <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding DataFolder, StringFormat=Data folder: {0}}" />
