@@ -1,0 +1,14 @@
+<Window x:Class="NotificationSpike.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Notification spike" Width="720" Height="460">
+  <DockPanel Margin="12">
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+      <Button Content="Show toast now" Padding="12,6" Click="ShowNow_Click" />
+      <Button Content="Show toast in 15 s" Padding="12,6" Margin="8,0,0,0" Click="ShowDelayed_Click" />
+    </StackPanel>
+    <TextBlock DockPanel.Dock="Top" Margin="0,8" TextWrapping="Wrap" x:Name="StatusText" />
+    <TextBox x:Name="LogBox" IsReadOnly="True" FontFamily="Consolas"
+             VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" />
+  </DockPanel>
+</Window>

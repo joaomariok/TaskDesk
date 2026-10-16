@@ -1,0 +1,3 @@
+<Project>
+  <!-- Isolates the throwaway spike from the product's root Directory.Build.props. -->
+</Project>
