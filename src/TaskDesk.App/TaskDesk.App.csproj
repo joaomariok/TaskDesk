@@ -7,7 +7,11 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <ApplicationIcon>Assets/TaskDesk.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets/TaskDesk.ico" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TaskDesk.Core\TaskDesk.Core.csproj" />
     <ProjectReference Include="..\TaskDesk.Data\TaskDesk.Data.csproj" />
@@ -15,5 +19,6 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="H.NotifyIcon.Wpf" />
   </ItemGroup>
 </Project>
