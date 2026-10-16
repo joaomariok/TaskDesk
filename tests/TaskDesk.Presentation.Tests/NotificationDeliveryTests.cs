@@ -82,6 +82,22 @@ public class NotificationDeliveryTests
     }
 
     [Fact]
+    public void A_missed_Reminders_summary_is_delivered_like_a_Reminder_and_falls_back_on_failure()
+    {
+        var (primary, fallback, _, delivery) = Create();
+        delivery.Register();
+        var summary = new MissedRemindersSummary(5);
+
+        delivery.ShowSummary(summary);
+        primary.ShowFailure = new InvalidOperationException("toast failed");
+        delivery.ShowSummary(summary);
+
+        Assert.Equal([summary], primary.Summaries);
+        Assert.Equal([summary], fallback.Summaries);
+        Assert.NotNull(delivery.FallbackReason);
+    }
+
+    [Fact]
     public void Clicks_on_either_delivery_are_reported()
     {
         var (primary, fallback, _, delivery) = Create();

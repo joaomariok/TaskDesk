@@ -56,18 +56,36 @@ internal sealed class AppSdkNotificationService(ILogger<AppSdkNotificationServic
             builder.AddArgument(key, value);
         }
 
-        var markDone = new AppNotificationButton("Mark done");
-        foreach (var (key, value) in ReminderArguments.MarkDone(notification.TaskId))
-        {
-            markDone.AddArgument(key, value);
-        }
-
         var toast = builder
             .AddText(notification.Title)
             .AddText(notification.Body)
-            .AddButton(markDone)
+            .AddButton(Button("Mark done", ReminderArguments.MarkDone(notification.TaskId)))
+            .AddButton(Button("Snooze 10 min", ReminderArguments.SnoozeShort(notification.TaskId)))
+            .AddButton(Button("Snooze 1 h", ReminderArguments.SnoozeLong(notification.TaskId)))
             .BuildNotification();
         AppNotificationManager.Default.Show(toast);
+    }
+
+    public void ShowSummary(MissedRemindersSummary summary)
+    {
+        var builder = new AppNotificationBuilder();
+        foreach (var (key, value) in ReminderArguments.OpenToday())
+        {
+            builder.AddArgument(key, value);
+        }
+
+        AppNotificationManager.Default.Show(builder.AddText(summary.Title).AddText(summary.Body).BuildNotification());
+    }
+
+    private static AppNotificationButton Button(string label, IReadOnlyDictionary<string, string> arguments)
+    {
+        var button = new AppNotificationButton(label);
+        foreach (var (key, value) in arguments)
+        {
+            button.AddArgument(key, value);
+        }
+
+        return button;
     }
 
     public void Unregister()

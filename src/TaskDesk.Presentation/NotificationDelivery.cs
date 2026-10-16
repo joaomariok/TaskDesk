@@ -49,14 +49,18 @@ public sealed class NotificationDelivery : INotificationService
 
     public NotificationActivation? GetLaunchActivation() => Active.GetLaunchActivation();
 
-    public void Show(ReminderNotification notification)
+    public void Show(ReminderNotification notification) => Deliver(service => service.Show(notification));
+
+    public void ShowSummary(MissedRemindersSummary summary) => Deliver(service => service.ShowSummary(summary));
+
+    private void Deliver(Action<INotificationService> show)
     {
         var active = Active;
         if (active == _primary)
         {
             try
             {
-                _primary.Show(notification);
+                show(_primary);
                 return;
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -65,7 +69,7 @@ public sealed class NotificationDelivery : INotificationService
             }
         }
 
-        _fallback.Show(notification);
+        show(_fallback);
     }
 
     public void Unregister() => Active.Unregister();

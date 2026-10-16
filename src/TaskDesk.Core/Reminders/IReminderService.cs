@@ -12,6 +12,21 @@ public interface IReminderService
     /// <exception cref="KeyNotFoundException">No Task has this id.</exception>
     Task<TaskItem> SetReminderAsync(Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Snoozes the Reminder of a Task until now + <paramref name="duration"/> and re-arms it; the planned
+    /// Reminder is left unchanged (see <see cref="ReminderCalculator.Snooze"/>). A completed Task is left as it
+    /// is. Returns the Task with its Tags and Subtasks loaded.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No Task has this id.</exception>
+    Task<TaskItem> SnoozeAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears the Snooze of a Task and re-arms its planned Reminder (see
+    /// <see cref="ReminderCalculator.ClearSnooze"/>). Returns the Task with its Tags and Subtasks loaded.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No Task has this id.</exception>
+    Task<TaskItem> ClearSnoozeAsync(Guid taskId, CancellationToken cancellationToken = default);
+
     /// <summary>The Reminders due now (see <see cref="ReminderCalculator.IsDue"/>), the one that fires first first.</summary>
     Task<IReadOnlyList<DueReminder>> ListDueAsync(CancellationToken cancellationToken = default);
 

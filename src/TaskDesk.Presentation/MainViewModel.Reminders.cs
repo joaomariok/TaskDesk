@@ -6,7 +6,7 @@ using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Presentation;
 
-// The Reminder of the selected Task, the Reminder notification actions, and the fallback banner.
+// The Reminder and Snooze of the selected Task, the Reminder notification actions, and the fallback banner.
 public sealed partial class MainViewModel
 {
     /// <summary>The local date of the selected Task's Reminder; null when it has none.</summary>
@@ -19,6 +19,13 @@ public sealed partial class MainViewModel
     /// </summary>
     [ObservableProperty]
     private string _detailReminderTime = "";
+
+    /// <summary>"Snoozed until ..." in local time for the selected Task; null when it is not snoozed.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDetailSnooze))]
+    private string? _detailSnooze;
+
+    public bool HasDetailSnooze => DetailSnooze is not null;
 
     /// <summary>Why rich notifications are unavailable, shown as a banner until dismissed; null hides it.</summary>
     [ObservableProperty]
@@ -46,6 +53,74 @@ public sealed partial class MainViewModel
         {
             DetailReminderDate = null;
             DetailReminderTime = "";
+        }
+
+        LoadSnoozeDetail(task);
+    }
+
+    private void LoadSnoozeDetail(TaskItem? task)
+    {
+        if (task?.SnoozedUntilUtc is not { } snoozedUtc)
+        {
+            DetailSnooze = null;
+            return;
+        }
+
+        var (date, time) = ReminderCalculator.ToLocal(snoozedUtc, _clock.LocalTimeZone);
+        var today = DueCalculator.LocalToday(_clock.GetUtcNow(), _clock.LocalTimeZone);
+        DetailSnooze = date == today
+            ? $"Snoozed until {FormatTime(time)}"
+            : $"Snoozed until {date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} {FormatTime(time)}";
+    }
+
+    /// <summary>Clears the Snooze of the selected Task, which re-arms its planned Reminder.</summary>
+    [RelayCommand]
+    private async Task ClearSnoozeAsync()
+    {
+        if (SelectedTask is not { } row)
+        {
+            return;
+        }
+
+        try
+        {
+            ApplyReminderChange(row, await Reminders.ClearSnoozeAsync(row.Id));
+            ErrorMessage = null;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            ErrorMessage = "Could not clear the Snooze: " + ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Snoozes a Task from its Reminder notification; the planned Reminder is unchanged. A Task deleted since
+    /// is ignored.
+    /// </summary>
+    public async Task SnoozeTaskAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default)
+    {
+        TaskItem task;
+        try
+        {
+            task = await Reminders.SnoozeAsync(taskId, duration, cancellationToken);
+        }
+        catch (KeyNotFoundException)
+        {
+            return;
+        }
+
+        if (_all.Find(r => r.Id == taskId) is { } row)
+        {
+            ApplyReminderChange(row, task);
+        }
+    }
+
+    private void ApplyReminderChange(TaskRowViewModel row, TaskItem task)
+    {
+        row.Apply(task);
+        if (SelectedTask == row)
+        {
+            LoadSnoozeDetail(task);
         }
     }
 
@@ -117,7 +192,7 @@ public sealed partial class MainViewModel
         await previous; // saves of one Task never overlap
         try
         {
-            row.Apply(await Reminders.SetReminderAsync(row.Id, reminderUtc));
+            ApplyReminderChange(row, await Reminders.SetReminderAsync(row.Id, reminderUtc));
             ErrorMessage = null;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

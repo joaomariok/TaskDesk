@@ -5,11 +5,12 @@ namespace TaskDesk.App.Notifications;
 
 /// <summary>
 /// The fallback when rich notifications are unavailable (SPEC 7.3): a tray balloon with the same title
-/// and body. It has no buttons; clicking it opens the Task of the last balloon. Manual checks only.
+/// and body. It has no buttons; clicking it opens the Task of the last balloon, or the Today view after a
+/// missed-Reminders summary. Manual checks only.
 /// </summary>
 internal sealed class TrayBalloonNotificationService(HNotifyTrayIcon tray) : INotificationService
 {
-    private Guid? _lastTaskId;
+    private NotificationActivation? _lastActivation;
     private bool _registered;
 
     public event Action<NotificationActivation>? Activated;
@@ -27,8 +28,14 @@ internal sealed class TrayBalloonNotificationService(HNotifyTrayIcon tray) : INo
 
     public void Show(ReminderNotification notification)
     {
-        _lastTaskId = notification.TaskId;
+        _lastActivation = new NotificationActivation(notification.TaskId, ReminderAction.Open);
         tray.ShowBalloon(notification.Title, notification.Body);
+    }
+
+    public void ShowSummary(MissedRemindersSummary summary)
+    {
+        _lastActivation = NotificationActivation.OpenToday;
+        tray.ShowBalloon(summary.Title, summary.Body);
     }
 
     public void Unregister()
@@ -42,9 +49,9 @@ internal sealed class TrayBalloonNotificationService(HNotifyTrayIcon tray) : INo
 
     private void OnBalloonClicked()
     {
-        if (_lastTaskId is { } taskId)
+        if (_lastActivation is { } activation)
         {
-            Activated?.Invoke(new NotificationActivation(taskId, ReminderAction.Open));
+            Activated?.Invoke(activation);
         }
     }
 }

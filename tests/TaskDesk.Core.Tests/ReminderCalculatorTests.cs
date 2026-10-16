@@ -185,4 +185,91 @@ public class ReminderCalculatorTests
         Assert.Null(task.SnoozedUntilUtc);
         Assert.Null(task.ReminderFiredUtc);
     }
+    // ---- Snooze ----
+
+    public static TheoryData<string, int> SnoozeCases => new()
+    {
+        // description, Snooze duration in minutes
+        { "Snooze 10 min", 10 },
+        { "Snooze 1 h", 60 },
+    };
+
+    [Theory]
+    [MemberData(nameof(SnoozeCases))]
+    public void Snoozing_a_fired_Reminder_sets_the_Snooze_from_now_and_leaves_the_planned_Reminder(
+        string description, int minutes)
+    {
+        var task = Task(Planned, fired: Utc(12, 0));
+        var clock = ClockAtUtc(12, 3);
+
+        Assert.True(ReminderCalculator.Snooze(task, clock.GetUtcNow(), TimeSpan.FromMinutes(minutes)), description);
+
+        Assert.Equal(Utc(12, 3).AddMinutes(minutes), task.SnoozedUntilUtc);
+        Assert.Equal(Planned, task.ReminderUtc);
+        Assert.Null(task.ReminderFiredUtc);
+        Assert.Equal(Utc(12, 3).AddMinutes(minutes), ReminderCalculator.EffectiveUtc(task));
+        Assert.False(ReminderCalculator.IsDue(task, clock.GetUtcNow()));
+        clock.Advance(TimeSpan.FromMinutes(minutes));
+        Assert.True(ReminderCalculator.IsDue(task, clock.GetUtcNow()));
+    }
+
+    [Fact]
+    public void The_Snooze_durations_are_10_minutes_and_1_hour()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(10), ReminderCalculator.ShortSnooze);
+        Assert.Equal(TimeSpan.FromHours(1), ReminderCalculator.LongSnooze);
+    }
+
+    [Fact]
+    public void A_completed_Task_cannot_be_snoozed()
+    {
+        var task = Task(Planned, fired: Utc(12, 0), completed: true);
+
+        Assert.False(ReminderCalculator.Snooze(task, ClockAtUtc(12, 3).GetUtcNow(), ReminderCalculator.ShortSnooze));
+
+        Assert.Null(task.SnoozedUntilUtc);
+        Assert.Equal(Utc(12, 0), task.ReminderFiredUtc);
+    }
+
+    [Fact]
+    public void Clearing_a_Snooze_re_arms_the_planned_Reminder()
+    {
+        var task = Task(Planned, snoozed: Utc(13, 0), fired: Utc(13, 0));
+
+        Assert.True(ReminderCalculator.ClearSnooze(task));
+
+        Assert.Null(task.SnoozedUntilUtc);
+        Assert.Null(task.ReminderFiredUtc);
+        Assert.Equal(Planned, task.ReminderUtc);
+        Assert.True(ReminderCalculator.IsDue(task, ClockAtUtc(13, 5).GetUtcNow()));
+    }
+
+    [Fact]
+    public void Clearing_when_there_is_no_Snooze_changes_nothing()
+    {
+        var task = Task(Planned, fired: Utc(12, 0));
+
+        Assert.False(ReminderCalculator.ClearSnooze(task));
+
+        Assert.Equal(Utc(12, 0), task.ReminderFiredUtc);
+    }
+
+    // ---- Missed summary ----
+
+    public static TheoryData<int, bool> SummaryCases => new()
+    {
+        // Reminders due at once, expected: one summary instead of one notification each
+        { 0, false },
+        { 1, false },
+        { 3, false },
+        { 4, true },
+        { 12, true },
+    };
+
+    [Theory]
+    [MemberData(nameof(SummaryCases))]
+    public void More_than_3_Reminders_due_at_once_are_summarized(int count, bool expected)
+    {
+        Assert.Equal(expected, ReminderCalculator.ShouldSummarize(count));
+    }
 }

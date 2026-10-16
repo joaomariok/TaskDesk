@@ -45,6 +45,36 @@ public class ReminderNotificationTests
             ReminderArguments.Parse(ReminderArguments.MarkDone(TaskId)));
     }
 
+    [Fact]
+    public void Snooze_arguments_round_trip_through_the_parser()
+    {
+        Assert.Equal(
+            new NotificationActivation(TaskId, ReminderAction.SnoozeShort),
+            ReminderArguments.Parse(ReminderArguments.SnoozeShort(TaskId)));
+        Assert.Equal(
+            new NotificationActivation(TaskId, ReminderAction.SnoozeLong),
+            ReminderArguments.Parse(ReminderArguments.SnoozeLong(TaskId)));
+    }
+
+    [Fact]
+    public void Open_Today_arguments_name_no_Task_and_round_trip_through_the_parser()
+    {
+        Assert.False(ReminderArguments.OpenToday().ContainsKey(ReminderArguments.TaskIdKey));
+        Assert.Equal(NotificationActivation.OpenToday, ReminderArguments.Parse(ReminderArguments.OpenToday()));
+        Assert.Equal(ReminderAction.OpenToday, NotificationActivation.OpenToday.Action);
+    }
+
+    [Theory]
+    [InlineData(4, "4 reminders missed")]
+    [InlineData(12, "12 reminders missed")]
+    public void The_missed_Reminders_summary_says_how_many_were_missed(int count, string title)
+    {
+        var summary = new MissedRemindersSummary(count);
+
+        Assert.Equal(title, summary.Title);
+        Assert.Equal("Open Today to see them.", summary.Body);
+    }
+
     public static TheoryData<string, string?, string?> InvalidArguments => new()
     {
         { "no arguments", null, null },

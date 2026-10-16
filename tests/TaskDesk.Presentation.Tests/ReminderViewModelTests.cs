@@ -17,9 +17,27 @@ public class ReminderViewModelTests
     private static DateTime Utc(int day, int hour, int minute = 0) => new(2026, 10, day, hour, minute, 0, DateTimeKind.Utc);
 
     // Stores the Reminder on the FakeTaskService's Tasks with the Core re-arm rule.
-    private sealed class FakeTaskReminders(FakeTaskService tasks) : IReminderService
+    private sealed class FakeTaskReminders(FakeTaskService tasks, TimeProvider clock) : IReminderService
     {
         public List<(Guid TaskId, DateTime? ReminderUtc)> SetCalls { get; } = [];
+        public List<(Guid TaskId, TimeSpan Duration)> SnoozeCalls { get; } = [];
+
+        public Task<TaskItem> SnoozeAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default)
+        {
+            SnoozeCalls.Add((taskId, duration));
+            var current = tasks.All.SingleOrDefault(t => t.Id == taskId)
+                ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
+            var task = FakeTaskService.With(current, t => ReminderCalculator.Snooze(t, clock.GetUtcNow(), duration));
+            tasks.Put(task);
+            return Task.FromResult(task);
+        }
+
+        public Task<TaskItem> ClearSnoozeAsync(Guid taskId, CancellationToken cancellationToken = default)
+        {
+            var task = FakeTaskService.With(tasks.All.Single(t => t.Id == taskId), t => ReminderCalculator.ClearSnooze(t));
+            tasks.Put(task);
+            return Task.FromResult(task);
+        }
 
         public Task<TaskItem> SetReminderAsync(Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default)
         {
@@ -36,7 +54,7 @@ public class ReminderViewModelTests
             throw new NotSupportedException();
     }
 
-    // Only the All and Completed views, which showing a Task from a notification falls back to.
+    // The All and Completed views, which showing a Task from a notification falls back to, and Today.
     private sealed class FakeViews(FakeTaskService tasks) : IDueService
     {
         public Task<TaskItem> SetDueAsync(
@@ -47,6 +65,7 @@ public class ReminderViewModelTests
             SmartView view, int skip = 0, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<TaskItem>>(view switch
             {
+                SmartView.Today => [.. tasks.All.Where(t => !t.IsCompleted && t.DueDate is not null)],
                 SmartView.All => [.. tasks.All.Where(t => !t.IsCompleted)],
                 SmartView.Completed => [.. tasks.All.Where(t => t.IsCompleted)],
                 _ => [],
@@ -79,7 +98,8 @@ public class ReminderViewModelTests
         public void Hide() => IsVisible = false;
     }
 
-    private sealed record Setup(FakeTaskService Tasks, FakeTaskReminders Reminders, FakeSearch Search, MainViewModel Vm);
+    private sealed record Setup(
+        FakeTaskService Tasks, FakeTaskReminders Reminders, FakeSearch Search, MainViewModel Vm, FakeTimeProvider Clock);
 
     private static async Task<Setup> StartAsync(params string[] titles)
     {
@@ -91,12 +111,12 @@ public class ReminderViewModelTests
             await tasks.CreateTaskAsync(title, Ct);
         }
 
-        var reminders = new FakeTaskReminders(tasks);
+        var reminders = new FakeTaskReminders(tasks, clock);
         var search = new FakeSearch(tasks);
         var vm = new MainViewModel(
             tasks, new FakeTagService(tasks), clock, new FakeViews(tasks), search, reminderService: reminders);
         await vm.LoadAsync(Ct);
-        return new Setup(tasks, reminders, search, vm);
+        return new Setup(tasks, reminders, search, vm, clock);
     }
 
     // ---- Detail pane ----
@@ -326,6 +346,119 @@ public class ReminderViewModelTests
 
         Assert.Equal(["a"], s.Vm.Tasks.Select(t => t.Title));
         Assert.False(s.Tasks.All[0].IsCompleted);
+    }
+
+    [Theory]
+    [InlineData(ReminderAction.SnoozeShort, 10)]
+    [InlineData(ReminderAction.SnoozeLong, 60)]
+    public async Task Snoozing_from_a_notification_snoozes_the_Task_without_showing_the_window(
+        ReminderAction action, int minutes)
+    {
+        var s = await StartAsync("a");
+        var id = s.Tasks.All[0].Id;
+        await s.Reminders.SetReminderAsync(id, Utc(20, 12), Ct);
+        var window = new FakeWindow();
+
+        await new ReminderActivationHandler(s.Vm, window).HandleAsync(new NotificationActivation(id, action), Ct);
+
+        Assert.Equal([(id, TimeSpan.FromMinutes(minutes))], s.Reminders.SnoozeCalls);
+        Assert.Equal(Utc(20, 13).AddMinutes(minutes), s.Tasks.All[0].SnoozedUntilUtc);
+        Assert.Equal(Utc(20, 12), s.Tasks.All[0].ReminderUtc);
+        Assert.Equal(0, window.FocusCount);
+        Assert.Null(s.Vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task Snoozing_a_deleted_Task_does_nothing()
+    {
+        var s = await StartAsync("a");
+
+        await new ReminderActivationHandler(s.Vm, new FakeWindow())
+            .HandleAsync(new NotificationActivation(Guid.NewGuid(), ReminderAction.SnoozeShort), Ct);
+
+        Assert.Null(s.Tasks.All[0].SnoozedUntilUtc);
+        Assert.Null(s.Vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task Opening_the_missed_Reminders_summary_shows_Today_and_the_window()
+    {
+        var s = await StartAsync("a");
+        var window = new FakeWindow();
+
+        await new ReminderActivationHandler(s.Vm, window).HandleAsync(NotificationActivation.OpenToday, Ct);
+
+        Assert.Equal(SmartView.Today, s.Vm.CurrentView);
+        Assert.Equal(1, window.FocusCount);
+    }
+
+    // ---- Snooze in the detail pane ----
+
+    [Fact]
+    public async Task A_snoozed_Task_shows_its_Snooze_and_clearing_it_re_arms_the_Reminder()
+    {
+        var s = await StartAsync("a");
+        var id = s.Tasks.All[0].Id;
+        await s.Reminders.SetReminderAsync(id, Utc(20, 12), Ct);
+        await s.Reminders.SnoozeAsync(id, ReminderCalculator.LongSnooze, Ct); // until 14:00 UTC, 11:00 local
+        s.Tasks.Put(FakeTaskService.With(s.Tasks.All[0], t => t.ReminderFiredUtc = Utc(20, 13)));
+        await s.Vm.LoadAsync(Ct);
+
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        Assert.True(s.Vm.HasDetailSnooze);
+        Assert.Equal("Snoozed until 11:00", s.Vm.DetailSnooze);
+
+        await s.Vm.ClearSnoozeCommand.ExecuteAsync(null);
+
+        Assert.False(s.Vm.HasDetailSnooze);
+        Assert.Null(s.Tasks.All[0].SnoozedUntilUtc);
+        Assert.Null(s.Tasks.All[0].ReminderFiredUtc);
+        Assert.Equal(Utc(20, 12), s.Tasks.All[0].ReminderUtc);
+    }
+
+    [Fact]
+    public async Task Editing_the_Reminder_of_a_snoozed_Task_clears_the_shown_Snooze()
+    {
+        var s = await StartAsync("a");
+        var id = s.Tasks.All[0].Id;
+        await s.Reminders.SetReminderAsync(id, Utc(20, 12), Ct);
+        await s.Reminders.SnoozeAsync(id, ReminderCalculator.ShortSnooze, Ct);
+        await s.Vm.LoadAsync(Ct);
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+
+        s.Vm.DetailReminderTime = "15:00";
+        await s.Vm.PendingSave;
+
+        Assert.Null(s.Tasks.All[0].SnoozedUntilUtc);
+        Assert.False(s.Vm.HasDetailSnooze);
+    }
+
+    [Fact]
+    public async Task A_Task_without_a_Snooze_shows_none()
+    {
+        var s = await StartAsync("a");
+        await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(20, 12), Ct);
+        await s.Vm.LoadAsync(Ct);
+
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+
+        Assert.False(s.Vm.HasDetailSnooze);
+        Assert.Null(s.Vm.DetailSnooze);
+    }
+
+    [Fact]
+    public async Task Snoozing_the_selected_Task_from_a_notification_shows_the_Snooze_in_the_pane()
+    {
+        var s = await StartAsync("a");
+        var id = s.Tasks.All[0].Id;
+        await s.Reminders.SetReminderAsync(id, Utc(20, 12), Ct);
+        await s.Vm.LoadAsync(Ct);
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+
+        await new ReminderActivationHandler(s.Vm, new FakeWindow())
+            .HandleAsync(new NotificationActivation(id, ReminderAction.SnoozeShort), Ct);
+
+        Assert.Equal("Snoozed until 10:10", s.Vm.DetailSnooze);
     }
 
     // ---- Fallback banner ----

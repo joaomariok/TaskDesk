@@ -196,6 +196,78 @@ public class ReminderServiceTests
         Assert.Equal(Now.AddHours(-1), completed.ReminderUtc);
     }
 
+    [Theory]
+    [InlineData(10)]
+    [InlineData(60)]
+    public async Task Snoozing_a_fired_Reminder_stores_the_Snooze_from_now_and_keeps_the_planned_Reminder(int minutes)
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddMinutes(-1));
+        var reminders = db.Get<IReminderService>();
+        await reminders.TryMarkFiredAsync(task.Id, Now.AddMinutes(-1), Ct);
+
+        var snoozed = await reminders.SnoozeAsync(task.Id, TimeSpan.FromMinutes(minutes), Ct);
+
+        var stored = Assert.Single(await db.Get<ITaskService>().ListDefaultListTasksAsync(Ct));
+        Assert.Equal(Now.AddMinutes(minutes), snoozed.SnoozedUntilUtc);
+        Assert.Equal(Now.AddMinutes(minutes), stored.SnoozedUntilUtc);
+        Assert.Equal(Now.AddMinutes(-1), stored.ReminderUtc);
+        Assert.Null(stored.ReminderFiredUtc);
+        Assert.Empty(await DueTitlesAsync(db));
+
+        db.Clock.Advance(TimeSpan.FromMinutes(minutes));
+        var due = Assert.Single(await reminders.ListDueAsync(Ct));
+        Assert.Equal(Now.AddMinutes(minutes), due.DueAtUtc);
+    }
+
+    [Fact]
+    public async Task Snoozing_a_missing_Task_throws()
+    {
+        using var db = await StartAsync();
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(
+            () => db.Get<IReminderService>().SnoozeAsync(Guid.NewGuid(), ReminderCalculator.ShortSnooze, Ct));
+    }
+
+    [Fact]
+    public async Task Snoozing_a_completed_Task_changes_nothing()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddMinutes(-1));
+        await db.Get<ITaskService>().SetCompletedAsync(task.Id, true, Ct);
+
+        var result = await db.Get<IReminderService>().SnoozeAsync(task.Id, ReminderCalculator.ShortSnooze, Ct);
+
+        Assert.Null(result.SnoozedUntilUtc);
+        Assert.Null(Assert.Single(await db.QueryAsync(c => c.Tasks)).SnoozedUntilUtc);
+    }
+
+    [Fact]
+    public async Task Clearing_a_Snooze_re_arms_the_planned_Reminder()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddMinutes(-1));
+        var reminders = db.Get<IReminderService>();
+        await reminders.TryMarkFiredAsync(task.Id, Now.AddMinutes(-1), Ct);
+        await reminders.SnoozeAsync(task.Id, ReminderCalculator.LongSnooze, Ct);
+
+        var cleared = await reminders.ClearSnoozeAsync(task.Id, Ct);
+
+        Assert.Null(cleared.SnoozedUntilUtc);
+        Assert.Null(cleared.ReminderFiredUtc);
+        var due = Assert.Single(await reminders.ListDueAsync(Ct));
+        Assert.Equal(Now.AddMinutes(-1), due.DueAtUtc);
+    }
+
+    [Fact]
+    public async Task Clearing_the_Snooze_of_a_missing_Task_throws()
+    {
+        using var db = await StartAsync();
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(
+            () => db.Get<IReminderService>().ClearSnoozeAsync(Guid.NewGuid(), Ct));
+    }
+
     [Fact]
     public async Task Undoing_a_delete_restores_the_Reminder_with_its_state()
     {

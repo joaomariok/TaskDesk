@@ -64,7 +64,8 @@ internal sealed class RecurrenceService(
 
         var now = clock.GetUtcNow().UtcDateTime;
         var skipDate = DueCalculator.LocalToday(clock.GetUtcNow(), clock.LocalTimeZone);
-        var next = await OccurrenceProducer.AddNextAsync(context, task, skipDate, now, cancellationToken);
+        var next = await OccurrenceProducer.AddNextAsync(
+            context, task, skipDate, now, clock.LocalTimeZone, cancellationToken);
 
         var snapshot = new DeletedTask(
             task, task.Tags.ConvertAll(t => t.Id), task.Subtasks.ConvertAll(TaskService.CopySubtask));

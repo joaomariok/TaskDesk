@@ -141,9 +141,9 @@ public partial class App : Application
         _notifications.Register();
         var launch = _notifications.GetLaunchActivation();
 
-        // Launched by "Mark done" on a toast: complete the Task without opening the window.
+        // Launched by "Mark done" or a Snooze button on a toast: act without opening the window.
         var minimized = e.Args.Contains("--minimized", StringComparer.OrdinalIgnoreCase)
-            || launch?.Action == ReminderAction.MarkDone;
+            || launch?.Action is ReminderAction.MarkDone or ReminderAction.SnoozeShort or ReminderAction.SnoozeLong;
         var exePath = Environment.ProcessPath ?? throw new InvalidOperationException("No process path.");
         await _shell.StartAsync(minimized, exePath);
         if (launch is not null)

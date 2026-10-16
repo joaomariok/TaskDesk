@@ -144,6 +144,76 @@ public class ReminderSchedulerTests
     }
 
     [Fact]
+    public async Task More_than_3_Reminders_due_at_once_show_one_summary_and_all_fire()
+    {
+        var s = Create();
+        var tasks = Enumerable.Range(1, 5).Select(i => s.Reminders.Add($"missed {i}", Start.AddHours(-i))).ToList();
+
+        await s.Scheduler.StartAsync();
+
+        Assert.Empty(s.Notifications.Shown);
+        var summary = Assert.Single(s.Notifications.Summaries);
+        Assert.Equal(5, summary.Count);
+        Assert.Equal("5 reminders missed", summary.Title);
+        Assert.All(tasks, t => Assert.Equal(Start, t.ReminderFiredUtc));
+
+        s.Clock.Advance(ReminderScheduler.Interval);
+        await s.Scheduler.CurrentCheck;
+        Assert.Single(s.Notifications.Summaries); // fired once: no second summary
+    }
+
+    [Fact]
+    public async Task Exactly_3_Reminders_due_at_once_are_shown_one_by_one()
+    {
+        var s = Create();
+        for (var i = 1; i <= 3; i++)
+        {
+            s.Reminders.Add($"missed {i}", Start.AddHours(-i));
+        }
+
+        await s.Scheduler.StartAsync();
+
+        Assert.Equal(3, s.Notifications.Shown.Count);
+        Assert.Empty(s.Notifications.Summaries);
+    }
+
+    [Fact]
+    public async Task The_summary_counts_only_the_Reminders_this_check_claimed()
+    {
+        var s = Create();
+        for (var i = 1; i <= 4; i++)
+        {
+            s.Reminders.Add($"missed {i}", Start.AddHours(-i));
+        }
+
+        s.Reminders.RefuseClaims.Add(s.Reminders.Tasks[0].Id); // claimed by another check after listing
+
+        await s.Scheduler.StartAsync();
+
+        Assert.Empty(s.Notifications.Summaries);
+        Assert.Equal(3, s.Notifications.Shown.Count);
+    }
+
+    [Fact]
+    public async Task A_snoozed_Reminder_is_shown_again_when_the_Snooze_ends()
+    {
+        var s = Create();
+        var task = s.Reminders.Add("a", Start.AddMinutes(-1));
+        await s.Scheduler.StartAsync();
+        Assert.Single(s.Notifications.Shown);
+
+        await s.Reminders.SnoozeAsync(task.Id, ReminderCalculator.ShortSnooze, TestContext.Current.CancellationToken);
+        s.Clock.Advance(TimeSpan.FromMinutes(9));
+        await s.Scheduler.RequestCheck();
+        Assert.Single(s.Notifications.Shown);
+
+        s.Clock.Advance(TimeSpan.FromMinutes(1));
+        await s.Scheduler.RequestCheck();
+        Assert.Equal(2, s.Notifications.Shown.Count);
+        Assert.Equal(Start.AddMinutes(-1), task.ReminderUtc);
+    }
+
+    [Fact]
     public async Task Due_Reminders_are_shown_first_due_first()
     {
         var s = Create();

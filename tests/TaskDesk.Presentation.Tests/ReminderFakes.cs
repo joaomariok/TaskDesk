@@ -29,6 +29,29 @@ internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>
         return Task.FromResult(task);
     }
 
+    /// <summary>Tasks whose Reminder TryMarkFiredAsync refuses, as if another check claimed it after listing.</summary>
+    public HashSet<Guid> RefuseClaims { get; } = [];
+
+    public List<(Guid TaskId, TimeSpan Duration)> SnoozeCalls { get; } = [];
+    public List<Guid> ClearSnoozeCalls { get; } = [];
+
+    public Task<TaskItem> SnoozeAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default)
+    {
+        SnoozeCalls.Add((taskId, duration));
+        var task = Tasks.SingleOrDefault(t => t.Id == taskId)
+            ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
+        ReminderCalculator.Snooze(task, clock.GetUtcNow(), duration);
+        return Task.FromResult(task);
+    }
+
+    public Task<TaskItem> ClearSnoozeAsync(Guid taskId, CancellationToken cancellationToken = default)
+    {
+        ClearSnoozeCalls.Add(taskId);
+        var task = Tasks.Single(t => t.Id == taskId);
+        ReminderCalculator.ClearSnooze(task);
+        return Task.FromResult(task);
+    }
+
     public Task<IReadOnlyList<DueReminder>> ListDueAsync(CancellationToken cancellationToken = default)
     {
         ListCalls++;
@@ -46,7 +69,8 @@ internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>
     public Task<bool> TryMarkFiredAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default)
     {
         var task = Tasks.Single(t => t.Id == taskId);
-        if (!ReminderCalculator.IsDue(task, clock.GetUtcNow()) || ReminderCalculator.EffectiveUtc(task) != dueAtUtc)
+        if (RefuseClaims.Contains(taskId)
+            || !ReminderCalculator.IsDue(task, clock.GetUtcNow()) || ReminderCalculator.EffectiveUtc(task) != dueAtUtc)
         {
             return Task.FromResult(false);
         }
@@ -60,6 +84,7 @@ internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>
 internal sealed class FakeNotificationService : INotificationService
 {
     public List<ReminderNotification> Shown { get; } = [];
+    public List<MissedRemindersSummary> Summaries { get; } = [];
     public int RegisterCalls { get; private set; }
     public int UnregisterCalls { get; private set; }
 
@@ -92,6 +117,16 @@ internal sealed class FakeNotificationService : INotificationService
         }
 
         Shown.Add(notification);
+    }
+
+    public void ShowSummary(MissedRemindersSummary summary)
+    {
+        if (ShowFailure is { } failure)
+        {
+            throw failure;
+        }
+
+        Summaries.Add(summary);
     }
 
     public void Unregister() => UnregisterCalls++;

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TaskDesk.Core.Lists;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
@@ -158,6 +159,80 @@ public class RecurrenceServiceTests
         Assert.Equal(
             [("fern", true), ("cactus", false)],
             old.Subtasks.OrderBy(s => s.SortOrder).Select(s => (s.Title, s.IsCompleted)));
+    }
+
+    // ---- The Reminder of the next Occurrence ----
+
+    private static DateTime Utc(int day, int hour, int minute = 0) => new(2026, 10, day, hour, minute, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public async Task The_next_Occurrence_keeps_the_planned_Reminder_offset_never_the_Snooze()
+    {
+        using var db = await StartAsync();
+        // Due 20 Oct 14:00 local (17:00 UTC); Reminder an hour before, at 13:00 local (16:00 UTC).
+        var task = await AddAsync(db, "a", Day(20), Recurrence.Daily(), new TimeOnly(14, 0));
+        var reminders = db.Get<IReminderService>();
+        await reminders.SetReminderAsync(task.Id, Utc(20, 16), Ct);
+        db.Clock.SetUtcNow(new DateTimeOffset(Utc(20, 16, 1)));
+        Assert.True(await reminders.TryMarkFiredAsync(task.Id, Utc(20, 16), Ct));
+        await reminders.SnoozeAsync(task.Id, ReminderCalculator.LongSnooze, Ct);
+
+        await CompleteAsync(db, task.Id);
+
+        var old = await TaskAsync(db, task.Id);
+        var next = await TaskAsync(db, old.NextOccurrenceId!.Value);
+        Assert.Equal(Utc(20, 16), old.ReminderUtc);
+        Assert.Null(old.SnoozedUntilUtc);
+        Assert.Equal(Utc(21, 16), next.ReminderUtc);
+        Assert.Null(next.SnoozedUntilUtc);
+        Assert.Null(next.ReminderFiredUtc);
+    }
+
+    [Fact]
+    public async Task A_date_only_Due_measures_the_Reminder_offset_from_local_midnight_across_daylight_saving()
+    {
+        using var db = await StartAsync();
+        // UTC+1, UTC+2 in daylight saving, which ends on 25 October 2026 at 03:00 local.
+        db.Clock.SetLocalTimeZone(TimeZoneInfo.CreateCustomTimeZone(
+            "Test+1-DST", TimeSpan.FromHours(1), "Test+1-DST", "Test+1", "Test+2",
+            [
+                TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(
+                    DateTime.MinValue.Date, DateTime.MaxValue.Date, TimeSpan.FromHours(1),
+                    TimeZoneInfo.TransitionTime.CreateFloatingDateRule(new DateTime(1, 1, 1, 2, 0, 0), 3, 5, DayOfWeek.Sunday),
+                    TimeZoneInfo.TransitionTime.CreateFloatingDateRule(new DateTime(1, 1, 1, 3, 0, 0), 10, 5, DayOfWeek.Sunday)),
+            ]));
+        var task = await AddAsync(db, "a", Day(24), Recurrence.Daily());
+        await db.Get<IReminderService>().SetReminderAsync(task.Id, Utc(24, 7), Ct); // 09:00 local, daylight saving
+
+        await CompleteAsync(db, task.Id);
+
+        var next = await TaskAsync(db, (await TaskAsync(db, task.Id)).NextOccurrenceId!.Value);
+        Assert.Equal(Day(25), next.DueDate);
+        Assert.Equal(Utc(25, 8), next.ReminderUtc); // still 09:00 local, now standard time
+    }
+
+    [Fact]
+    public async Task An_Occurrence_without_a_Reminder_produces_one_without_a_Reminder()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Day(20), Recurrence.Daily());
+
+        await CompleteAsync(db, task.Id);
+
+        var next = await TaskAsync(db, (await TaskAsync(db, task.Id)).NextOccurrenceId!.Value);
+        Assert.Null(next.ReminderUtc);
+    }
+
+    [Fact]
+    public async Task A_Skip_carries_the_planned_Reminder_to_the_next_Occurrence()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Day(20), Recurrence.Daily());
+        await db.Get<IReminderService>().SetReminderAsync(task.Id, Utc(19, 21), Ct); // 18:00 local the day before
+
+        var skipped = await db.Get<IRecurrenceService>().SkipOccurrenceAsync(task.Id, Ct);
+
+        Assert.Equal(Utc(20, 21), (await TaskAsync(db, skipped.ProducedOccurrenceId!.Value)).ReminderUtc);
     }
 
     [Fact]

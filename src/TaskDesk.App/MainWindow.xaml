@@ -180,6 +180,13 @@
                          Text="{Binding DetailReminderTime, UpdateSourceTrigger=LostFocus}" />
                 <DatePicker SelectedDate="{Binding DetailReminderDate}" AutomationProperties.Name="Reminder date" />
             </DockPanel>
+            <DockPanel Margin="0,-4,0,8"
+                       Visibility="{Binding HasDetailSnooze, Converter={StaticResource BoolToVisibility}}">
+                <Button DockPanel.Dock="Right" Content="Clear Snooze" Padding="6,2"
+                        Command="{Binding ClearSnoozeCommand}"
+                        ToolTip="Clear the Snooze; the planned Reminder fires again" />
+                <TextBlock Text="{Binding DetailSnooze}" VerticalAlignment="Center" />
+            </DockPanel>
             <TextBlock Text="Repeat" />
             <StackPanel Margin="0,2,0,8" DataContext="{Binding Repeat}">
                 <ComboBox AutomationProperties.Name="Repeat"

@@ -9,7 +9,9 @@ namespace TaskDesk.Presentation;
 /// Shows due Reminders (SPEC 7.4). Checks on start, every <see cref="Interval"/>, after every Task change,
 /// and whenever <see cref="RequestCheck"/> is called (the App calls it on resume from sleep). A polling loop
 /// survives sleep, clock and time-zone changes. Which Reminders are due is the Core rule; each one is
-/// claimed (marked fired) before it is shown, so it fires once. Delivery is whatever
+/// claimed (marked fired) before it is shown, so it fires once. When more than
+/// <see cref="ReminderCalculator.MissedSummaryThreshold"/> are claimed in one check (the PC was off or asleep),
+/// one summary is shown instead of a notification each. Delivery is whatever
 /// <see cref="INotificationService"/> is given.
 /// </summary>
 public sealed class ReminderScheduler(
@@ -107,13 +109,25 @@ public sealed class ReminderScheduler(
 
     private async Task CheckOnceAsync()
     {
+        // Claim first: a Reminder edited, completed or claimed since it was listed is not shown.
+        var claimed = new List<DueReminder>();
         foreach (var due in await reminders.ListDueAsync())
         {
-            // Claim first: a Reminder edited, completed or claimed since it was listed is not shown.
             if (await reminders.TryMarkFiredAsync(due.TaskId, due.DueAtUtc))
             {
-                notifications.Show(ReminderNotification.For(due, CultureInfo.CurrentCulture));
+                claimed.Add(due);
             }
+        }
+
+        if (ReminderCalculator.ShouldSummarize(claimed.Count))
+        {
+            notifications.ShowSummary(new MissedRemindersSummary(claimed.Count));
+            return;
+        }
+
+        foreach (var due in claimed)
+        {
+            notifications.Show(ReminderNotification.For(due, CultureInfo.CurrentCulture));
         }
     }
 }

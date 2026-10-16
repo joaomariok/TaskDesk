@@ -11,6 +11,18 @@ public static class ReminderCalculator
     /// <summary>The local time of a Reminder set with a date only.</summary>
     public static readonly TimeOnly DefaultReminderTime = new(9, 0);
 
+    /// <summary>The "Snooze 10 min" duration.</summary>
+    public static readonly TimeSpan ShortSnooze = TimeSpan.FromMinutes(10);
+
+    /// <summary>The "Snooze 1 h" duration.</summary>
+    public static readonly TimeSpan LongSnooze = TimeSpan.FromHours(1);
+
+    /// <summary>More Reminders than this due at once are shown as one missed-Reminders summary (SPEC 7.4).</summary>
+    public const int MissedSummaryThreshold = 3;
+
+    /// <summary>Whether <paramref name="dueCount"/> Reminders due at once are shown as one summary.</summary>
+    public static bool ShouldSummarize(int dueCount) => dueCount > MissedSummaryThreshold;
+
     /// <summary>The instant the Reminder fires at: the Snooze when set, otherwise the planned Reminder.</summary>
     public static DateTime? EffectiveUtc(TaskItem task) => task.SnoozedUntilUtc ?? task.ReminderUtc;
 
@@ -53,6 +65,25 @@ public static class ReminderCalculator
         return DateTime.SpecifyKind(local - offset, DateTimeKind.Utc);
     }
 
+    /// <summary>
+    /// The planned Reminder of the next Occurrence (SPEC 5.1 step 3): it keeps the offset the planned Reminder
+    /// had from the old Due. The Due is DueDate + DueTime, or local midnight of DueDate when there is no
+    /// DueTime; the next Occurrence keeps the same DueTime. The offset is measured in local wall-clock time
+    /// in <paramref name="zone"/>, so "09:00 on the Due date" stays 09:00 across a daylight-saving change.
+    /// The result is converted with <see cref="ToUtc"/>'s rules for skipped and repeated local times.
+    /// Takes the planned Reminder only: a Snooze never carries to the next Occurrence.
+    /// </summary>
+    public static DateTime CarryOver(
+        DateTime plannedReminderUtc, DateOnly dueDate, TimeOnly? dueTime, DateOnly nextDueDate, TimeZoneInfo zone)
+    {
+        var (reminderDate, reminderTime) = ToLocal(plannedReminderUtc, zone);
+        var localReminder = reminderDate.ToDateTime(reminderTime);
+        var dueAt = dueTime ?? TimeOnly.MinValue;
+        var offset = localReminder - dueDate.ToDateTime(dueAt);
+        var nextLocal = nextDueDate.ToDateTime(dueAt) + offset;
+        return ToUtc(DateOnly.FromDateTime(nextLocal), TimeOnly.FromDateTime(nextLocal), zone);
+    }
+
     /// <summary>The local date and time in <paramref name="zone"/> of a Reminder instant.</summary>
     public static (DateOnly Date, TimeOnly Time) ToLocal(DateTime reminderUtc, TimeZoneInfo zone)
     {
@@ -72,6 +103,38 @@ public static class ReminderCalculator
         }
 
         task.ReminderUtc = reminderUtc;
+        task.SnoozedUntilUtc = null;
+        task.ReminderFiredUtc = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Snoozes the Reminder until <paramref name="now"/> + <paramref name="duration"/> and re-arms it. The
+    /// planned Reminder is left unchanged. Returns false, changing nothing, for a completed Task.
+    /// </summary>
+    public static bool Snooze(TaskItem task, DateTimeOffset now, TimeSpan duration)
+    {
+        if (task.IsCompleted)
+        {
+            return false;
+        }
+
+        task.SnoozedUntilUtc = now.UtcDateTime + duration;
+        task.ReminderFiredUtc = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Clears the Snooze and re-arms the planned Reminder, so a planned Reminder already past fires again.
+    /// Returns false, changing nothing, when there is no Snooze.
+    /// </summary>
+    public static bool ClearSnooze(TaskItem task)
+    {
+        if (task.SnoozedUntilUtc is null)
+        {
+            return false;
+        }
+
         task.SnoozedUntilUtc = null;
         task.ReminderFiredUtc = null;
         return true;

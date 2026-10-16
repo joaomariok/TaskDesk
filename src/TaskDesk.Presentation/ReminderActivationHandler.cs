@@ -1,5 +1,6 @@
 using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Shell;
+using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Presentation;
 
@@ -19,6 +20,16 @@ public sealed class ReminderActivationHandler(MainViewModel viewModel, IMainWind
                 break;
             case ReminderAction.MarkDone:
                 await viewModel.CompleteTaskAsync(activation.TaskId, cancellationToken);
+                break;
+            case ReminderAction.SnoozeShort:
+                await viewModel.SnoozeTaskAsync(activation.TaskId, ReminderCalculator.ShortSnooze, cancellationToken);
+                break;
+            case ReminderAction.SnoozeLong:
+                await viewModel.SnoozeTaskAsync(activation.TaskId, ReminderCalculator.LongSnooze, cancellationToken);
+                break;
+            case ReminderAction.OpenToday:
+                await viewModel.ShowSmartViewAsync(SmartView.Today, cancellationToken);
+                window.ShowAndFocus();
                 break;
         }
     }

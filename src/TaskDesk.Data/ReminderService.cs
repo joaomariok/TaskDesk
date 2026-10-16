@@ -10,8 +10,20 @@ internal sealed class ReminderService(
     TimeProvider clock,
     ILogger<ReminderService> logger) : IReminderService
 {
-    public async Task<TaskItem> SetReminderAsync(
-        Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default)
+    public Task<TaskItem> SetReminderAsync(
+        Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default) =>
+        ChangeAsync(taskId, t => ReminderCalculator.SetPlanned(t, reminderUtc), "Reminder changed", cancellationToken);
+
+    public Task<TaskItem> SnoozeAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default) =>
+        ChangeAsync(
+            taskId, t => ReminderCalculator.Snooze(t, clock.GetUtcNow(), duration), "Reminder snoozed", cancellationToken);
+
+    public Task<TaskItem> ClearSnoozeAsync(Guid taskId, CancellationToken cancellationToken = default) =>
+        ChangeAsync(taskId, ReminderCalculator.ClearSnooze, "Snooze cleared", cancellationToken);
+
+    // Loads the Task, applies a Core rule and saves when the rule changed it.
+    private async Task<TaskItem> ChangeAsync(
+        Guid taskId, Func<TaskItem, bool> change, string what, CancellationToken cancellationToken)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var task = await context.Tasks
@@ -20,11 +32,11 @@ internal sealed class ReminderService(
             .SingleOrDefaultAsync(t => t.Id == taskId, cancellationToken)
             ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
 
-        if (ReminderCalculator.SetPlanned(task, reminderUtc))
+        if (change(task))
         {
             task.UpdatedUtc = clock.GetUtcNow().UtcDateTime;
             await context.SaveChangesAsync(cancellationToken);
-            logger.LogInformation("Task {TaskId} Reminder changed", taskId);
+            logger.LogInformation("Task {TaskId}: {Change}", taskId, what);
         }
 
         return task;

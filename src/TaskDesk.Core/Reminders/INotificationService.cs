@@ -16,6 +16,9 @@ public interface INotificationService
     /// <summary>Shows a Reminder notification.</summary>
     void Show(ReminderNotification notification);
 
+    /// <summary>Shows the one notification that stands for many missed Reminders.</summary>
+    void ShowSummary(MissedRemindersSummary summary);
+
     /// <summary>Stops delivery; call before the app exits.</summary>
     void Unregister();
 }

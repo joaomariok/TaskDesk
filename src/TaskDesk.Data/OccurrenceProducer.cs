@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Data;
@@ -12,11 +13,12 @@ internal static class OccurrenceProducer
 {
     /// <summary>
     /// Adds the next Occurrence of <paramref name="current"/> (loaded with its Tags and Subtasks) and links
-    /// it through NextOccurrenceId. Returns null, adding nothing, when the Task has no Recurrence or Due date,
+    /// it through NextOccurrenceId. Its planned Reminder keeps the offset from the Due that the planned Reminder
+    /// of <paramref name="current"/> had, measured in <paramref name="zone"/>. Returns null, adding nothing, when the Task has no Recurrence or Due date,
     /// has already produced its next Occurrence, or its Series has ended.
     /// </summary>
     public static async Task<TaskItem?> AddNextAsync(
-        TaskDeskDbContext context, TaskItem current, DateOnly completionDate, DateTime nowUtc,
+        TaskDeskDbContext context, TaskItem current, DateOnly completionDate, DateTime nowUtc, TimeZoneInfo zone,
         CancellationToken cancellationToken)
     {
         if (current.Recurrence is not { } recurrence || current.DueDate is not { } currentDue
@@ -41,6 +43,10 @@ internal static class OccurrenceProducer
             DueDate = nextDue,
             DueTime = current.DueTime,
             Recurrence = recurrence with { }, // an owned value is never shared between two Tasks
+            // The planned Reminder, never the Snooze; the Snooze and fired marker start cleared (SPEC 5.1 step 3).
+            ReminderUtc = current.ReminderUtc is { } planned
+                ? ReminderCalculator.CarryOver(planned, currentDue, current.DueTime, nextDue, zone)
+                : null,
             SeriesId = current.SeriesId,
             SortOrder = await SortOrderAfterAsync(context, current, cancellationToken),
             CreatedUtc = nowUtc,
@@ -55,9 +61,6 @@ internal static class OccurrenceProducer
             IsCompleted = false,
             SortOrder = s.SortOrder,
         })];
-
-        // Seam for Reminders (#13): shift the planned Reminder (never the Snooze) by the offset it had from
-        // the old Due, and leave the Snooze and fired marker cleared on the new Occurrence (SPEC 5.1 step 3).
 
         context.Tasks.Add(next);
         current.NextOccurrenceId = next.Id;

@@ -111,7 +111,7 @@ internal sealed class TaskService(
             var next = isCompleted
                 ? await OccurrenceProducer.AddNextAsync(
                     context, task, DueCalculator.LocalToday(clock.GetUtcNow(), clock.LocalTimeZone), now,
-                    cancellationToken)
+                    clock.LocalTimeZone, cancellationToken)
                 : null;
             await context.SaveChangesAsync(cancellationToken);
             logger.LogInformation("Task {TaskId} completion set to {IsCompleted}", taskId, isCompleted);
