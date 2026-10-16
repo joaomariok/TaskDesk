@@ -1,0 +1,16 @@
+<Window x:Class="TaskDesk.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TaskDesk" Height="480" Width="520"
+        FocusManager.FocusedElement="{Binding ElementName=QuickAddBox}">
+    <DockPanel Margin="12">
+        <TextBox x:Name="QuickAddBox" DockPanel.Dock="Top" Margin="0,0,0,8" Padding="6"
+                 AutomationProperties.Name="Quick add"
+                 Text="{Binding QuickAddTitle, UpdateSourceTrigger=PropertyChanged}">
+            <TextBox.InputBindings>
+                <KeyBinding Key="Return" Command="{Binding AddTaskCommand}" />
+            </TextBox.InputBindings>
+        </TextBox>
+        <ListBox ItemsSource="{Binding Tasks}" DisplayMemberPath="Title" />
+    </DockPanel>
+</Window>

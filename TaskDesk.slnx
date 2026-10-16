@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TaskDesk.App/TaskDesk.App.csproj" />
+    <Project Path="src/TaskDesk.Core/TaskDesk.Core.csproj" />
+    <Project Path="src/TaskDesk.Data/TaskDesk.Data.csproj" />
+    <Project Path="src/TaskDesk.Presentation/TaskDesk.Presentation.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TaskDesk.Core.Tests/TaskDesk.Core.Tests.csproj" />
+    <Project Path="tests/TaskDesk.Data.Tests/TaskDesk.Data.Tests.csproj" />
+    <Project Path="tests/TaskDesk.Presentation.Tests/TaskDesk.Presentation.Tests.csproj" />
+  </Folder>
+</Solution>
