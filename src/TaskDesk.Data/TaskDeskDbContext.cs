@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Data;
@@ -7,6 +8,8 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
 {
     public DbSet<TaskList> Lists => Set<TaskList>();
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
+    public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<TaskTag> TaskTags => Set<TaskTag>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -31,6 +34,23 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
             task.Property(t => t.Title).IsRequired().HasMaxLength(TaskTitle.MaxLength);
             task.HasOne<TaskList>().WithMany().HasForeignKey(t => t.ListId).OnDelete(DeleteBehavior.Cascade);
             task.HasIndex(t => new { t.ListId, t.IsCompleted, t.SortOrder });
+            task.HasMany(t => t.Tags).WithMany().UsingEntity<TaskTag>(
+                join => join.HasOne<Tag>().WithMany().HasForeignKey(l => l.TagId).OnDelete(DeleteBehavior.Cascade),
+                join => join.HasOne<TaskItem>().WithMany().HasForeignKey(l => l.TaskId).OnDelete(DeleteBehavior.Cascade),
+                join =>
+                {
+                    join.ToTable("TaskTags");
+                    join.HasKey(l => new { l.TaskId, l.TagId });
+                });
+        });
+
+        modelBuilder.Entity<Tag>(tag =>
+        {
+            tag.ToTable("Tags");
+            tag.HasKey(t => t.Id);
+            tag.Property(t => t.Name).IsRequired().HasMaxLength(TagName.MaxLength);
+            tag.Property(t => t.NormalizedName).IsRequired().HasMaxLength(TagName.MaxLength);
+            tag.HasIndex(t => t.NormalizedName).IsUnique();
         });
     }
 }

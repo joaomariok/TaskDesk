@@ -82,6 +82,7 @@ internal sealed class TaskService(
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         return await context.Tasks
             .AsNoTracking()
+            .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
             .Where(t => context.Lists.Any(l => l.IsDefault && l.Id == t.ListId))
             .OrderBy(t => t.SortOrder)
             .ThenBy(t => t.CreatedUtc)

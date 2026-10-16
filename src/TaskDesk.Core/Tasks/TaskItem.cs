@@ -10,4 +10,7 @@ public sealed class TaskItem
     public double SortOrder { get; set; }
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }
+
+    /// <summary>Tags, loaded only by queries that include them.</summary>
+    public List<TaskDesk.Core.Tags.Tag> Tags { get; set; } = [];
 }

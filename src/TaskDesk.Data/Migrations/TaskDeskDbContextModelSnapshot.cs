@@ -17,6 +17,48 @@ namespace TaskDesk.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
+            modelBuilder.Entity("TaskDesk.Core.Tags.Tag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ColorHex")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("Tags", (string)null);
+                });
+
+            modelBuilder.Entity("TaskDesk.Core.Tags.TaskTag", b =>
+                {
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TagId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("TaskId", "TagId");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("TaskTags", (string)null);
+                });
+
             modelBuilder.Entity("TaskDesk.Core.Tasks.TaskItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -77,6 +119,21 @@ namespace TaskDesk.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Lists", (string)null);
+                });
+
+            modelBuilder.Entity("TaskDesk.Core.Tags.TaskTag", b =>
+                {
+                    b.HasOne("TaskDesk.Core.Tags.Tag", null)
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TaskDesk.Core.Tasks.TaskItem", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TaskDesk.Core.Tasks.TaskItem", b =>

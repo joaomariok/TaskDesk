@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TaskDesk.Core.Paths;
+using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Data;
@@ -19,6 +20,7 @@ public static class DataServiceCollectionExtensions
             options.UseSqlite($"Data Source={paths.DatabaseFile};Pooling=False"));
         services.AddSingleton<IDatabaseInitializer, DatabaseInitializer>();
         services.AddSingleton<ITaskService, TaskService>();
+        services.AddSingleton<ITagService, TagService>();
         return services;
     }
 }
