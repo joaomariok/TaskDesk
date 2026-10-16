@@ -268,4 +268,18 @@ public sealed class ShellControllerTests
 
         Assert.Equal(1, _tray.DisposeCount);
     }
+
+    [Fact]
+    public async Task Close_with_exit_behavior_shuts_down_instead_of_hiding()
+    {
+        _settings.Current = new ShellSettings(CloseBehavior: CloseBehavior.Exit);
+        var controller = await StartedAsync();
+
+        var cancel = controller.OnWindowClosing();
+
+        Assert.False(cancel);
+        Assert.True(_window.IsVisible);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+        Assert.Empty(_tray.Hints);
+    }
 }

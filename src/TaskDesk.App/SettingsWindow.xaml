@@ -1,0 +1,43 @@
+<Window x:Class="TaskDesk.App.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:TaskDesk.App"
+        Title="TaskDesk Settings" Width="460" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen">
+    <StackPanel Margin="16">
+        <TextBlock Text="Theme" Margin="0,0,0,4" />
+        <ComboBox ItemsSource="{x:Static local:SettingsOptions.Themes}"
+                  SelectedItem="{Binding Theme}" AutomationProperties.Name="Theme" />
+
+        <CheckBox Content="Start with Windows" Margin="0,12,0,0"
+                  IsChecked="{Binding StartWithWindows}" />
+
+        <TextBlock Text="When the close button is pressed" Margin="0,12,0,4" />
+        <ComboBox ItemsSource="{x:Static local:SettingsOptions.CloseBehaviors}"
+                  SelectedItem="{Binding CloseBehavior}" AutomationProperties.Name="Close button behavior" />
+
+        <TextBlock Text="Default reminder time for date-only reminders (HH:mm)" Margin="0,12,0,4" />
+        <TextBox Padding="4" HorizontalAlignment="Left" Width="80"
+                 AutomationProperties.Name="Default reminder time"
+                 Text="{Binding DefaultReminderTimeText, UpdateSourceTrigger=PropertyChanged}" />
+        <TextBlock Text="Enter a time such as 09:00." Margin="0,4,0,0" Opacity="0.7">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsReminderTimeValid}" Value="False">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+
+        <TextBlock Text="About" FontWeight="SemiBold" Margin="0,20,0,4" />
+        <TextBlock Text="{Binding Version, StringFormat=Version {0}}" />
+        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding DataFolder, StringFormat=Data folder: {0}}" />
+        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding LogFolder, StringFormat=Log folder: {0}}" />
+        <Button Content="Open data folder" Margin="0,12,0,0" Padding="12,4" HorizontalAlignment="Left"
+                Command="{Binding OpenDataFolderCommand}" />
+    </StackPanel>
+</Window>

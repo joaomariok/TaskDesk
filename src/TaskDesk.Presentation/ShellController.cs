@@ -16,7 +16,7 @@ public sealed class ShellController(
     private bool _exiting;
     private bool _disposed;
 
-    /// <summary>Raised by the tray menu; the Settings window is wired by its own ticket.</summary>
+    /// <summary>Raised by the tray menu; the App opens the Settings window in response.</summary>
     public event Action? SettingsRequested;
 
     /// <summary>
@@ -56,8 +56,14 @@ public sealed class ShellController(
             return false;
         }
 
-        window.Hide();
         var settings = settingsStore.Load();
+        if (settings.CloseBehavior == CloseBehavior.Exit)
+        {
+            Exit();
+            return false;
+        }
+
+        window.Hide();
         if (!settings.TrayHintShown)
         {
             tray.ShowHint(TrayHint);
