@@ -110,12 +110,18 @@ namespace TaskDesk.Data.Migrations
                     b.Property<Guid>("ListId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("NextOccurrenceId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(10000)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("SeriesId")
+                        .HasColumnType("TEXT");
 
                     b.Property<double>("SortOrder")
                         .HasColumnType("REAL");
@@ -131,6 +137,8 @@ namespace TaskDesk.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DueDate");
+
+                    b.HasIndex("SeriesId");
 
                     b.HasIndex("ListId", "IsCompleted", "SortOrder");
 
@@ -201,6 +209,49 @@ namespace TaskDesk.Data.Migrations
                         .HasForeignKey("ListId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.OwnsOne("TaskDesk.Core.Tasks.Recurrence", "Recurrence", b1 =>
+                        {
+                            b1.Property<Guid>("TaskItemId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("Anchor")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("RecurrenceAnchor");
+
+                            b1.Property<int?>("DayOfMonth")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("RecurrenceDayOfMonth");
+
+                            b1.Property<int>("DaysOfWeek")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("RecurrenceDaysOfWeek");
+
+                            b1.Property<DateOnly?>("EndDate")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("RecurrenceEndDate");
+
+                            b1.Property<int>("Frequency")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("RecurrenceFrequency");
+
+                            b1.Property<int>("Interval")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("RecurrenceInterval");
+
+                            b1.Property<int?>("Month")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("RecurrenceMonth");
+
+                            b1.HasKey("TaskItemId");
+
+                            b1.ToTable("Tasks");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TaskItemId");
+                        });
+
+                    b.Navigation("Recurrence");
                 });
 
             modelBuilder.Entity("TaskDesk.Core.Tasks.TaskItem", b =>

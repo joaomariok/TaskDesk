@@ -101,8 +101,20 @@ internal sealed class TaskService(
             task.IsCompleted = isCompleted;
             task.CompletedUtc = isCompleted ? now : null;
             task.UpdatedUtc = now;
+
+            // Completing an Occurrence produces the next one (at most once) in the same transaction.
+            // Un-completing never touches the next Occurrence.
+            var next = isCompleted
+                ? await OccurrenceProducer.AddNextAsync(
+                    context, task, DueCalculator.LocalToday(clock.GetUtcNow(), clock.LocalTimeZone), now,
+                    cancellationToken)
+                : null;
             await context.SaveChangesAsync(cancellationToken);
             logger.LogInformation("Task {TaskId} completion set to {IsCompleted}", taskId, isCompleted);
+            if (next is not null)
+            {
+                logger.LogInformation("Occurrence {NextId} produced by Task {TaskId}", next.Id, taskId);
+            }
         }
 
         return task;
@@ -151,8 +163,21 @@ internal sealed class TaskService(
 
     public async Task<TaskItem> RestoreTaskAsync(DeletedTask deleted, CancellationToken cancellationToken = default)
     {
-        var snapshot = deleted.Task;
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var restored = await AddRestoredAsync(context, deleted, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Task {TaskId} restored with {TagCount} Tags and {SubtaskCount} Subtasks",
+            restored.Id, restored.Tags.Count, restored.Subtasks.Count);
+        return restored;
+    }
+
+    /// <summary>Adds a deleted Task back to the context with the same ids, without saving.</summary>
+    /// <exception cref="InvalidOperationException">A Task with this id exists already.</exception>
+    internal static async Task<TaskItem> AddRestoredAsync(
+        TaskDeskDbContext context, DeletedTask deleted, CancellationToken cancellationToken)
+    {
+        var snapshot = deleted.Task;
         if (await context.Tasks.AnyAsync(t => t.Id == snapshot.Id, cancellationToken))
         {
             throw new InvalidOperationException($"Task {snapshot.Id} exists already.");
@@ -176,6 +201,9 @@ internal sealed class TaskService(
             CompletedUtc = snapshot.CompletedUtc,
             DueDate = snapshot.DueDate,
             DueTime = snapshot.DueTime,
+            Recurrence = snapshot.Recurrence is { } recurrence ? recurrence with { } : null,
+            SeriesId = snapshot.SeriesId,
+            NextOccurrenceId = snapshot.NextOccurrenceId,
             SortOrder = snapshot.SortOrder,
             CreatedUtc = snapshot.CreatedUtc,
             UpdatedUtc = snapshot.UpdatedUtc,
@@ -183,10 +211,6 @@ internal sealed class TaskService(
             Subtasks = [.. deleted.Subtasks.OrderBy(s => s.SortOrder).Select(CopySubtask)],
         };
         context.Tasks.Add(restored);
-        await context.SaveChangesAsync(cancellationToken);
-
-        logger.LogInformation("Task {TaskId} restored with {TagCount} Tags and {SubtaskCount} Subtasks",
-            restored.Id, tags.Count, restored.Subtasks.Count);
         return restored;
     }
 
@@ -304,7 +328,7 @@ internal sealed class TaskService(
         return restored;
     }
 
-    private static Subtask CopySubtask(Subtask source) => new()
+    internal static Subtask CopySubtask(Subtask source) => new()
     {
         Id = source.Id,
         TaskId = source.TaskId,
@@ -318,7 +342,7 @@ internal sealed class TaskService(
         => await context.Subtasks.SingleOrDefaultAsync(s => s.Id == subtaskId, cancellationToken)
             ?? throw new KeyNotFoundException($"Subtask {subtaskId} does not exist.");
 
-    private static async Task<TaskItem> FindAsync(
+    internal static async Task<TaskItem> FindAsync(
         TaskDeskDbContext context, Guid taskId, CancellationToken cancellationToken)
         => await context.Tasks
             .Include(t => t.Tags.OrderBy(g => g.NormalizedName))

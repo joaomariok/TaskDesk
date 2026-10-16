@@ -43,6 +43,7 @@ public partial class App : Application
         builder.Services.AddTaskDeskData(paths);
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<IListDialogs, WpfListDialogs>();
+        builder.Services.AddSingleton<IOccurrenceDialogs, WpfOccurrenceDialogs>();
         builder.Services.AddSingleton<ListsViewModel>();
         builder.Services.AddSingleton<MainWindow>();
         builder.Services.AddSingleton<WpfMainWindow>();

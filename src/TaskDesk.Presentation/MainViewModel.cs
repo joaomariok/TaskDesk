@@ -12,7 +12,9 @@ public sealed partial class MainViewModel(
     ITagService tagService,
     TimeProvider? timeProvider = null,
     IDueService? dueService = null,
-    ITaskSearchService? searchService = null) : ObservableObject
+    ITaskSearchService? searchService = null,
+    IRecurrenceService? recurrenceService = null,
+    IOccurrenceDialogs? occurrenceDialogs = null) : ObservableObject
 {
     /// <summary>How long text edits wait for further typing before they are saved.</summary>
     public static readonly TimeSpan SaveDebounce = TimeSpan.FromMilliseconds(500);
@@ -32,6 +34,13 @@ public sealed partial class MainViewModel(
     // Needed for search and filters only.
     private ITaskSearchService Search => searchService
         ?? throw new InvalidOperationException("No search service was supplied.");
+
+    // Needed for recurring Tasks only.
+    private IRecurrenceService Recurrences => recurrenceService
+        ?? throw new InvalidOperationException("No Recurrence service was supplied.");
+
+    private IOccurrenceDialogs OccurrenceDialogs => occurrenceDialogs
+        ?? throw new InvalidOperationException("No Occurrence dialogs were supplied.");
 
     private int _completedFetched;
     private bool _completedHasMore;
@@ -331,8 +340,16 @@ public sealed partial class MainViewModel(
     private async Task ToggleAsync(TaskRowViewModel row, CancellationToken cancellationToken)
     {
         var previous = row.IsCompleted;
+        var hadNext = row.Item.NextOccurrenceId is not null;
         await SetCompletedAsync(row, !previous, cancellationToken);
-        PushUndo(new ToggleUndo(row.Id, previous));
+
+        // Completing an Occurrence may have produced the next one; Ctrl+Z right after deletes it again.
+        var produced = !previous && !hadNext ? row.Item.NextOccurrenceId : null;
+        PushUndo(new ToggleUndo(row.Id, previous, produced));
+        if (produced is not null)
+        {
+            await LoadAsync(cancellationToken);
+        }
     }
 
     private async Task SetCompletedAsync(TaskRowViewModel row, bool isCompleted, CancellationToken cancellationToken)
@@ -356,10 +373,39 @@ public sealed partial class MainViewModel(
 
     private async Task DeleteRowAsync(TaskRowViewModel row, CancellationToken cancellationToken)
     {
+        // Deleting an Occurrence asks whether to Skip it or stop repeating (SPEC 5.2).
+        var choice = row.Item.Recurrence is null
+            ? OccurrenceDeleteChoice.StopRepeating
+            : OccurrenceDialogs.AskDeleteOccurrence(row.Title);
+        if (choice == OccurrenceDeleteChoice.Cancel)
+        {
+            return;
+        }
+
         _debounce?.Cancel();
         _debounce = null;
-        var snapshot = await taskService.DeleteTaskAsync(row.Id, cancellationToken);
+        if (choice == OccurrenceDeleteChoice.DeleteThisOccurrence)
+        {
+            var skipped = await Recurrences.SkipOccurrenceAsync(row.Id, cancellationToken);
+            RemoveRow(row);
+            PushUndo(new SkipUndo(skipped));
+            ShowUndoBar("Task deleted");
+            if (skipped.ProducedOccurrenceId is not null)
+            {
+                await LoadAsync(cancellationToken);
+            }
 
+            return;
+        }
+
+        var snapshot = await taskService.DeleteTaskAsync(row.Id, cancellationToken);
+        RemoveRow(row);
+        PushUndo(new DeleteUndo(snapshot));
+        ShowUndoBar("Task deleted");
+    }
+
+    private void RemoveRow(TaskRowViewModel row)
+    {
         if (SelectedTask == row)
         {
             SelectedTask = null;
@@ -371,9 +417,6 @@ public sealed partial class MainViewModel(
         CompletedTasks.Remove(row);
         NotifyCompletedChanged();
         OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty);
-
-        PushUndo(new DeleteUndo(snapshot));
-        ShowUndoBar("Task deleted");
     }
 
     [ObservableProperty]
@@ -393,6 +436,16 @@ public sealed partial class MainViewModel(
         HideUndoBar();
         switch (entry)
         {
+            case ToggleUndo { ProducedOccurrenceId: { } produced } toggle:
+                await Recurrences.UndoCompletionAsync(toggle.TaskId, produced, cancellationToken);
+                await LoadAsync(cancellationToken);
+                OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty);
+                break;
+            case SkipUndo skip:
+                await Recurrences.UndoSkipAsync(skip.Skipped, cancellationToken);
+                await LoadAsync(cancellationToken);
+                OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty);
+                break;
             case ToggleUndo toggle when _all.Find(r => r.Id == toggle.TaskId) is { } row:
                 await SetCompletedAsync(row, toggle.PreviousState, cancellationToken);
                 break;
@@ -413,7 +466,7 @@ public sealed partial class MainViewModel(
     private void PushUndo(UndoEntry entry)
     {
         _lastUndo = entry;
-        if (entry is not (DeleteUndo or SubtaskDeleteUndo))
+        if (entry is not (DeleteUndo or SubtaskDeleteUndo or SkipUndo))
         {
             HideUndoBar();
         }
@@ -459,7 +512,10 @@ public sealed partial class MainViewModel(
 
     private abstract record UndoEntry;
 
-    private sealed record ToggleUndo(Guid TaskId, bool PreviousState) : UndoEntry;
+    // ProducedOccurrenceId: the next Occurrence this completion produced, deleted again by the undo.
+    private sealed record ToggleUndo(Guid TaskId, bool PreviousState, Guid? ProducedOccurrenceId) : UndoEntry;
+
+    private sealed record SkipUndo(SkippedOccurrence Skipped) : UndoEntry;
 
     private sealed record DeleteUndo(DeletedTask Snapshot) : UndoEntry;
 
@@ -515,6 +571,7 @@ public sealed partial class MainViewModel(
         DetailDueDate = value?.Item.DueDate?.ToDateTime(TimeOnly.MinValue);
         DetailDueTime = value?.Item.DueTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "";
         _loadingDetail = false;
+        Repeat.Load(value?.Item.Recurrence, value?.Item.DueDate);
         RebuildSubtaskItems();
         if (value is not null)
         {
@@ -587,6 +644,11 @@ public sealed partial class MainViewModel(
         {
             var updated = await Due.SetDueAsync(row.Id, date, time);
             row.Apply(updated);
+            if (row == SelectedTask && updated.Recurrence is null)
+            {
+                Repeat.Load(null, updated.DueDate); // the Repeat defaults follow the new Due date
+            }
+
             if (InOverdueGroup(row) != OverdueTasks.Contains(row))
             {
                 Place(row);
@@ -675,6 +737,56 @@ public sealed partial class MainViewModel(
         try
         {
             var updated = await taskService.UpdateTaskAsync(row.Id, title, notes, priority);
+            row.Apply(updated);
+            ErrorMessage = null;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            ErrorMessage = "Could not save the changes: " + ex.Message;
+        }
+    }
+
+    // ---- Repeat ----
+
+    private RepeatEditorViewModel? _repeat;
+
+    /// <summary>The Repeat section of the detail pane, showing the selected Task's Recurrence.</summary>
+    public RepeatEditorViewModel Repeat => _repeat ??= new RepeatEditorViewModel(OnRepeatEdited);
+
+    private void OnRepeatEdited()
+    {
+        if (SelectedTask is not { } row)
+        {
+            return;
+        }
+
+        if (Repeat.IsRepeating && DetailDueDate is null)
+        {
+            ErrorMessage = "A repeating Task needs a Due date.";
+            return;
+        }
+
+        Recurrence? recurrence;
+        try
+        {
+            recurrence = Repeat.Build();
+        }
+        catch (ArgumentException ex)
+        {
+            ErrorMessage = ex.Message;
+            return;
+        }
+
+        ErrorMessage = null;
+        _pendingSave = SaveRecurrenceAsync(_pendingSave, row, recurrence);
+    }
+
+    private async Task SaveRecurrenceAsync(Task previous, TaskRowViewModel row, Recurrence? recurrence)
+    {
+        await previous; // saves of one Task never overlap
+        try
+        {
+            var updated = await Recurrences.SetRecurrenceAsync(row.Id, recurrence);
             row.Apply(updated);
             ErrorMessage = null;
         }

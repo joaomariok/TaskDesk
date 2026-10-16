@@ -54,6 +54,10 @@ public sealed partial class TaskRowViewModel : ObservableObject
     [ObservableProperty]
     private bool _isOverdue;
 
+    /// <summary>True when the Task repeats; the row shows the repeat icon.</summary>
+    [ObservableProperty]
+    private bool _isRecurring;
+
     /// <summary>The marker on the row: nothing, "!", "!!" or "!!!".</summary>
     public string PriorityMarker => new('!', (int)Priority);
 
@@ -63,6 +67,7 @@ public sealed partial class TaskRowViewModel : ObservableObject
         Title = item.Title;
         Priority = item.Priority;
         IsCompleted = item.IsCompleted;
+        IsRecurring = item.Recurrence is not null;
         Tags = item.Tags;
         Subtasks.Clear();
         Subtasks.AddRange(item.Subtasks);

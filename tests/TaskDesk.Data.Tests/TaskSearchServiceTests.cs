@@ -127,6 +127,27 @@ public class TaskSearchServiceTests
     }
 
     [Fact]
+    public async Task Results_carry_the_recurrence_with_tags_and_subtasks_in_every_view()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "water plants");
+        await db.Get<IDueService>().SetDueAsync(task.Id, new DateOnly(2026, 10, 20), null, Ct);
+        await db.Get<IRecurrenceService>().SetRecurrenceAsync(task.Id, Recurrence.Weekly(RecurrenceDays.Tuesday), Ct);
+        await db.Get<ITaskService>().AddSubtaskAsync(task.Id, "fern", Ct);
+        await db.Get<ITagService>().AddTagToTaskAsync(task.Id, "home", Ct);
+
+        foreach (var view in new SmartView?[] { null, SmartView.All })
+        {
+            var found = Assert.Single(await db.Get<ITaskSearchService>().SearchAsync(
+                new(Text: "plants", View: view), Ct));
+
+            Assert.Equal(Recurrence.Weekly(RecurrenceDays.Tuesday), found.Recurrence);
+            Assert.Equal(["home"], found.Tags.Select(t => t.Name));
+            Assert.Equal(["fern"], found.Subtasks.Select(s => s.Title));
+        }
+    }
+
+    [Fact]
     public async Task Search_stays_within_the_default_list_or_the_tag_view()
     {
         using var db = await StartAsync();

@@ -38,6 +38,17 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
             task.HasOne<TaskList>().WithMany().HasForeignKey(t => t.ListId).OnDelete(DeleteBehavior.Cascade);
             task.HasIndex(t => new { t.ListId, t.IsCompleted, t.SortOrder });
             task.HasIndex(t => t.DueDate);
+            task.HasIndex(t => t.SeriesId);
+            task.OwnsOne(t => t.Recurrence, recurrence =>
+            {
+                recurrence.Property(r => r.Frequency).HasColumnName("RecurrenceFrequency");
+                recurrence.Property(r => r.Interval).HasColumnName("RecurrenceInterval");
+                recurrence.Property(r => r.DaysOfWeek).HasColumnName("RecurrenceDaysOfWeek");
+                recurrence.Property(r => r.Month).HasColumnName("RecurrenceMonth");
+                recurrence.Property(r => r.DayOfMonth).HasColumnName("RecurrenceDayOfMonth");
+                recurrence.Property(r => r.Anchor).HasColumnName("RecurrenceAnchor");
+                recurrence.Property(r => r.EndDate).HasColumnName("RecurrenceEndDate");
+            });
             task.HasMany(t => t.Tags).WithMany().UsingEntity<TaskTag>(
                 join => join.HasOne<Tag>().WithMany().HasForeignKey(l => l.TagId).OnDelete(DeleteBehavior.Cascade),
                 join => join.HasOne<TaskItem>().WithMany().HasForeignKey(l => l.TaskId).OnDelete(DeleteBehavior.Cascade),

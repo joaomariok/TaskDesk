@@ -369,8 +369,43 @@ public class MainViewModelTests
                 t.IsCompleted = isCompleted;
                 t.CompletedUtc = isCompleted ? completedUtc : null;
             });
+
+            // Emulates the at-most-once next Occurrence (a simple +1 day; the real rules live in Core).
+            if (isCompleted && _tasks[index] is { Recurrence: not null, NextOccurrenceId: null } current)
+            {
+                var next = Copy(current, t =>
+                {
+                    t.Id = Guid.NewGuid();
+                    t.IsCompleted = false;
+                    t.CompletedUtc = null;
+                    t.DueDate = current.DueDate?.AddDays(1);
+                    t.SortOrder = current.SortOrder + 0.5;
+                });
+                _tasks.Insert(index + 1, next);
+                _tasks[index] = Copy(current, t => t.NextOccurrenceId = next.Id);
+            }
+
             return Task.FromResult(_tasks[index]);
         }
+
+        /// <summary>Puts a Task straight into the fake store (used by fakes of other services).</summary>
+        internal void Put(TaskItem task)
+        {
+            var index = _tasks.FindIndex(t => t.Id == task.Id);
+            if (index >= 0)
+            {
+                _tasks[index] = task;
+            }
+            else
+            {
+                _tasks.Add(task);
+                _tasks.Sort((a, b) => a.SortOrder.CompareTo(b.SortOrder));
+            }
+        }
+
+        internal void Remove(Guid taskId) => _tasks.RemoveAll(t => t.Id == taskId);
+
+        internal static TaskItem With(TaskItem source, Action<TaskItem> change) => Copy(source, change);
 
         public Task<TaskItem> UpdateTaskAsync(
             Guid taskId, string title, string? notes, Priority priority, CancellationToken cancellationToken = default)
@@ -410,6 +445,9 @@ public class MainViewModelTests
                 CompletedUtc = source.CompletedUtc,
                 DueDate = source.DueDate,
                 DueTime = source.DueTime,
+                Recurrence = source.Recurrence,
+                SeriesId = source.SeriesId,
+                NextOccurrenceId = source.NextOccurrenceId,
                 SortOrder = source.SortOrder,
                 CreatedUtc = source.CreatedUtc,
                 UpdatedUtc = source.UpdatedUtc,

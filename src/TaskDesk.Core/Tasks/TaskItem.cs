@@ -16,6 +16,19 @@ public sealed class TaskItem
 
     /// <summary>Due time: a local wall-clock time; only allowed when <see cref="DueDate"/> is set.</summary>
     public TimeOnly? DueTime { get; set; }
+
+    /// <summary>How the Task repeats, or null. Requires a <see cref="DueDate"/>. Never shared between Tasks.</summary>
+    public Recurrence? Recurrence { get; set; }
+
+    /// <summary>Shared by all Occurrences of one Series; assigned when the first next Occurrence is produced.</summary>
+    public Guid? SeriesId { get; set; }
+
+    /// <summary>
+    /// The Occurrence this one produced on completion or Skip. Once set, completing this Task again never
+    /// produces another. Not a foreign key: the next Occurrence may be deleted later.
+    /// </summary>
+    public Guid? NextOccurrenceId { get; set; }
+
     public double SortOrder { get; set; }
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }

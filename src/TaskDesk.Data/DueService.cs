@@ -21,6 +21,11 @@ internal sealed class DueService(
             .SingleOrDefaultAsync(t => t.Id == taskId, cancellationToken)
             ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
 
+        if (dueDate is null && task.Recurrence is not null)
+        {
+            throw new ArgumentException("A recurring Task needs a Due date.", nameof(dueDate));
+        }
+
         if (task.DueDate != dueDate || task.DueTime != dueTime)
         {
             task.DueDate = dueDate;
