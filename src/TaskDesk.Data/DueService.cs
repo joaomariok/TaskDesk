@@ -7,7 +7,7 @@ namespace TaskDesk.Data;
 internal sealed class DueService(
     IDbContextFactory<TaskDeskDbContext> contextFactory,
     TimeProvider clock,
-    ILogger<DueService> logger) : IDueService
+    ILogger<DueService> logger) : IDueService, ITaskSearchService
 {
     public async Task<TaskItem> SetDueAsync(
         Guid taskId, DateOnly? dueDate, TimeOnly? dueTime, CancellationToken cancellationToken = default)
@@ -33,18 +33,47 @@ internal sealed class DueService(
         return task;
     }
 
-    public async Task<IReadOnlyList<TaskItem>> ListSmartViewAsync(
+    public Task<IReadOnlyList<TaskItem>> ListSmartViewAsync(
         SmartView view, int skip = 0, CancellationToken cancellationToken = default)
+        => ListViewAsync(view, skip, null, cancellationToken);
+
+    public async Task<IReadOnlyList<TaskItem>> SearchAsync(
+        TaskSearchQuery query, CancellationToken cancellationToken = default)
+    {
+        var filter = TaskSearchFilter.Create(query);
+        if (query.View is { } view)
+        {
+            return await ListViewAsync(view, query.Skip, filter, cancellationToken);
+        }
+
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var tasks = filter(context.Tasks
+            .AsNoTracking()
+            .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
+            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder)));
+        tasks = query.ViewTagId is { } tagId
+            ? tasks.Where(t => t.Tags.Any(g => g.Id == tagId))
+            : tasks.Where(t => context.Lists.Any(l => l.IsDefault && l.Id == t.ListId));
+        return await tasks.OrderBy(t => t.SortOrder).ThenBy(t => t.CreatedUtc).ToListAsync(cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<TaskItem>> ListViewAsync(
+        SmartView view, int skip, Func<IQueryable<TaskItem>, IQueryable<TaskItem>>? filter,
+        CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow();
         var zone = clock.LocalTimeZone;
         var today = DueCalculator.LocalToday(now, zone);
 
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        var tasks = context.Tasks
+        IQueryable<TaskItem> tasks = context.Tasks
             .AsNoTracking()
             .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
             .Include(t => t.Subtasks.OrderBy(s => s.SortOrder));
+        if (filter is not null)
+        {
+            tasks = filter(tasks);
+        }
 
         switch (view)
         {

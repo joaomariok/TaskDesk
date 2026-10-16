@@ -11,7 +11,8 @@ public sealed partial class MainViewModel(
     ITaskService taskService,
     ITagService tagService,
     TimeProvider? timeProvider = null,
-    IDueService? dueService = null) : ObservableObject
+    IDueService? dueService = null,
+    ITaskSearchService? searchService = null) : ObservableObject
 {
     /// <summary>How long text edits wait for further typing before they are saved.</summary>
     public static readonly TimeSpan SaveDebounce = TimeSpan.FromMilliseconds(500);
@@ -27,6 +28,10 @@ public sealed partial class MainViewModel(
     // Needed for Due edits and Smart Views only.
     private IDueService Due => dueService
         ?? throw new InvalidOperationException("No Due service was supplied.");
+
+    // Needed for search and filters only.
+    private ITaskSearchService Search => searchService
+        ?? throw new InvalidOperationException("No search service was supplied.");
 
     private int _completedFetched;
     private bool _completedHasMore;
@@ -92,7 +97,8 @@ public sealed partial class MainViewModel(
 
     partial void OnCurrentViewChanged(SmartView? value) => UpdateReorderEnabled();
 
-    private void UpdateReorderEnabled() => IsReorderEnabled = TagFilter is null && CurrentView is null;
+    private void UpdateReorderEnabled() =>
+        IsReorderEnabled = TagFilter is null && CurrentView is null && !IsFilterActive;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddTagCommand))]
@@ -118,7 +124,12 @@ public sealed partial class MainViewModel(
             TagFilter = Tags.FirstOrDefault(t => t.Id == filterId);
         }
 
-        var tasks = CurrentView is { } view
+        PruneFilterTags();
+        RebuildFilterTagChips();
+
+        var tasks = IsFilterActive
+            ? await Search.SearchAsync(BuildSearchQuery(0), cancellationToken)
+            : CurrentView is { } view
             ? await Due.ListSmartViewAsync(view, 0, cancellationToken)
             : TagFilter is null
                 ? await taskService.ListDefaultListTasksAsync(cancellationToken)
@@ -185,7 +196,9 @@ public sealed partial class MainViewModel(
             return;
         }
 
-        var page = await Due.ListSmartViewAsync(SmartView.Completed, _completedFetched, cancellationToken);
+        var page = IsFilterActive
+            ? await Search.SearchAsync(BuildSearchQuery(_completedFetched), cancellationToken)
+            : await Due.ListSmartViewAsync(SmartView.Completed, _completedFetched, cancellationToken);
         _completedFetched += page.Count;
         _completedHasMore = page.Count == IDueService.CompletedPageSize;
         foreach (var task in page)
@@ -218,6 +231,11 @@ public sealed partial class MainViewModel(
                     cancellationToken);
             }
 
+            await LoadAsync(cancellationToken);
+        }
+        else if (IsFilterActive)
+        {
+            // The new Task may not match the search or the filters, so let them decide.
             await LoadAsync(cancellationToken);
         }
         else if (TagFilter is null)

@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         DataContext = viewModel;
         InitializeComponent();
         PriorityBox.ItemsSource = Enum.GetValues<Priority>();
+        InitializeSearch();
 
         // Open-Task counts change when Tasks are added, completed, un-completed, deleted or restored.
         viewModel.OpenTaskCountsChanged += async (_, _) => await lists.LoadAsync();
@@ -76,6 +77,22 @@ public partial class MainWindow : Window
     // F2 edits the title of the selected Task in the detail pane.
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
+        // Esc clears the search and restores the view.
+        if (e.Key == Key.Escape && ViewModel.SearchText.Length > 0)
+        {
+            ViewModel.ClearSearchCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F2 && ViewModel.SelectedTask is not null)
         {
             ViewModel.IsDetailPaneOpen = true;
@@ -248,6 +265,53 @@ public partial class MainWindow : Window
             : ViewModel.Tasks.Count - 1; // dropped on empty space: move to the end
 
         await ViewModel.MoveTaskAsync(oldIndex, newIndex);
+    }
+
+    // ---- Search and filters ----
+
+    private static readonly TimeSpan SearchDelay = TimeSpan.FromMilliseconds(250);
+    private System.Windows.Threading.DispatcherTimer? _searchTimer;
+    private bool _syncingPriorityFilter;
+
+    private void InitializeSearch()
+    {
+        PriorityFilterBox.ItemsSource = new[] { "Any priority", "Low or higher", "Medium or higher", "High" };
+        PriorityFilterBox.SelectedIndex = 0;
+        ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.MinPriorityFilter))
+            {
+                _syncingPriorityFilter = true;
+                PriorityFilterBox.SelectedIndex = (int)(ViewModel.MinPriorityFilter ?? Priority.None);
+                _syncingPriorityFilter = false;
+            }
+        };
+    }
+
+    // Reloads once typing pauses, so each keystroke does not query the database.
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _searchTimer ??= new System.Windows.Threading.DispatcherTimer { Interval = SearchDelay };
+        _searchTimer.Tick -= OnSearchTimerTick;
+        _searchTimer.Tick += OnSearchTimerTick;
+        _searchTimer.Stop();
+        _searchTimer.Start();
+    }
+
+    private void OnSearchTimerTick(object? sender, EventArgs e)
+    {
+        _searchTimer?.Stop();
+        ViewModel.ApplySearchCommand.Execute(null);
+    }
+
+    private async void PriorityFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingPriorityFilter || PriorityFilterBox.SelectedIndex < 0)
+        {
+            return;
+        }
+
+        await ViewModel.SetMinPriorityFilterAsync((Priority)PriorityFilterBox.SelectedIndex);
     }
 
     private static ListBoxItem? ItemUnder(object source)

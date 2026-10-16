@@ -258,6 +258,39 @@
                 </TextBox>
             </DockPanel>
         </StackPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBox x:Name="SearchBox" Padding="6" Margin="0,0,0,4"
+                     AutomationProperties.Name="Search (Ctrl+F)"
+                     ToolTip="Search (Ctrl+F). Esc clears."
+                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                     TextChanged="SearchBox_TextChanged" />
+            <WrapPanel>
+                <ComboBox x:Name="PriorityFilterBox" Width="150" Margin="0,0,6,0"
+                          AutomationProperties.Name="Priority filter"
+                          SelectionChanged="PriorityFilterBox_SelectionChanged" />
+                <ToggleButton Content="Has due" Padding="8,2" Margin="0,0,6,0"
+                              AutomationProperties.Name="Has due filter"
+                              IsChecked="{Binding HasDueFilter, Mode=OneWay}"
+                              Command="{Binding ToggleHasDueFilterCommand}" />
+                <ItemsControl ItemsSource="{Binding FilterTagChips}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <ToggleButton Content="{Binding Tag.Name}" ContentStringFormat="#{0}" Padding="8,2"
+                                          Margin="0,0,6,0" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                          Command="{Binding DataContext.ToggleFilterTagCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          CommandParameter="{Binding Tag}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="Clear filters" Padding="8,2" Command="{Binding ClearAllFiltersCommand}"
+                        Visibility="{Binding IsFilterActive, Converter={StaticResource BoolToVisibility}}" />
+            </WrapPanel>
+        </StackPanel>
         <TextBox x:Name="QuickAddBox" DockPanel.Dock="Top" Margin="0,0,0,8" Padding="6"
                  AutomationProperties.Name="Quick add"
                  Text="{Binding QuickAddTitle, UpdateSourceTrigger=PropertyChanged}">
