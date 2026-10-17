@@ -1,3 +1,4 @@
+using System.Globalization;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
@@ -118,6 +119,75 @@ public sealed class NavigationTests : IDisposable
             AppSession.WaitUntil(() => HasDue() is null || HasDue()!.AsToggleButton().ToggleState == ToggleState.Off,
                 () => "The Has due Filter did not turn off.");
         }
+    }
+
+    [Fact]
+    public void Clear_filters_shows_while_a_Filter_is_on()
+    {
+        AutomationElement? HasDue() =>
+            _app.Window.FindFirstDescendant(cf => cf.ByName("Has due filter"));
+        _app.Find(Ids.FilterButton).Click();
+        AppSession.Eventually(HasDue, "Clicking Filter did not show the Filter row.");
+        HasDue()!.Click();
+        AppSession.WaitUntil(() => HasDue()!.AsToggleButton().ToggleState == ToggleState.On,
+            () => "The Has due Filter did not turn on.");
+        try
+        {
+            AppSession.Eventually(() => _app.Window.FindFirstDescendant(cf => cf.ByName("Clear filters")),
+                "Clear filters is not shown while a Filter is on.");
+        }
+        finally
+        {
+            HasDue()?.Click();
+            AppSession.WaitUntil(() => HasDue() is null || HasDue()!.AsToggleButton().ToggleState == ToggleState.Off,
+                () => "The Has due Filter did not turn off.");
+        }
+    }
+
+    [Fact]
+    public void Ctrl_comma_opens_Settings_and_closing_it_closes_the_window()
+    {
+        // A shortcut goes to the focused element; right after launch the window may not have keyboard focus yet.
+        _app.Focus(Ids.QuickAddBox);
+        // Ctrl+, opens Settings, the same window as the tray menu's Settings.
+        AppSession.Ctrl(VirtualKeyShort.OEM_COMMA);
+        var settings = _app.SettingsWindow();
+        AppSession.Eventually(() => settings.FindFirstDescendant(cf => cf.ByName("Close button behavior")),
+            "Settings has no Close button behavior control.");
+
+        settings.Close();
+
+        AppSession.WaitUntil(() => !_app.SettingsWindowShown(), () => "The Settings window did not close.");
+    }
+
+    [Fact]
+    public void A_past_Due_date_typed_into_the_detail_pane_puts_the_Task_in_Overdue()
+    {
+        AppSession.Ctrl(VirtualKeyShort.KEY_4);
+        _app.TypeInto(Ids.QuickAddBox, "Pay the rent", pressEnter: true);
+        _app.SelectRow(Ids.OpenTaskList, "Pay the rent");
+        Keyboard.Type(VirtualKeyShort.F2);
+        AppSession.WaitUntil(() => _app.TextBox(Ids.DetailTitleBox).Text == "Pay the rent",
+            () => "The detail pane did not open.");
+
+        // Yesterday, typed into the Due date picker, which parses with the current culture.
+        var yesterday = DateTime.Today.AddDays(-1).ToString("d", CultureInfo.CurrentCulture);
+        var dueBox = _app.Find(Ids.DetailDueDatePicker).FindFirstDescendant(cf => cf.ByControlType(ControlType.Edit))
+            ?? throw new InvalidOperationException("The Due date picker has no text box.");
+        dueBox.Focus();
+        Keyboard.Type(yesterday);
+        Keyboard.Type(VirtualKeyShort.RETURN);
+        Keyboard.Type(VirtualKeyShort.TAB);
+
+        // The Due edit saves after a short debounce, so reopen Overdue until the Task shows there.
+        AppSession.WaitUntil(() =>
+            {
+                AppSession.Ctrl(VirtualKeyShort.KEY_3);
+                Thread.Sleep(300);
+                return _app.Rows(Ids.OpenTaskList).Contains("Pay the rent");
+            },
+            () => $"Overdue rows were [{string.Join(", ", _app.Rows(Ids.OpenTaskList))}]; the typed Due '{yesterday}' did not save.");
+        AppSession.WaitUntil(() => _app.Find(Ids.PageHeading).Name == "Overdue", () => "The Overdue view did not open.");
     }
 
     [Fact]
