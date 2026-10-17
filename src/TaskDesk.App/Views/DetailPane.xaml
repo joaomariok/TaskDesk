@@ -16,7 +16,7 @@
             </DockPanel>
             <TextBlock Text="Title" />
             <TextBox x:Name="DetailTitleBox" Padding="4" Margin="0,2,0,8" MaxLength="500"
-                     AutomationProperties.Name="Task title"
+                     AutomationProperties.Name="Task title" AutomationProperties.AutomationId="DetailTitleBox"
                      Text="{Binding DetailTitle, UpdateSourceTrigger=PropertyChanged}" />
             <TextBlock Text="Priority" />
             <ComboBox x:Name="PriorityBox" Margin="0,2,0,8" AutomationProperties.Name="Priority"
@@ -84,7 +84,7 @@
             <TextBlock Text="Notes" />
             <TextBox Height="160" Margin="0,2,0,8" Padding="4" AcceptsReturn="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto" MaxLength="10000"
-                     AutomationProperties.Name="Task notes"
+                     AutomationProperties.Name="Task notes" AutomationProperties.AutomationId="DetailNotesBox"
                      Text="{Binding DetailNotes, UpdateSourceTrigger=PropertyChanged}" />
             <TextBlock Text="Subtasks" />
             <ItemsControl ItemsSource="{Binding SubtaskItems}" Margin="0,2,0,4"

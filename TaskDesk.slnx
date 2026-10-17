@@ -12,5 +12,6 @@
     <Project Path="tests/TaskDesk.Core.Tests/TaskDesk.Core.Tests.csproj" />
     <Project Path="tests/TaskDesk.Data.Tests/TaskDesk.Data.Tests.csproj" />
     <Project Path="tests/TaskDesk.Presentation.Tests/TaskDesk.Presentation.Tests.csproj" />
+    <Project Path="tests/TaskDesk.UiTests/TaskDesk.UiTests.csproj" />
   </Folder>
 </Solution>

@@ -34,14 +34,14 @@ TaskDesk is a small, fast, **local-only** to-do list desktop app for Windows 11.
 | Storage | SQLite database through EF Core (Entity Framework Core, Microsoft's object-relational mapper) with migrations |
 | Extras in scope | Light/dark theme, import/export, global quick-add hotkey |
 | Extras out of scope | Localization (UI is English only) |
-| Quality bar | Unit tests + integration tests (no automated UI tests) |
+| Quality bar | Unit tests + integration tests; an opt-in UI test suite outside the gate (#23) |
 | Recurrence | Common presets (section 5) — not full iCalendar RRULE |
 | OS support | Windows 11 only (build 22000 or newer), x64 |
 | Name | TaskDesk |
 
 ### 1.2 Explicitly out of scope for v1
 
-Sync of any kind, JMTaskApi, accounts/login, mobile, multiple users, file attachments, rich-text notes, localization, MSIX/installer, auto-update, encryption at rest, automated UI tests, ARM64 builds.
+Sync of any kind, JMTaskApi, accounts/login, mobile, multiple users, file attachments, rich-text notes, localization, MSIX/installer, auto-update, encryption at rest, ARM64 builds.
 
 ---
 
@@ -518,7 +518,7 @@ Against a **real SQLite file** in a unique temp folder per test (not the EF in-m
 
 ### 11.3 Manual test checklist (`docs/MANUAL-TESTS.md`)
 
-The agent writes this file for the owner, covering what automated tests cannot: toast appears and buttons work (running and not-running app); tray menu; hide-to-tray and first-time hint; auto-start after logoff/logon; `--minimized`; hotkey from another app, hotkey conflict handling; theme switching live; drag-and-drop reorder; keyboard-only navigation; second instance focuses the first; missed reminders summary after sleep.
+The agent writes this file for the owner, covering what automated tests cannot (checks covered by the opt-in UI suite, `scripts/ui-tests.ps1`, are marked there): toast appears and buttons work (running and not-running app); tray menu; hide-to-tray and first-time hint; auto-start after logoff/logon; `--minimized`; hotkey from another app, hotkey conflict handling; theme switching live; drag-and-drop reorder; keyboard-only navigation; second instance focuses the first; missed reminders summary after sleep.
 
 ---
 

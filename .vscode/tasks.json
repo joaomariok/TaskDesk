@@ -27,6 +27,15 @@
       "group": "test"
     },
     {
+      "label": "ui tests",
+      "detail": "Opt-in UI suite; drives real windows and takes over keyboard and mouse for about a minute.",
+      "type": "process",
+      "command": "pwsh",
+      "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/ui-tests.ps1"],
+      "problemMatcher": "$msCompile",
+      "group": "test"
+    },
+    {
       "label": "run (sandbox)",
       "detail": "Runs the app against %TEMP%\\TaskDesk-dev; no Run key, no toast registration.",
       "type": "process",

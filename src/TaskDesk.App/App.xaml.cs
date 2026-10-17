@@ -39,7 +39,8 @@ public partial class App : Application
         var mode = RuntimeMode.FromEnvironment();
 
         // Claim single-instance ownership before any expensive start-up work.
-        var singleInstance = new NamedPipeSingleInstance();
+        var singleInstance = new NamedPipeSingleInstance(
+            SingleInstanceNames.For(Environment.GetEnvironmentVariable(AppPaths.DataDirectoryVariable)));
         if (!singleInstance.TryAcquire())
         {
             // Forward --minimized and a Reminder notification click to the running instance (SPEC 7.1).

@@ -6,13 +6,11 @@ namespace TaskDesk.App.Shell;
 
 /// <summary>
 /// Named mutex for ownership plus a named pipe that wakes the first instance and forwards a later launch's
-/// arguments (wire format: <see cref="SecondLaunchMessage"/>). Covered by manual checks.
+/// arguments (wire format: <see cref="SecondLaunchMessage"/>). Names come from <see cref="SingleInstanceNames"/>,
+/// so a redirected data folder is its own instance. Covered by manual checks and the UI tests.
 /// </summary>
-internal sealed class NamedPipeSingleInstance : ISingleInstance
+internal sealed class NamedPipeSingleInstance(SingleInstanceNames names) : ISingleInstance
 {
-    private const string MutexName = @"Local\TaskDesk.SingleInstance";
-    private const string PipeName = "TaskDesk.Activate";
-
     private readonly CancellationTokenSource _stop = new();
     private Mutex? _mutex;
     private bool? _owned;
@@ -25,7 +23,7 @@ internal sealed class NamedPipeSingleInstance : ISingleInstance
             return owned;
         }
 
-        _mutex = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
+        _mutex = new Mutex(initiallyOwned: true, names.Mutex, out var createdNew);
         _owned = createdNew;
         if (!createdNew)
         {
@@ -40,7 +38,7 @@ internal sealed class NamedPipeSingleInstance : ISingleInstance
     {
         try
         {
-            await using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
+            await using var client = new NamedPipeClientStream(".", names.Pipe, PipeDirection.Out);
             await client.ConnectAsync(5000, cancellationToken);
             await SecondLaunchMessage.WriteAsync(client, arguments, cancellationToken);
         }
@@ -59,7 +57,7 @@ internal sealed class NamedPipeSingleInstance : ISingleInstance
                 try
                 {
                     await using var server = new NamedPipeServerStream(
-                        PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+                        names.Pipe, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
                     await server.WaitForConnectionAsync(_stop.Token);
                     var arguments = await SecondLaunchMessage.ReadAsync(server, _stop.Token);
                     onSecondLaunch(arguments);

@@ -3,6 +3,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <Style x:Key="TaskRowContainer" TargetType="ListBoxItem">
+            <!-- Narrator announces a row by its Task title. -->
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+        </Style>
         <DataTemplate x:Key="TaskRowTemplate">
             <DockPanel LastChildFill="True">
                 <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"
@@ -67,7 +71,8 @@
         <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="10,6" Background="#333"
                 Visibility="{Binding IsUndoBarVisible, Converter={StaticResource BoolToVisibility}}">
             <DockPanel>
-                <Button DockPanel.Dock="Right" Content="Undo" Command="{Binding UndoCommand}" Padding="10,2" />
+                <Button DockPanel.Dock="Right" Content="Undo" Command="{Binding UndoCommand}" Padding="10,2"
+                        AutomationProperties.AutomationId="UndoButton" />
                 <TextBlock Foreground="White" VerticalAlignment="Center" Text="{Binding UndoBarText, StringFormat={}{0} &#x2014;}" />
             </DockPanel>
         </Border>
@@ -95,7 +100,7 @@
             <DockPanel>
                 <Button DockPanel.Dock="Right" Content="Add tag" Margin="4,0,0,0" Padding="8,2"
                         Command="{Binding AddTagCommand}" />
-                <TextBox Padding="4" AutomationProperties.Name="New tag name"
+                <TextBox Padding="4" AutomationProperties.Name="New tag name" AutomationProperties.AutomationId="NewTagBox"
                          Text="{Binding NewTagName, UpdateSourceTrigger=PropertyChanged}">
                     <TextBox.InputBindings>
                         <KeyBinding Key="Return" Command="{Binding AddTagCommand}" />
@@ -105,7 +110,7 @@
         </StackPanel>
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
             <TextBox x:Name="SearchBox" Padding="6" Margin="0,0,0,4"
-                     AutomationProperties.Name="Search (Ctrl+F)"
+                     AutomationProperties.Name="Search (Ctrl+F)" AutomationProperties.AutomationId="SearchBox"
                      ToolTip="Search (Ctrl+F). Esc clears."
                      Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                      TextChanged="SearchBox_TextChanged" />
@@ -141,7 +146,7 @@
             </WrapPanel>
         </StackPanel>
         <TextBox x:Name="QuickAddBox" DockPanel.Dock="Top" Margin="0,0,0,8" Padding="6"
-                 AutomationProperties.Name="Quick add"
+                 AutomationProperties.Name="Quick add" AutomationProperties.AutomationId="QuickAddBox"
                  Text="{Binding QuickAddTitle, UpdateSourceTrigger=PropertyChanged}">
             <TextBox.InputBindings>
                 <KeyBinding Key="Return" Command="{Binding AddTaskCommand}" />
@@ -155,7 +160,8 @@
                   Header="{Binding CompletedHeader}"
                   IsExpanded="{Binding IsCompletedExpanded, Mode=TwoWay}">
             <ListBox x:Name="CompletedList" MaxHeight="160" ItemsSource="{Binding CompletedTasks}"
-                     HorizontalContentAlignment="Stretch" AutomationProperties.Name="Completed tasks"
+                     HorizontalContentAlignment="Stretch" AutomationProperties.Name="Completed tasks" AutomationProperties.AutomationId="CompletedTaskList"
+                     ItemContainerStyle="{StaticResource TaskRowContainer}"
                      ItemTemplate="{StaticResource TaskRowTemplate}"
                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                      ScrollViewer.CanContentScroll="True"
@@ -171,6 +177,7 @@
             <TextBlock Text="{Binding OverdueHeader}" FontWeight="Bold" Foreground="Red" Margin="0,0,0,4" />
             <ListBox x:Name="OverdueList" MaxHeight="160" ItemsSource="{Binding OverdueTasks}"
                      HorizontalContentAlignment="Stretch" AutomationProperties.Name="Overdue tasks"
+                     ItemContainerStyle="{StaticResource TaskRowContainer}"
                      ItemTemplate="{StaticResource TaskRowTemplate}"
                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                      ScrollViewer.CanContentScroll="True"
@@ -182,7 +189,8 @@
             </ListBox>
         </StackPanel>
         <ListBox x:Name="OpenList" ItemsSource="{Binding Tasks}" AllowDrop="True"
-                 HorizontalContentAlignment="Stretch" AutomationProperties.Name="Tasks"
+                 HorizontalContentAlignment="Stretch" AutomationProperties.Name="Tasks" AutomationProperties.AutomationId="OpenTaskList"
+                 ItemContainerStyle="{StaticResource TaskRowContainer}"
                  ItemTemplate="{StaticResource TaskRowTemplate}"
                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                  ScrollViewer.CanContentScroll="True"

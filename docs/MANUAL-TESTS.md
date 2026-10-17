@@ -1,6 +1,6 @@
 # Manual test checklist
 
-What automated tests cannot cover (SPEC 11.3), plus checks per feature. Run against a published build (`dotnet publish src/TaskDesk.App -p:PublishProfile=win-x64`). To keep your real data safe, set `TASKDESK_DATA_DIR` to a scratch folder first. That also turns on sandbox mode: the Run key is never read or written and reminders use tray balloons. Checks of rich toasts need notification registration, so also set `TASKDESK_SANDBOX=0` for them; this still never touches the Run key. Checks of auto-start need a normal run (no `TASKDESK_DATA_DIR`) of a published build, which uses your real data folder, so back it up first. Turning "Start with Windows" off removes the Run entry only when it points at the running exe. The log shows the active mode at start-up.
+What automated tests cannot cover (SPEC 11.3), plus checks per feature. Items marked **(automated)** are covered by the opt-in UI suite (`pwsh scripts/ui-tests.ps1`); check them by hand only when that suite cannot run. Run against a published build (`dotnet publish src/TaskDesk.App -p:PublishProfile=win-x64`). To keep your real data safe, set `TASKDESK_DATA_DIR` to a scratch folder first. That also turns on sandbox mode: the Run key is never read or written and reminders use tray balloons. Checks of rich toasts need notification registration, so also set `TASKDESK_SANDBOX=0` for them; this still never touches the Run key. Checks of auto-start need a normal run (no `TASKDESK_DATA_DIR`) of a published build, which uses your real data folder, so back it up first. Turning "Start with Windows" off removes the Run entry only when it points at the running exe. The log shows the active mode at start-up.
 
 Mark each item with the date and result.
 
@@ -22,7 +22,7 @@ Mark each item with the date and result.
 - [ ] Right-click menu has Open TaskDesk, Quick add, Settings, Exit, and each works.
 - [ ] Close button hides to the tray (default). The first time only, a one-time hint says TaskDesk is still running in the tray.
 - [ ] Settings, close behavior = exit: the close button exits the process.
-- [ ] Window size, position and pane widths are restored after restart; minimum size is 800x500.
+- [ ] Window size, position and pane widths are restored after restart; minimum size is 800x500. **(automated: pane widths)**
 - [ ] Exit leaves no TaskDesk process behind and unregisters the hotkey.
 
 ## Start and single instance
@@ -51,9 +51,10 @@ Mark each item with the date and result.
 
 - [ ] Drag a Task to reorder it in a List; the order survives restart. Reordering is off in Smart Views, Tag filters and search.
 - [ ] Drag Lists in the navigation pane to reorder; rename, color and delete from the right-click menu.
+- [ ] Creating a List (new list box, Enter) and tagging a Task (new tag box, Enter). **(automated)**
 - [ ] Click a Tag in the navigation pane to filter; click again to clear.
-- [ ] Space toggles complete, Delete removes the Task, Ctrl+Z restores it (within 10 seconds); undoing a recurring Task's completion also removes the Occurrence it produced.
-- [ ] Edits in the detail pane save on their own (text after about 0.5 s); kill the process right after typing and restart: the edit is there.
+- [ ] Space toggles complete, Delete removes the Task, Ctrl+Z and the Undo bar restore it (within 10 seconds) **(automated, except the recurring case)**; undoing a recurring Task's completion also removes the Occurrence it produced.
+- [ ] Edits in the detail pane save on their own (text after about 0.5 s); kill the process right after typing and restart: the edit is there. **(automated: edit then close and restart; killing the process is still manual)**
 - [ ] Subtasks: add, tick, delete, undo; the "done/total" progress shows on the row.
 - [ ] Due dates: Today, Upcoming, Overdue, All, Completed views contain the right Tasks, including a Task due today at a time that has just passed.
 - [ ] Recurrence: complete a repeating Task and the next Occurrence appears; Skip works; deleting an Occurrence offers "Delete this occurrence" and "Stop repeating".
@@ -61,7 +62,8 @@ Mark each item with the date and result.
 
 ## Keyboard-only
 
-- [ ] Ctrl+N, Ctrl+F, Ctrl+Z, F2, Space, Delete, Esc and Ctrl+1 to Ctrl+5 do what SPEC 6.4 says.
+- [ ] Ctrl+N, Ctrl+F, Ctrl+Z, F2, Space, Delete, Esc and Ctrl+1 to Ctrl+5 do what SPEC 6.4 says. **(automated, except Ctrl+N; Esc only for clearing search)**
+- [ ] Start-up puts keyboard focus in quick add; Enter adds the Task. **(automated)**
 - [ ] Tab reaches every control; nothing needs the mouse; a screen reader (Narrator) announces names for the main controls.
 
 ## Data safety, backup, export and import

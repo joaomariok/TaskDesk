@@ -26,7 +26,7 @@
                    DataContext="{Binding Lists, RelativeSource={RelativeSource AncestorType=Window}}">
             <TextBlock DockPanel.Dock="Top" Text="LISTS" FontWeight="Bold" Margin="0,0,0,4" />
             <TextBox DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="4"
-                     AutomationProperties.Name="New list"
+                     AutomationProperties.Name="New list" AutomationProperties.AutomationId="NewListBox"
                      Text="{Binding NewListName, UpdateSourceTrigger=PropertyChanged}">
                 <TextBox.InputBindings>
                     <KeyBinding Key="Return" Command="{Binding CreateListCommand}" />
@@ -34,9 +34,14 @@
             </TextBox>
             <TextBlock DockPanel.Dock="Bottom" Foreground="Firebrick" TextWrapping="Wrap"
                        Text="{Binding ErrorMessage}" />
-            <ListBox ItemsSource="{Binding Lists}" AllowDrop="True" AutomationProperties.Name="Lists"
+            <ListBox ItemsSource="{Binding Lists}" AllowDrop="True" AutomationProperties.Name="Lists" AutomationProperties.AutomationId="ListsList"
                      PreviewMouseLeftButtonDown="OnListMouseDown" PreviewMouseMove="OnListMouseMove"
                      Drop="OnListDrop">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <DockPanel LastChildFill="True" Background="Transparent">
@@ -71,8 +76,13 @@
                     AutomationProperties.Name="Show all tasks" Click="OnShowAllClick" />
             <Button x:Name="DeleteTagButton" DockPanel.Dock="Bottom" Content="Delete tag" Margin="0,4,0,0"
                     AutomationProperties.Name="Delete selected tag" Click="OnDeleteTagClick" />
-            <ListBox x:Name="TagList" ItemsSource="{Binding Tags}" AutomationProperties.Name="Tags"
+            <ListBox x:Name="TagList" ItemsSource="{Binding Tags}" AutomationProperties.Name="Tags" AutomationProperties.AutomationId="TagList"
                      SelectionChanged="OnTagSelectionChanged">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <TextBlock Text="{Binding Name, StringFormat=#{0}}" />

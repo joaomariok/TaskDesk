@@ -15,3 +15,14 @@ jobs:
       - name: Run gate
         shell: pwsh
         run: pwsh scripts/gate.ps1
+
+  ui-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Run UI tests
+        shell: pwsh
+        run: pwsh scripts/ui-tests.ps1

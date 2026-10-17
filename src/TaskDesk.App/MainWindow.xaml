@@ -32,16 +32,16 @@
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition x:Name="DetailColumn" Width="260" />
         </Grid.ColumnDefinitions>
-        <views:NavigationPane x:Name="Navigation" Grid.Column="0" />
-        <GridSplitter Grid.Column="1" Width="12" HorizontalAlignment="Stretch" Background="Transparent"
+        <views:NavigationPane x:Name="Navigation" Grid.Column="0" AutomationProperties.AutomationId="NavigationPane" />
+        <GridSplitter Grid.Column="1" AutomationProperties.AutomationId="SidebarSplitter" Width="12" HorizontalAlignment="Stretch" Background="Transparent"
                       ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Focusable="False"
                       AutomationProperties.Name="Resize sidebar" />
-        <GridSplitter x:Name="DetailSplitter" Grid.Column="3" Width="12" HorizontalAlignment="Stretch"
+        <GridSplitter x:Name="DetailSplitter" AutomationProperties.AutomationId="DetailSplitter" Grid.Column="3" Width="12" HorizontalAlignment="Stretch"
                       Background="Transparent" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
                       Focusable="False" AutomationProperties.Name="Resize detail pane"
                       Visibility="{Binding IsDetailPaneVisible, Converter={StaticResource BoolToVisibility}}" />
         <!-- Detail pane -->
-        <views:DetailPane x:Name="Details" Grid.Column="4" />
+        <views:DetailPane x:Name="Details" Grid.Column="4" AutomationProperties.AutomationId="DetailPane" />
         <views:TaskListArea x:Name="TaskArea" Grid.Column="2" />
     </Grid>
 </Window>
