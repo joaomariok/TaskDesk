@@ -141,6 +141,7 @@ public sealed partial class MainViewModel
             }
 
             ScheduleDueRefresh();
+            OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty); // the Smart View counts depend on Due
             ErrorMessage = null;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

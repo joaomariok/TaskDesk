@@ -277,7 +277,11 @@ Deleting a Task that has a Recurrence asks: **"Delete this occurrence"** (a Skip
 └───────────────┴───────────────────────────────────┴──────────────────────┘
 ```
 
-- **Left navigation:** smart views, user lists (with open-task counts, drag to reorder, right-click → Rename / Color / Delete), tags (click to filter).
+- **Left navigation (sidebar):** in the Windows Settings style, on one shared background.
+  - **Smart Views** (Today, Upcoming, Overdue, All, Completed), each with a Segoe Fluent icon. Today, Upcoming, Overdue and All show their open-task count; Overdue's count is a red badge. Selecting an item shows that view (Ctrl+1 to Ctrl+5 as before).
+  - A divider, then **Lists**: each with its colour dot (a hollow ring when the List has no colour) and open-task count, drag to reorder, then "+ New List" (opens a name box; Enter creates, Esc cancels).
+  - **Tags** (`#name`, click to filter); the section is hidden when there are no Tags. Selecting the Default List shows it again after a Smart View or a Tag.
+  - **Rename / Colour / Delete** are on the context menu of each List (right-click, Menu key or Shift+F10); a Tag's menu has Delete. Delete on a focused List or Tag starts its deletion with the usual confirmation. The Default List cannot be deleted. No loose buttons are shown for things that are not selected.
 - **Middle:** quick-add box at the top (adds to the current list; in a smart view adds to the default list, and in "Today" sets DueDate = today). Task rows show checkbox, title, priority marker, recurrence icon, Due as a chip with relative wording ("Today 18:00", "Tomorrow", "Thu", "Thu 15 Oct", plus the year when not the current one; Overdue in the critical colour, due-today in the accent colour), tag chips, subtask progress "2/5". Completed tasks collapse into a "Completed (N)" group at the bottom of a list. Drag-and-drop reorder within a list (only in list views, not in smart views or while searching).
 - **Right detail pane:** edits the selected task; changes save automatically (debounced ~500 ms for text, immediate for other controls). Pane can be closed.
 - Minimum window size 800×500; remember size/position/pane widths in settings.

@@ -1,3 +1,5 @@
+using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 
@@ -70,6 +72,7 @@ public sealed class NavigationTests : IDisposable
     [Fact]
     public void Enter_in_the_new_List_box_creates_a_List()
     {
+        _app.Find(Ids.NewListButton).AsButton().Invoke();
         _app.TypeInto(Ids.NewListBox, "Groceries", pressEnter: true);
 
         AppSession.WaitUntil(() => _app.Rows(Ids.ListsList).Contains("Groceries"),
@@ -86,5 +89,68 @@ public sealed class NavigationTests : IDisposable
 
         AppSession.WaitUntil(() => _app.Rows(Ids.TagList).Contains("home"),
             () => $"Tags were [{string.Join(", ", _app.Rows(Ids.TagList))}].");
+    }
+
+    [Fact]
+    public void Shift_F10_on_a_List_opens_its_context_menu_with_Rename_Colour_and_Delete()
+    {
+        _app.Find(Ids.NewListButton).AsButton().Invoke();
+        _app.TypeInto(Ids.NewListBox, "Groceries", pressEnter: true);
+        AppSession.WaitUntil(() => _app.Rows(Ids.ListsList).Contains("Groceries"),
+            () => $"Lists were [{string.Join(", ", _app.Rows(Ids.ListsList))}].");
+        _app.SelectRow(Ids.ListsList, "Groceries");
+
+        AppSession.Press(VirtualKeyShort.SHIFT, VirtualKeyShort.F10);
+
+        // A context menu is a pop-up window of its own, so look from the desktop.
+        var desktop = _app.Window.Automation.GetDesktop();
+        foreach (var entry in new[] { "Rename", "Colour", "Delete" })
+        {
+            AppSession.Eventually(
+                () => desktop.FindFirstDescendant(cf => cf.ByControlType(ControlType.MenuItem).And(cf.ByName(entry))),
+                $"The List's context menu has no '{entry}' entry.");
+        }
+
+        AppSession.Press(VirtualKeyShort.ESCAPE);
+    }
+
+    [Fact]
+    public void Selecting_Overdue_in_the_sidebar_shows_the_Overdue_view()
+    {
+        _app.TypeInto(Ids.QuickAddBox, "No due yet", pressEnter: true);
+        _app.WaitForRows(Ids.OpenTaskList, "No due yet");
+
+        _app.SelectRow(Ids.SmartViewList, "Overdue");
+
+        _app.WaitForRows(Ids.OpenTaskList);
+    }
+
+    [Fact]
+    public void Delete_on_a_List_asks_in_the_Fluent_dialog_where_Esc_keeps_it_and_Delete_removes_it()
+    {
+        _app.Find(Ids.NewListButton).AsButton().Invoke();
+        _app.TypeInto(Ids.NewListBox, "Groceries", pressEnter: true);
+        AppSession.WaitUntil(() => _app.Rows(Ids.ListsList).Contains("Groceries"),
+            () => $"Lists were [{string.Join(", ", _app.Rows(Ids.ListsList))}].");
+        var desktop = _app.Window.Automation.GetDesktop();
+        AutomationElement? Dialog() => desktop.FindFirstDescendant(cf => cf.ByAutomationId("FluentDialog"));
+
+        _app.SelectRow(Ids.ListsList, "Groceries");
+        AppSession.Press(VirtualKeyShort.DELETE);
+        AppSession.Eventually(Dialog, "Delete on a List showed no Fluent dialog.");
+        AppSession.Press(VirtualKeyShort.ESCAPE);
+        AppSession.WaitUntil(() => Dialog() is null, () => "Esc did not close the dialog.");
+        Assert.Contains("Groceries", _app.Rows(Ids.ListsList));
+
+        _app.SelectRow(Ids.ListsList, "Groceries");
+        AppSession.Press(VirtualKeyShort.DELETE);
+        var dialog = AppSession.Eventually(Dialog, "Delete on a List showed no Fluent dialog.");
+        AppSession.Eventually(
+                () => dialog.FindFirstDescendant(cf => cf.ByControlType(ControlType.Button).And(cf.ByName("Delete"))),
+                "The dialog has no 'Delete' button.")
+            .AsButton().Invoke();
+
+        AppSession.WaitUntil(() => !_app.Rows(Ids.ListsList).Contains("Groceries"),
+            () => $"Lists were [{string.Join(", ", _app.Rows(Ids.ListsList))}].");
     }
 }

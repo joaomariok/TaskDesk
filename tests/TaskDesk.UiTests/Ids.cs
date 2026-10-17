@@ -12,6 +12,8 @@ internal static class Ids
     public const string ListsList = nameof(ListsList);
     public const string NavigationPane = nameof(NavigationPane);
     public const string NewListBox = nameof(NewListBox);
+    public const string NewListButton = nameof(NewListButton);
+    public const string SmartViewList = nameof(SmartViewList);
     public const string NewTagBox = nameof(NewTagBox);
     public const string OpenTaskList = nameof(OpenTaskList);
     public const string QuickAddBox = nameof(QuickAddBox);

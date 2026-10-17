@@ -1,3 +1,4 @@
+using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 
@@ -52,6 +53,7 @@ public sealed class ScreenshotTour : IDisposable
         Shot(3, "details");
 
         app.TypeInto(Ids.NewTagBox, "health", pressEnter: true);
+        app.Find(Ids.NewListButton).AsButton().Invoke();
         app.TypeInto(Ids.NewListBox, "Groceries", pressEnter: true);
         AppSession.WaitUntil(() => app.Rows(Ids.TagList).Contains("health") && app.Rows(Ids.ListsList).Contains("Groceries"),
             () => $"Tags were [{string.Join(", ", app.Rows(Ids.TagList))}], " +

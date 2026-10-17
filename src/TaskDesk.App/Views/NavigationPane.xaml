@@ -2,90 +2,175 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:tasks="clr-namespace:TaskDesk.Core.Tasks;assembly=TaskDesk.Core">
-    <!-- Smart Views, Lists and Tags. -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+        <!-- Context menus are resources, not inline in the Style setters: WPF cannot hook up event handlers
+             on elements defined inside a Setter. x:Shared="False" gives every row its own menu. -->
+        <ContextMenu x:Key="ListContextMenu" x:Shared="False" Opened="OnMenuOpened">
+            <MenuItem Header="Rename" Click="OnRenameClick" />
+            <MenuItem Header="Colour">
+                <MenuItem Header="None" Tag="" Click="OnColorClick" />
+                <MenuItem Header="Red" Tag="#D13438" Click="OnColorClick" />
+                <MenuItem Header="Orange" Tag="#F7630C" Click="OnColorClick" />
+                <MenuItem Header="Yellow" Tag="#FFB900" Click="OnColorClick" />
+                <MenuItem Header="Green" Tag="#107C10" Click="OnColorClick" />
+                <MenuItem Header="Blue" Tag="#0078D4" Click="OnColorClick" />
+                <MenuItem Header="Purple" Tag="#744DA9" Click="OnColorClick" />
+            </MenuItem>
+            <MenuItem Header="Delete" Tag="delete" Click="OnDeleteClick" />
+        </ContextMenu>
+        <ContextMenu x:Key="TagContextMenu" x:Shared="False">
+            <MenuItem Header="Delete" Click="OnDeleteTagClick" />
+        </ContextMenu>
+
+        <Style x:Key="ListItemContainer" TargetType="ListBoxItem" BasedOn="{StaticResource SidebarListBoxItem}">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+            <Setter Property="ContextMenu" Value="{StaticResource ListContextMenu}" />
+        </Style>
+
+        <Style x:Key="TagItemContainer" TargetType="ListBoxItem" BasedOn="{StaticResource SidebarListBoxItem}">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+            <Setter Property="ContextMenu" Value="{StaticResource TagContextMenu}" />
+        </Style>
+    </UserControl.Resources>
+    <!-- Smart Views, Lists and Tags in the Windows Settings style: one list per section, all on the
+         sidebar's own background. Rename, Colour and Delete are on the context menu of each List or Tag. -->
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="3*" />
             <RowDefinition Height="2*" />
         </Grid.RowDefinitions>
-        <StackPanel Grid.Row="0" Margin="0,0,0,8">
-            <TextBlock Text="SMART VIEWS" FontWeight="Bold" Margin="0,0,0,4" />
-            <Button Content="Today (Ctrl+1)" HorizontalContentAlignment="Left" Padding="6,2" Margin="0,0,0,2"
-                    Command="{Binding SelectSmartViewCommand}" CommandParameter="{x:Static tasks:SmartView.Today}" />
-            <Button Content="Upcoming (Ctrl+2)" HorizontalContentAlignment="Left" Padding="6,2" Margin="0,0,0,2"
-                    Command="{Binding SelectSmartViewCommand}" CommandParameter="{x:Static tasks:SmartView.Upcoming}" />
-            <Button Content="Overdue (Ctrl+3)" HorizontalContentAlignment="Left" Padding="6,2" Margin="0,0,0,2"
-                    Command="{Binding SelectSmartViewCommand}" CommandParameter="{x:Static tasks:SmartView.Overdue}" />
-            <Button Content="All (Ctrl+4)" HorizontalContentAlignment="Left" Padding="6,2" Margin="0,0,0,2"
-                    Command="{Binding SelectSmartViewCommand}" CommandParameter="{x:Static tasks:SmartView.All}" />
-            <Button Content="Completed (Ctrl+5)" HorizontalContentAlignment="Left" Padding="6,2" Margin="0,0,0,2"
-                    Command="{Binding SelectSmartViewCommand}" CommandParameter="{x:Static tasks:SmartView.Completed}" />
-        </StackPanel>
-        <DockPanel Grid.Row="1" Margin="0,0,0,8"
+
+        <ListBox x:Name="SmartViewList" Grid.Row="0" Style="{StaticResource SidebarListBox}"
+                 ItemContainerStyle="{StaticResource SidebarListBoxItem}"
+                 AutomationProperties.Name="Smart Views" AutomationProperties.AutomationId="SmartViewList"
+                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                 SelectionChanged="OnSmartViewSelectionChanged">
+            <ListBoxItem Tag="{x:Static tasks:SmartView.Today}" ToolTip="Today (Ctrl+1)"
+                         AutomationProperties.Name="Today" AutomationProperties.AutomationId="SmartViewToday">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource SidebarCount}" Text="{Binding TodayCount}" />
+                    <TextBlock DockPanel.Dock="Left" Style="{StaticResource SidebarIcon}" Text="&#xE161;" />
+                    <TextBlock Style="{StaticResource BodyText}" Text="Today" VerticalAlignment="Center" />
+                </DockPanel>
+            </ListBoxItem>
+            <ListBoxItem Tag="{x:Static tasks:SmartView.Upcoming}" ToolTip="Upcoming (Ctrl+2)"
+                         AutomationProperties.Name="Upcoming" AutomationProperties.AutomationId="SmartViewUpcoming">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource SidebarCount}" Text="{Binding UpcomingCount}" />
+                    <TextBlock DockPanel.Dock="Left" Style="{StaticResource SidebarIcon}" Text="&#xE787;" />
+                    <TextBlock Style="{StaticResource BodyText}" Text="Upcoming" VerticalAlignment="Center" />
+                </DockPanel>
+            </ListBoxItem>
+            <ListBoxItem Tag="{x:Static tasks:SmartView.Overdue}" ToolTip="Overdue (Ctrl+3)"
+                         AutomationProperties.Name="Overdue" AutomationProperties.AutomationId="SmartViewOverdue">
+                <DockPanel>
+                    <Border DockPanel.Dock="Right" Style="{StaticResource SidebarBadge}"
+                            Visibility="{Binding HasOverdueCount, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding OverdueCount}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                   AutomationProperties.Name="Overdue count" />
+                    </Border>
+                    <TextBlock DockPanel.Dock="Left" Style="{StaticResource SidebarIcon}" Text="&#xE7BA;" />
+                    <TextBlock Style="{StaticResource BodyText}" Text="Overdue" VerticalAlignment="Center" />
+                </DockPanel>
+            </ListBoxItem>
+            <ListBoxItem Tag="{x:Static tasks:SmartView.All}" ToolTip="All (Ctrl+4)"
+                         AutomationProperties.Name="All" AutomationProperties.AutomationId="SmartViewAll">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource SidebarCount}" Text="{Binding AllCount}" />
+                    <TextBlock DockPanel.Dock="Left" Style="{StaticResource SidebarIcon}" Text="&#xE8FD;" />
+                    <TextBlock Style="{StaticResource BodyText}" Text="All" VerticalAlignment="Center" />
+                </DockPanel>
+            </ListBoxItem>
+            <ListBoxItem Tag="{x:Static tasks:SmartView.Completed}" ToolTip="Completed (Ctrl+5)"
+                         AutomationProperties.Name="Completed" AutomationProperties.AutomationId="SmartViewCompleted">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" Style="{StaticResource SidebarIcon}" Text="&#xE930;" />
+                    <TextBlock Style="{StaticResource BodyText}" Text="Completed" VerticalAlignment="Center" />
+                </DockPanel>
+            </ListBoxItem>
+        </ListBox>
+
+        <Border Grid.Row="1" Style="{StaticResource SidebarDivider}" />
+
+        <DockPanel Grid.Row="2" Margin="0,0,0,8"
                    DataContext="{Binding Lists, RelativeSource={RelativeSource AncestorType=Window}}">
-            <TextBlock DockPanel.Dock="Top" Text="LISTS" FontWeight="Bold" Margin="0,0,0,4" />
-            <TextBox DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="4"
-                     AutomationProperties.Name="New list" AutomationProperties.AutomationId="NewListBox"
-                     Text="{Binding NewListName, UpdateSourceTrigger=PropertyChanged}">
-                <TextBox.InputBindings>
-                    <KeyBinding Key="Return" Command="{Binding CreateListCommand}" />
-                </TextBox.InputBindings>
-            </TextBox>
-            <TextBlock DockPanel.Dock="Bottom" Foreground="Firebrick" TextWrapping="Wrap"
-                       Text="{Binding ErrorMessage}" />
-            <ListBox ItemsSource="{Binding Lists}" AllowDrop="True" AutomationProperties.Name="Lists" AutomationProperties.AutomationId="ListsList"
+            <TextBlock DockPanel.Dock="Top" Style="{StaticResource SidebarSectionHeader}" Text="Lists" />
+            <StackPanel DockPanel.Dock="Bottom">
+                <TextBlock Foreground="{DynamicResource OverdueBrush}" TextWrapping="Wrap" Margin="8,4,8,0"
+                           Style="{StaticResource CaptionText}" Text="{Binding ErrorMessage}" />
+                <Button x:Name="NewListButton" Style="{StaticResource SidebarActionButton}"
+                        Content="+ New List" AutomationProperties.Name="New list"
+                        AutomationProperties.AutomationId="NewListButton" Click="OnNewListClick" />
+                <TextBox x:Name="NewListBox" Visibility="Collapsed" Margin="0,2,0,0"
+                         AutomationProperties.Name="New list name" AutomationProperties.AutomationId="NewListBox"
+                         Text="{Binding NewListName, UpdateSourceTrigger=PropertyChanged}"
+                         PreviewKeyDown="OnNewListKeyDown" LostKeyboardFocus="OnNewListLostFocus">
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Return" Command="{Binding CreateListCommand}" />
+                    </TextBox.InputBindings>
+                </TextBox>
+            </StackPanel>
+            <ListBox x:Name="ListsBox" ItemsSource="{Binding Lists}" AllowDrop="True"
+                     Style="{StaticResource SidebarListBox}" ItemContainerStyle="{StaticResource ListItemContainer}"
+                     AutomationProperties.Name="Lists" AutomationProperties.AutomationId="ListsList"
                      PreviewMouseLeftButtonDown="OnListMouseDown" PreviewMouseMove="OnListMouseMove"
+                     PreviewKeyDown="OnListKeyDown" SelectionChanged="OnListSelectionChanged"
                      Drop="OnListDrop">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
-                    </Style>
-                </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <DockPanel LastChildFill="True" Background="Transparent">
-                            <DockPanel.ContextMenu>
-                                <ContextMenu Opened="OnMenuOpened">
-                                    <MenuItem Header="Rename" Click="OnRenameClick" />
-                                    <MenuItem Header="Color">
-                                        <MenuItem Header="None" Tag="" Click="OnColorClick" />
-                                        <MenuItem Header="Red" Tag="#D13438" Click="OnColorClick" />
-                                        <MenuItem Header="Orange" Tag="#F7630C" Click="OnColorClick" />
-                                        <MenuItem Header="Yellow" Tag="#FFB900" Click="OnColorClick" />
-                                        <MenuItem Header="Green" Tag="#107C10" Click="OnColorClick" />
-                                        <MenuItem Header="Blue" Tag="#0078D4" Click="OnColorClick" />
-                                        <MenuItem Header="Purple" Tag="#744DA9" Click="OnColorClick" />
-                                    </MenuItem>
-                                    <MenuItem Header="Delete" Tag="delete" Click="OnDeleteClick" />
-                                </ContextMenu>
-                            </DockPanel.ContextMenu>
-                            <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Opacity="0.7"
+                            <TextBlock DockPanel.Dock="Right" Style="{StaticResource SidebarCount}"
                                        Text="{Binding OpenTaskCount}" />
-                            <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Margin="0,0,6,0"
-                                     Fill="{Binding ColorHex, TargetNullValue=Transparent, FallbackValue=Transparent}" />
-                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                            <Grid DockPanel.Dock="Left" Width="24" VerticalAlignment="Center">
+                                <!-- A coloured dot; a hollow ring when the List has no colour. -->
+                                <Ellipse Width="10" Height="10"
+                                         Fill="{Binding ColorHex, TargetNullValue=Transparent, FallbackValue=Transparent}" />
+                                <Ellipse Width="10" Height="10" StrokeThickness="1.5"
+                                         Stroke="{DynamicResource ListStripeBrush}">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ColorHex}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                            </Grid>
+                            <TextBlock Style="{StaticResource BodyText}" VerticalAlignment="Center"
+                                       Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                         </DockPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
         </DockPanel>
-        <DockPanel Grid.Row="2">
-            <TextBlock DockPanel.Dock="Top" Text="TAGS" FontWeight="Bold" Margin="0,0,0,4" />
-            <Button x:Name="ShowAllButton" DockPanel.Dock="Top" Content="All tasks" Margin="0,0,0,4"
-                    AutomationProperties.Name="Show all tasks" Click="OnShowAllClick" />
-            <Button x:Name="DeleteTagButton" DockPanel.Dock="Bottom" Content="Delete tag" Margin="0,4,0,0"
-                    AutomationProperties.Name="Delete selected tag" Click="OnDeleteTagClick" />
-            <ListBox x:Name="TagList" ItemsSource="{Binding Tags}" AutomationProperties.Name="Tags" AutomationProperties.AutomationId="TagList"
-                     SelectionChanged="OnTagSelectionChanged">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
-                    </Style>
-                </ListBox.ItemContainerStyle>
+
+        <DockPanel Grid.Row="3">
+            <DockPanel.Style>
+                <Style TargetType="DockPanel">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Tags.Count}" Value="0">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DockPanel.Style>
+            <TextBlock DockPanel.Dock="Top" Style="{StaticResource SidebarSectionHeader}" Text="Tags" />
+            <ListBox x:Name="TagList" ItemsSource="{Binding Tags}" Style="{StaticResource SidebarListBox}"
+                     ItemContainerStyle="{StaticResource TagItemContainer}"
+                     AutomationProperties.Name="Tags" AutomationProperties.AutomationId="TagList"
+                     PreviewKeyDown="OnTagKeyDown" SelectionChanged="OnTagSelectionChanged">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding Name, StringFormat=#{0}}" />
+                        <TextBlock Style="{StaticResource BodyText}" Text="{Binding Name, StringFormat=#{0}}" />
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

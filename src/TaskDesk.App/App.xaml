@@ -11,6 +11,7 @@
                 <ResourceDictionary Source="Styles/TaskCheckBox.xaml" />
                 <ResourceDictionary Source="Styles/InfoBar.xaml" />
                 <ResourceDictionary Source="Styles/DueChip.xaml" />
+                <ResourceDictionary Source="Styles/Sidebar.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
