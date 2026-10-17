@@ -7,6 +7,7 @@
         PreviewKeyDown="Window_PreviewKeyDown" KeyDown="Window_KeyDown" SizeChanged="Window_SizeChanged">
     <Window.InputBindings>
         <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
+        <KeyBinding Key="OemComma" Modifiers="Control" Command="{Binding OpenSettingsCommand}" />
         <KeyBinding Key="D1" Modifiers="Control" Command="{Binding SelectSmartViewCommand}"
                     CommandParameter="{x:Static tasks:SmartView.Today}" />
         <KeyBinding Key="D2" Modifiers="Control" Command="{Binding SelectSmartViewCommand}"

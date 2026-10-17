@@ -86,6 +86,12 @@ public sealed partial class MainViewModel(
     /// </summary>
     public event EventHandler? OpenTaskCountsChanged;
 
+    /// <summary>Raised by Ctrl+, so the shell can open the Settings window (the tray menu's Settings does the same).</summary>
+    public event EventHandler? SettingsRequested;
+
+    [RelayCommand]
+    private void OpenSettings() => SettingsRequested?.Invoke(this, EventArgs.Empty);
+
     /// <summary>The open Tasks, in manual order.</summary>
     public ObservableCollection<TaskRowViewModel> Tasks { get; } = [];
 

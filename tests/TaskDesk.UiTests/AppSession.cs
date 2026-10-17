@@ -175,6 +175,15 @@ public sealed class AppSession : IDisposable
         Eventually(() => _app!.GetAllTopLevelWindows(_automation).FirstOrDefault(w => w.Title == "TaskDesk quick add"),
             "The quick-add window did not show.");
 
+    /// <summary>The Settings window, once it is shown.</summary>
+    public Window SettingsWindow() =>
+        Eventually(() => _app!.GetAllTopLevelWindows(_automation).FirstOrDefault(w => w.Title == "TaskDesk Settings"),
+            "The Settings window did not show.");
+
+    /// <summary>True while the Settings window is shown.</summary>
+    public bool SettingsWindowShown() =>
+        _app!.GetAllTopLevelWindows(_automation).Any(w => w.Title == "TaskDesk Settings");
+
     /// <summary>True while the quick-add window is shown.</summary>
     public bool QuickAddWindowShown() =>
         _app!.GetAllTopLevelWindows(_automation).Any(w => w.Title == "TaskDesk quick add");

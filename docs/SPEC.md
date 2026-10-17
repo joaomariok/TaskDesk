@@ -318,6 +318,7 @@ Ctrl+F focuses search. Search applies within the current view. Filter chips: pri
 | Delete | Delete selected task (with undo, see 6.5) |
 | Ctrl+F | Search |
 | Ctrl+Z | Undo last delete or completion toggle |
+| Ctrl+, | Open Settings (same as the tray menu's Settings) |
 | Esc | Clear search / close detail pane / hide quick-add window |
 | Ctrl+1…Ctrl+5 | Switch to Today / Upcoming / Overdue / All / Completed |
 

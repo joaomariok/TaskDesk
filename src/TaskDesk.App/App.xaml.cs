@@ -167,6 +167,7 @@ public partial class App : Application
             args.Cancel = _shell.OnWindowClosing();
         };
         _shell.SettingsRequested += () => Dispatcher.Invoke(ShowSettings);
+        window.ViewModel.SettingsRequested += (_, _) => ShowSettings();
         _shell.ActivationRequested += activation => _ = Dispatcher.InvokeAsync(() => HandleActivationAsync(activation));
         _shell.QuickAddRequested += () => _ = Dispatcher.InvokeAsync(ShowQuickAddAsync);
 

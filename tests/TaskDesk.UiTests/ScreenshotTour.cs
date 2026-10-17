@@ -1,4 +1,6 @@
+using System.Globalization;
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 
@@ -25,12 +27,21 @@ public sealed class ScreenshotTour : IDisposable
     {
         var app = _app = AppSession.Start(theme);
         var shots = Environment.GetEnvironmentVariable(ScreenshotsVariable);
-        void Shot(int step, string state)
+        void Shot(int step, string state, Window? window = null)
         {
             if (!string.IsNullOrWhiteSpace(shots))
             {
                 Directory.CreateDirectory(shots);
-                app.Capture(Path.Combine(shots, $"{theme.ToLowerInvariant()}-{step:00}-{state}.png"));
+                var path = Path.Combine(shots, $"{theme.ToLowerInvariant()}-{step:00}-{state}.png");
+                if (window is null)
+                {
+                    app.Capture(path);
+                }
+                else
+                {
+                    Thread.Sleep(300);
+                    FlaUI.Core.Capturing.Capture.Element(window).ToFile(path);
+                }
             }
         }
 
@@ -65,6 +76,40 @@ public sealed class ScreenshotTour : IDisposable
         AppSession.Ctrl(VirtualKeyShort.KEY_5);
         app.WaitForRows(Ids.CompletedTaskList, "Water plants");
         Shot(5, "completed");
+
+        // Ctrl+, opens Settings, the same window as the tray menu's Settings.
+        AppSession.Ctrl(VirtualKeyShort.OEM_COMMA);
+        var settings = app.SettingsWindow();
+        AppSession.Eventually(() => settings.FindFirstDescendant(cf => cf.ByName("Close button behavior")),
+            "Settings has no Close button behavior control.");
+        Shot(9, "settings", settings);
+        settings.Close();
+        AppSession.WaitUntil(() => !app.SettingsWindowShown(), () => "The Settings window did not close.");
+
+        // An Overdue Task: yesterday typed into the detail pane's Due date picker, which parses with the current culture.
+        AppSession.Ctrl(VirtualKeyShort.KEY_4);
+        app.TypeInto(Ids.QuickAddBox, "Pay the rent", pressEnter: true);
+        app.SelectRow(Ids.OpenTaskList, "Pay the rent");
+        Keyboard.Type(VirtualKeyShort.F2);
+        AppSession.WaitUntil(() => app.TextBox(Ids.DetailTitleBox).Text == "Pay the rent",
+            () => "The detail pane did not open.");
+        var yesterday = DateTime.Today.AddDays(-1).ToString("d", CultureInfo.CurrentCulture);
+        var dueBox = app.Find(Ids.DetailDueDatePicker).FindFirstDescendant(cf => cf.ByControlType(ControlType.Edit))
+            ?? throw new InvalidOperationException("The Due date picker has no text box.");
+        dueBox.Focus();
+        Keyboard.Type(yesterday);
+        Keyboard.Type(VirtualKeyShort.RETURN);
+        Keyboard.Type(VirtualKeyShort.TAB);
+        // The Due edit saves after a short debounce, so reopen Overdue until the Task shows there.
+        AppSession.WaitUntil(() =>
+            {
+                AppSession.Ctrl(VirtualKeyShort.KEY_3);
+                Thread.Sleep(300);
+                return app.Rows(Ids.OpenTaskList).Contains("Pay the rent");
+            },
+            () => $"Overdue rows were [{string.Join(", ", app.Rows(Ids.OpenTaskList))}]; the typed Due '{yesterday}' did not save.");
+        AppSession.WaitUntil(() => app.Find(Ids.PageHeading).Name == "Overdue", () => "The Overdue view did not open.");
+        Shot(10, "overdue");
 
         // Below 900 px the sidebar is the icon rail; the hamburger opens the full sidebar over it.
         app.ResizeWidth(0.94);

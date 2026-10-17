@@ -100,7 +100,8 @@
                                  AutomationProperties.Name="Due time"
                                  ToolTip="Due time as HH:mm (needs a Due date)"
                                  Text="{Binding DetailDueTime, UpdateSourceTrigger=LostFocus}" />
-                        <DatePicker SelectedDate="{Binding DetailDueDate}" AutomationProperties.Name="Due date" />
+                        <DatePicker SelectedDate="{Binding DetailDueDate}" AutomationProperties.Name="Due date"
+                                    AutomationProperties.AutomationId="DetailDueDatePicker" />
                     </DockPanel>
 
                     <!-- Reminder -->
