@@ -182,6 +182,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Ctrl+N only moves focus to quick add; it changes no selection, search, view or pane.
+        if (e.Key == Key.N && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            TaskArea.QuickAddBox.Focus();
+            e.Handled = true;
+            return;
+        }
+
         // Esc clears the search and restores the view.
         if (e.Key == Key.Escape && ViewModel.SearchText.Length > 0)
         {

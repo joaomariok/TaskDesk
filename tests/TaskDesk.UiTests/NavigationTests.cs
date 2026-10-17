@@ -43,6 +43,18 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
+    public void Ctrl_N_moves_focus_from_the_search_box_to_quick_add()
+    {
+        AppSession.Ctrl(VirtualKeyShort.KEY_F);
+        AppSession.WaitUntil(() => _app.FocusedAutomationId() == Ids.SearchBox,
+            () => $"Ctrl+F left focus on '{_app.FocusedAutomationId()}'.");
+
+        AppSession.Ctrl(VirtualKeyShort.KEY_N);
+        AppSession.WaitUntil(() => _app.FocusedAutomationId() == Ids.QuickAddBox,
+            () => $"Ctrl+N left focus on '{_app.FocusedAutomationId()}'.");
+    }
+
+    [Fact]
     public void Ctrl_F_searches_and_Esc_clears_the_search()
     {
         _app.TypeInto(Ids.QuickAddBox, "Alpha report", pressEnter: true);
