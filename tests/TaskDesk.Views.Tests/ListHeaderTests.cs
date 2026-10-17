@@ -135,6 +135,36 @@ public sealed class ListHeaderTests
         }
     }
 
+    // The shell loads the page once the database is ready. A load the window started by itself would race it, and
+    // after the database is gone its failure would end the app.
+    [UITestMethod]
+    public async Task Opening_the_window_does_not_load_the_page_by_itself()
+    {
+        using var db = await DatabaseAsync();
+        var tags = new CountingTagService(db.Get<ITagService>());
+        var viewModel = new MainViewModel(
+            db.Get<ITaskService>(), tags, db.Clock,
+            dueService: db.Get<IDueService>(), searchService: db.Get<ITaskSearchService>(),
+            listService: db.Get<IListService>());
+        var window = new MainWindow(viewModel);
+        try
+        {
+            window.Activate();
+            await UiWait.UntilAsync(() => window.View.IsLoaded, () => "The main view never loaded.", Ct);
+            Toggle(VisualTree.Find<ToggleButton>(window.View, "FilterButton"));
+            await UiWait.UntilAsync(() => FindByName<ComboBox>(window.View, "Priority filter").IsLoaded,
+                () => "The Filter bar never loaded.", Ct);
+
+            Assert.AreEqual(0, tags.ListTagsCalls, "The window loaded the page before the shell asked.");
+            var priority = FindByName<ComboBox>(window.View, "Priority filter");
+            Assert.AreEqual(0, priority.SelectedIndex, "Any priority is selected.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     [UITestMethod]
     public async Task Each_Filter_narrows_the_list_and_Clear_filters_keeps_the_search()
     {
@@ -466,5 +496,32 @@ public sealed class ListHeaderTests
         public Task<bool> ConfirmDeleteAsync(string listName, int taskCount) => Task.FromResult(false);
 
         public Task<string?> PromptNameAsync(string currentName) => Task.FromResult<string?>(name);
+    }
+
+    // Counts the page loads: every load lists the Tags first.
+    private sealed class CountingTagService(ITagService inner) : ITagService
+    {
+        public int ListTagsCalls { get; private set; }
+
+        public Task<IReadOnlyList<Tag>> ListTagsAsync(CancellationToken cancellationToken = default)
+        {
+            ListTagsCalls++;
+            return inner.ListTagsAsync(cancellationToken);
+        }
+
+        public Task<Tag> CreateTagAsync(string name, CancellationToken cancellationToken = default) =>
+            inner.CreateTagAsync(name, cancellationToken);
+
+        public Task<Tag> AddTagToTaskAsync(Guid taskId, string name, CancellationToken cancellationToken = default) =>
+            inner.AddTagToTaskAsync(taskId, name, cancellationToken);
+
+        public Task RemoveTagFromTaskAsync(Guid taskId, Guid tagId, CancellationToken cancellationToken = default) =>
+            inner.RemoveTagFromTaskAsync(taskId, tagId, cancellationToken);
+
+        public Task DeleteTagAsync(Guid tagId, CancellationToken cancellationToken = default) =>
+            inner.DeleteTagAsync(tagId, cancellationToken);
+
+        public Task<IReadOnlyList<TaskItem>> ListTasksByTagAsync(Guid tagId, CancellationToken cancellationToken = default) =>
+            inner.ListTasksByTagAsync(tagId, cancellationToken);
     }
 }

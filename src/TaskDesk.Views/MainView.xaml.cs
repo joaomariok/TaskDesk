@@ -37,7 +37,11 @@ public sealed partial class MainView : UserControl
         RootGrid.Children.Add(TaskList);
 
         PriorityFilterBox.ItemsSource = PriorityChoices;
-        PriorityFilterBox.SelectedIndex = 0;
+        // Shows the view model's Filter. Not a change, so no reload: the shell loads the page once the database
+        // is ready.
+        _syncingPriorityFilter = true;
+        PriorityFilterBox.SelectedIndex = (int)(viewModel.MinPriorityFilter ?? Priority.None);
+        _syncingPriorityFilter = false;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         viewModel.FocusQuickAddRequested += (_, _) => FocusQuickAdd();
     }

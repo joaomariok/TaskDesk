@@ -75,6 +75,7 @@ public partial class App : Application
         builder.Services.AddSingleton<IImportDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
         builder.Services.AddSingleton<IOccurrenceDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
         builder.Services.AddSingleton<MainViewModel>();
+        builder.Services.AddSingleton<ListsViewModel>();
         builder.Services.AddSingleton<MainWindow>();
         builder.Services.AddSingleton<WinUiMainWindow>();
         builder.Services.AddSingleton<IMainWindow>(sp => sp.GetRequiredService<WinUiMainWindow>());
@@ -130,6 +131,7 @@ public partial class App : Application
             }
         };
         await window.ViewModel.LoadAsync();
+        await window.Lists!.LoadAsync();
 
         var shell = _host.Services.GetRequiredService<ShellController>();
         // Exit waits for these, in order, before it ends the app.
@@ -178,7 +180,12 @@ public partial class App : Application
             var main = _host!.Services.GetRequiredService<MainWindow>();
             var viewModel = _host.Services.GetRequiredService<QuickAddViewModel>();
 #pragma warning disable VSTHRD101 // Action event; a failed reload reaches the UnhandledException log
-            viewModel.TaskCreated += async () => await main.ViewModel.LoadAsync();
+            // MainViewModel.LoadAsync does not raise OpenTaskCountsChanged, so the Lists' counts reload here.
+            viewModel.TaskCreated += async () =>
+            {
+                await main.ViewModel.LoadAsync();
+                await main.Lists!.LoadAsync();
+            };
 #pragma warning restore VSTHRD101
             await viewModel.LoadAsync();
 

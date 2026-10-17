@@ -23,10 +23,16 @@ public sealed partial class NavigationPane : UserControl
     private bool _syncing;
     private bool _countRefreshQueued;
 
-    public NavigationPane(MainViewModel viewModel)
+    /// <param name="viewModel">The page's view model: Smart Views, counts and Tags.</param>
+    /// <param name="lists">The Lists section; null shows no Lists.</param>
+    /// <param name="dialogs">Confirms deleting a Tag; null deletes without asking (tests of other parts).</param>
+    public NavigationPane(MainViewModel viewModel, ListsViewModel? lists = null, Dialogs.DialogService? dialogs = null)
     {
         ViewModel = viewModel;
+        Lists = lists;
+        _dialogs = dialogs;
         InitializeComponent();
+        InitializeListsAndTags();
         _views = new()
         {
             [TodayItem] = SmartView.Today,
@@ -46,6 +52,7 @@ public sealed partial class NavigationPane : UserControl
             QueueCountRefresh();
         };
         SizeChanged += (_, e) => SetRail(PaneLayout.IsRail(e.NewSize.Width));
+        FollowSplitterDragsWithoutMoves();
     }
 
     public MainViewModel ViewModel { get; }
@@ -90,6 +97,45 @@ public sealed partial class NavigationPane : UserControl
         Pane.IsPaneToggleButtonVisible = rail;
         Pane.IsPaneOpen = !rail;
         SidebarSplitter.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
+        ShowCompact(rail && !Pane.IsPaneOpen);
+    }
+
+    // The splitter (a toolkit PropertySizer) resizes from manipulation deltas, which need pointer moves while the
+    // button is down, and it does not capture the pointer. Input that jumps between press and release (UI
+    // Automation's mouse, a touchpad that reports no move in between) then lands outside the splitter and never
+    // resizes. Capturing on press and resizing on release by the distance travelled covers that; when the
+    // manipulation already resized the pane, release leaves it alone.
+    private void FollowSplitterDragsWithoutMoves()
+    {
+        double? pressedAt = null;
+        double startWidth = 0;
+        var manipulated = false;
+        SidebarSplitter.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
+        {
+            if (!e.GetCurrentPoint(SidebarSplitter).Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
+            pressedAt = e.GetCurrentPoint(null).Position.X;
+            startWidth = SidebarWidth;
+            manipulated = false;
+            SidebarSplitter.CapturePointer(e.Pointer);
+        }), handledEventsToo: true);
+        SidebarSplitter.AddHandler(ManipulationDeltaEvent,
+            new ManipulationDeltaEventHandler((_, _) => manipulated = true), handledEventsToo: true);
+        SidebarSplitter.AddHandler(PointerReleasedEvent, new PointerEventHandler((_, e) =>
+        {
+            if (pressedAt is { } start && !manipulated)
+            {
+                SidebarWidth = startWidth + e.GetCurrentPoint(null).Position.X - start;
+            }
+
+            pressedAt = null;
+            SidebarSplitter.ReleasePointerCapture(e.Pointer);
+        }), handledEventsToo: true);
+        SidebarSplitter.AddHandler(PointerCaptureLostEvent, new PointerEventHandler((_, _) => pressedAt = null),
+            handledEventsToo: true);
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -100,7 +146,7 @@ public sealed partial class NavigationPane : UserControl
         }
     }
 
-    // Shows which Smart View is current. A page that is not a Smart View leaves any other selection alone.
+    // Shows which page is current: a Smart View, a Tag, or the Default List.
     private void SyncSelection()
     {
         _syncing = true;
@@ -114,6 +160,8 @@ public sealed partial class NavigationPane : UserControl
             {
                 Pane.SelectedItem = null;
             }
+
+            SyncListAndTagSelection();
         }
         finally
         {
@@ -167,6 +215,7 @@ public sealed partial class NavigationPane : UserControl
     }
 
     // The UI tests find the pane, its Smart Views and the rail's hamburger by these ids, as in the WPF app.
+    // The Lists and Tags (the pane footer) move up under the Smart Views.
     private void ExposeToAutomation()
     {
         foreach (var element in Descendants(Pane).OfType<FrameworkElement>())
@@ -182,6 +231,9 @@ public sealed partial class NavigationPane : UserControl
                     break;
                 case "TogglePaneButton":
                     AutomationProperties.SetAutomationId(element, "SidebarExpandButton");
+                    break;
+                case "ItemsContainerGrid" when element is Grid grid:
+                    FitFooterUnderMenuItems(grid);
                     break;
             }
         }
