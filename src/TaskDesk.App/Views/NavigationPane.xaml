@@ -290,7 +290,7 @@
                     </Style.Triggers>
                 </Style>
             </Button.Style>
-            <TextBlock Style="{StaticResource SidebarIcon}" FontFamily="{DynamicResource ContentControlThemeFontFamily}"
+            <TextBlock Style="{StaticResource SidebarIcon}" FontFamily="{x:Static SystemFonts.MessageFontFamily}"
                        FontWeight="SemiBold" Text="#" HorizontalAlignment="Center" />
         </Button>
     </Grid>

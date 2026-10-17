@@ -211,7 +211,8 @@
         </Expander>
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8"
                     Visibility="{Binding HasOverdueTasks, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Text="{Binding OverdueHeader}" FontWeight="Bold" Foreground="Red" Margin="0,0,0,4" />
+            <TextBlock Text="{Binding OverdueHeader}" Style="{StaticResource BodyStrongText}"
+                       Foreground="{DynamicResource OverdueBrush}" Margin="0,0,0,4" />
             <ListBox x:Name="OverdueList" MaxHeight="160" ItemsSource="{Binding OverdueTasks}"
                      HorizontalContentAlignment="Stretch" AutomationProperties.Name="Overdue tasks"
                      ItemContainerStyle="{StaticResource TaskRowContainer}"
