@@ -41,6 +41,40 @@ public sealed class TaskRowLookTests(WpfAppFixture fixture)
         Assert.Equal(struck, title.TextDecorations.Contains(TextDecorations.Strikethrough[0]));
     });
 
+    [Fact]
+    public void Task_rows_draw_Fluents_list_item() => fixture.Run(() =>
+    {
+        var area = new TaskListArea();
+        var row = new ListBoxItem { Style = (Style)area.Resources["TaskRowContainer"], Content = "Call the bank" };
+        var plain = new ListBoxItem { Content = "Call the bank" };
+        var host = new StackPanel { Children = { row, plain } };
+        host.Measure(LayoutSize);
+        host.Arrange(new Rect(LayoutSize));
+
+        // A plain ListBoxItem takes Fluent's implicit style, so its template is Fluent's.
+        Assert.Same(plain.Template, row.Template);
+    });
+
+    [Fact]
+    public void Task_rows_stay_one_compact_line() => fixture.Run(() =>
+    {
+        var area = new TaskListArea();
+        var item = new TaskItem { Id = Guid.NewGuid(), Title = "Call the bank" };
+        var row = new ListBoxItem
+        {
+            Style = (Style)area.Resources["TaskRowContainer"],
+            Content = new TaskRowViewModel(item),
+            ContentTemplate = (DataTemplate)area.Resources["TaskRowTemplate"],
+        };
+        var host = new StackPanel { Children = { row } };
+        host.Measure(LayoutSize);
+        host.Arrange(new Rect(LayoutSize));
+
+        // The 22 px checkbox, 1 px of padding and the item's 1 px border above and below: Fluent's own list
+        // item padding (12 px all round) would make every row 44 px tall.
+        Assert.Equal(26, row.ActualHeight);
+    });
+
     [Theory]
     [InlineData("OverdueList")]
     [InlineData("CompletedList")]

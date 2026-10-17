@@ -4,7 +4,9 @@
              xmlns:controls="clr-namespace:TaskDesk.App.Controls">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-        <Style x:Key="TaskRowContainer" TargetType="ListBoxItem">
+        <Style x:Key="TaskRowContainer" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+            <!-- Fluent's list item pads 12 px all round; a Task row stays one compact line. -->
+            <Setter Property="Padding" Value="8,1" />
             <!-- Narrator announces a row by its Task title. -->
             <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
         </Style>
