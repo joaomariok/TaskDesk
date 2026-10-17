@@ -1,6 +1,8 @@
 {
   "enabledPlugins": {
     "impeccable@impeccable": true,
-    "winappcli@winappcli": true
+    "winappcli@win-dev-skills": true,
+    "winui@win-dev-skills": true,
+    "windbg@win-dev-skills": true
   }
 }
