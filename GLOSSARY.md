@@ -22,6 +22,10 @@ _Avoid_: Inbox (as a concept)
 A built-in, read-only view of Tasks across all Lists selected by Due and completion: Today, Upcoming, Overdue, All, Completed.
 _Avoid_: Filter, saved search, list
 
+**Filter**:
+A temporary narrowing of the current view by Priority, Due present, Reminder present or Tags; it is never saved and stays on across views until cleared. Search is not a Filter.
+_Avoid_: Smart View, saved search, query
+
 **Tag**:
 A short label, shown with a leading `#`, attached to any number of Tasks across Lists.
 _Avoid_: Label, category
