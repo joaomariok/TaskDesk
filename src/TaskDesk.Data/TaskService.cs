@@ -352,8 +352,7 @@ internal sealed class TaskService(
     internal static async Task<TaskItem> FindAsync(
         TaskDeskDbContext context, Guid taskId, CancellationToken cancellationToken)
         => await context.Tasks
-            .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
-            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder))
+            .WithDetails()
             .SingleOrDefaultAsync(t => t.Id == taskId, cancellationToken)
             ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
 
@@ -363,8 +362,7 @@ internal sealed class TaskService(
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         return await context.Tasks
             .AsNoTracking()
-            .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
-            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder))
+            .WithDetails()
             .Where(t => context.Lists.Any(l => l.IsDefault && l.Id == t.ListId))
             .OrderBy(t => t.SortOrder)
             .ThenBy(t => t.CreatedUtc)

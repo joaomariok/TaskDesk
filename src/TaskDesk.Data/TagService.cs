@@ -76,8 +76,7 @@ internal sealed class TagService(
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         return await context.Tasks
             .AsNoTracking()
-            .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
-            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder))
+            .WithDetails()
             .Where(t => t.Tags.Any(g => g.Id == tagId))
             .OrderBy(t => t.SortOrder)
             .ThenBy(t => t.CreatedUtc)

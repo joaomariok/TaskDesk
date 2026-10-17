@@ -1,0 +1,199 @@
+<UserControl x:Class="TaskDesk.App.Views.TaskListArea"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <DataTemplate x:Key="TaskRowTemplate">
+            <DockPanel LastChildFill="True">
+                <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"
+                          AutomationProperties.Name="Completed"
+                          IsChecked="{Binding IsCompleted, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
+                          Command="{Binding DataContext.ToggleCompleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                          CommandParameter="{Binding}" />
+                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" FontWeight="Bold" Foreground="OrangeRed"
+                           Text="{Binding PriorityMarker}" />
+                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Text="&#x21BB;" Foreground="Gray"
+                           AutomationProperties.Name="Repeats" ToolTip="Repeats"
+                           Visibility="{Binding IsRecurring, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Text="{Binding DueText}"
+                           AutomationProperties.Name="Due">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Opacity" Value="0.7" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsOverdue}" Value="True">
+                                    <Setter Property="Foreground" Value="Red" />
+                                    <Setter Property="Opacity" Value="1" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Foreground="Gray"
+                           AutomationProperties.Name="Subtask progress"
+                           Text="{Binding SubtaskProgress}"
+                           Visibility="{Binding HasSubtasks, Converter={StaticResource BoolToVisibility}}" />
+                <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Tags}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name, StringFormat=#{0}}" Margin="6,0,0,0"
+                                       Foreground="SteelBlue" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+    <!-- Search and filters, quick add, the Overdue, open and Completed Task lists, Tags of the
+         selected Task and the Undo bar. -->
+    <DockPanel>
+        <!-- Shown when Reminders fall back to tray balloons -->
+        <Border DockPanel.Dock="Top" Margin="0,0,0,8" Padding="10,6" BorderThickness="1" BorderBrush="Goldenrod"
+                AutomationProperties.Name="Notifications unavailable"
+                Visibility="{Binding HasNotificationBanner, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Dismiss" Padding="10,2" Margin="8,0,0,0"
+                        Command="{Binding DismissNotificationBannerCommand}" />
+                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding NotificationBanner}" />
+            </DockPanel>
+        </Border>
+        <!-- Undo bar -->
+        <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="10,6" Background="#333"
+                Visibility="{Binding IsUndoBarVisible, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Undo" Command="{Binding UndoCommand}" Padding="10,2" />
+                <TextBlock Foreground="White" VerticalAlignment="Center" Text="{Binding UndoBarText, StringFormat={}{0} &#x2014;}" />
+            </DockPanel>
+        </Border>
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <ItemsControl ItemsSource="{Binding SelectedTask.Tags}" AutomationProperties.Name="Task tags">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Margin="0,0,4,4" Padding="6,1"
+                                Command="{Binding DataContext.RemoveTagCommand,
+                                          RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}"
+                                ToolTip="Remove tag">
+                            <TextBlock>
+                                <Run Text="#" /><Run Text="{Binding Name, Mode=OneWay}" /><Run Text=" x" />
+                            </TextBlock>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Add tag" Margin="4,0,0,0" Padding="8,2"
+                        Command="{Binding AddTagCommand}" />
+                <TextBox Padding="4" AutomationProperties.Name="New tag name"
+                         Text="{Binding NewTagName, UpdateSourceTrigger=PropertyChanged}">
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Return" Command="{Binding AddTagCommand}" />
+                    </TextBox.InputBindings>
+                </TextBox>
+            </DockPanel>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBox x:Name="SearchBox" Padding="6" Margin="0,0,0,4"
+                     AutomationProperties.Name="Search (Ctrl+F)"
+                     ToolTip="Search (Ctrl+F). Esc clears."
+                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                     TextChanged="SearchBox_TextChanged" />
+            <WrapPanel>
+                <ComboBox x:Name="PriorityFilterBox" Width="150" Margin="0,0,6,0"
+                          AutomationProperties.Name="Priority filter"
+                          SelectionChanged="PriorityFilterBox_SelectionChanged" />
+                <ToggleButton Content="Has due" Padding="8,2" Margin="0,0,6,0"
+                              AutomationProperties.Name="Has due filter"
+                              IsChecked="{Binding HasDueFilter, Mode=OneWay}"
+                              Command="{Binding ToggleHasDueFilterCommand}" />
+                <ToggleButton Content="Has reminder" Padding="8,2" Margin="0,0,6,0"
+                              AutomationProperties.Name="Has reminder filter"
+                              IsChecked="{Binding HasReminderFilter, Mode=OneWay}"
+                              Command="{Binding ToggleHasReminderFilterCommand}" />
+                <ItemsControl ItemsSource="{Binding FilterTagChips}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <ToggleButton Content="{Binding Tag.Name}" ContentStringFormat="#{0}" Padding="8,2"
+                                          Margin="0,0,6,0" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                          Command="{Binding DataContext.ToggleFilterTagCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          CommandParameter="{Binding Tag}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="Clear filters" Padding="8,2" Command="{Binding ClearAllFiltersCommand}"
+                        Visibility="{Binding IsFilterActive, Converter={StaticResource BoolToVisibility}}" />
+            </WrapPanel>
+        </StackPanel>
+        <TextBox x:Name="QuickAddBox" DockPanel.Dock="Top" Margin="0,0,0,8" Padding="6"
+                 AutomationProperties.Name="Quick add"
+                 Text="{Binding QuickAddTitle, UpdateSourceTrigger=PropertyChanged}">
+            <TextBox.InputBindings>
+                <KeyBinding Key="Return" Command="{Binding AddTaskCommand}" />
+            </TextBox.InputBindings>
+        </TextBox>
+        <Button DockPanel.Dock="Bottom" Content="Load more completed tasks" Margin="0,8,0,0" Padding="8,2"
+                HorizontalAlignment="Left" Command="{Binding LoadMoreCompletedCommand}"
+                Visibility="{Binding HasMoreCompleted, Converter={StaticResource BoolToVisibility}}" />
+        <Expander DockPanel.Dock="Bottom" Margin="0,8,0,0"
+                  Visibility="{Binding HasCompletedTasks, Converter={StaticResource BoolToVisibility}}"
+                  Header="{Binding CompletedHeader}"
+                  IsExpanded="{Binding IsCompletedExpanded, Mode=TwoWay}">
+            <ListBox x:Name="CompletedList" MaxHeight="160" ItemsSource="{Binding CompletedTasks}"
+                     HorizontalContentAlignment="Stretch" AutomationProperties.Name="Completed tasks"
+                     ItemTemplate="{StaticResource TaskRowTemplate}"
+                     VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                     ScrollViewer.CanContentScroll="True"
+                     SelectionChanged="TaskList_SelectionChanged">
+                <ListBox.InputBindings>
+                    <KeyBinding Key="Space" Command="{Binding ToggleSelectedCompleteCommand}" />
+                    <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
+                </ListBox.InputBindings>
+            </ListBox>
+        </Expander>
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8"
+                    Visibility="{Binding HasOverdueTasks, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="{Binding OverdueHeader}" FontWeight="Bold" Foreground="Red" Margin="0,0,0,4" />
+            <ListBox x:Name="OverdueList" MaxHeight="160" ItemsSource="{Binding OverdueTasks}"
+                     HorizontalContentAlignment="Stretch" AutomationProperties.Name="Overdue tasks"
+                     ItemTemplate="{StaticResource TaskRowTemplate}"
+                     VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                     ScrollViewer.CanContentScroll="True"
+                     SelectionChanged="TaskList_SelectionChanged">
+                <ListBox.InputBindings>
+                    <KeyBinding Key="Space" Command="{Binding ToggleSelectedCompleteCommand}" />
+                    <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
+                </ListBox.InputBindings>
+            </ListBox>
+        </StackPanel>
+        <ListBox x:Name="OpenList" ItemsSource="{Binding Tasks}" AllowDrop="True"
+                 HorizontalContentAlignment="Stretch" AutomationProperties.Name="Tasks"
+                 ItemTemplate="{StaticResource TaskRowTemplate}"
+                 VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                 ScrollViewer.CanContentScroll="True"
+                 SelectionChanged="TaskList_SelectionChanged"
+                 PreviewMouseLeftButtonDown="TaskList_PreviewMouseLeftButtonDown"
+                 PreviewMouseMove="TaskList_PreviewMouseMove"
+                 DragOver="TaskList_DragOver" Drop="TaskList_Drop">
+            <ListBox.InputBindings>
+                <KeyBinding Key="Space" Command="{Binding ToggleSelectedCompleteCommand}" />
+                <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
+            </ListBox.InputBindings>
+        </ListBox>
+    </DockPanel>
+</UserControl>

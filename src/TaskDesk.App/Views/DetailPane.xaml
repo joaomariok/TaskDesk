@@ -1,0 +1,134 @@
+<UserControl x:Class="TaskDesk.App.Views.DetailPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:presentation="clr-namespace:TaskDesk.Presentation;assembly=TaskDesk.Presentation">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
+    <!-- The detail pane of the selected Task. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  Visibility="{Binding IsDetailPaneVisible, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel Margin="0,0,8,0">
+            <DockPanel Margin="0,0,0,8">
+                <Button DockPanel.Dock="Right" Content="Close" Command="{Binding CloseDetailPaneCommand}"
+                        AutomationProperties.Name="Close detail pane" />
+                <TextBlock Text="Details" FontWeight="Bold" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="Title" />
+            <TextBox x:Name="DetailTitleBox" Padding="4" Margin="0,2,0,8" MaxLength="500"
+                     AutomationProperties.Name="Task title"
+                     Text="{Binding DetailTitle, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Text="Priority" />
+            <ComboBox x:Name="PriorityBox" Margin="0,2,0,8" AutomationProperties.Name="Priority"
+                      SelectedItem="{Binding DetailPriority}" />
+            <TextBlock Text="Due" />
+            <DockPanel Margin="0,2,0,8">
+                <TextBox DockPanel.Dock="Right" Width="60" Padding="4" Margin="6,0,0,0" MaxLength="5"
+                         AutomationProperties.Name="Due time"
+                         ToolTip="Due time as HH:mm (needs a Due date)"
+                         Text="{Binding DetailDueTime, UpdateSourceTrigger=LostFocus}" />
+                <DatePicker SelectedDate="{Binding DetailDueDate}" AutomationProperties.Name="Due date" />
+            </DockPanel>
+            <TextBlock Text="Reminder" />
+            <DockPanel Margin="0,2,0,8">
+                <TextBox DockPanel.Dock="Right" Width="60" Padding="4" Margin="6,0,0,0" MaxLength="5"
+                         AutomationProperties.Name="Reminder time"
+                         ToolTip="Reminder time as HH:mm (empty means 09:00)"
+                         Text="{Binding DetailReminderTime, UpdateSourceTrigger=LostFocus}" />
+                <DatePicker SelectedDate="{Binding DetailReminderDate}" AutomationProperties.Name="Reminder date" />
+            </DockPanel>
+            <DockPanel Margin="0,-4,0,8"
+                       Visibility="{Binding HasDetailSnooze, Converter={StaticResource BoolToVisibility}}">
+                <Button DockPanel.Dock="Right" Content="Clear Snooze" Padding="6,2"
+                        Command="{Binding ClearSnoozeCommand}"
+                        ToolTip="Clear the Snooze; the planned Reminder fires again" />
+                <TextBlock Text="{Binding DetailSnooze}" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="Repeat" />
+            <StackPanel Margin="0,2,0,8" DataContext="{Binding Repeat}">
+                <ComboBox AutomationProperties.Name="Repeat"
+                          ItemsSource="{x:Static presentation:RepeatEditorViewModel.Presets}"
+                          SelectedItem="{Binding Preset}" />
+                <DockPanel Margin="0,4,0,0"
+                           Visibility="{Binding HasInterval, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="Every" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBox Width="50" Padding="2" MaxLength="3" AutomationProperties.Name="Repeat every"
+                             ToolTip="Every N days, weeks, months or years"
+                             Text="{Binding Interval, UpdateSourceTrigger=LostFocus}" />
+                    <TextBlock Text="{Binding Preset}" VerticalAlignment="Center" Margin="6,0,0,0" Opacity="0.7" />
+                </DockPanel>
+                <WrapPanel Margin="0,4,0,0" Visibility="{Binding HasDays, Converter={StaticResource BoolToVisibility}}">
+                    <CheckBox Content="Mon" Margin="0,0,6,0" IsChecked="{Binding Monday}" AutomationProperties.Name="Monday" />
+                    <CheckBox Content="Tue" Margin="0,0,6,0" IsChecked="{Binding Tuesday}" AutomationProperties.Name="Tuesday" />
+                    <CheckBox Content="Wed" Margin="0,0,6,0" IsChecked="{Binding Wednesday}" AutomationProperties.Name="Wednesday" />
+                    <CheckBox Content="Thu" Margin="0,0,6,0" IsChecked="{Binding Thursday}" AutomationProperties.Name="Thursday" />
+                    <CheckBox Content="Fri" Margin="0,0,6,0" IsChecked="{Binding Friday}" AutomationProperties.Name="Friday" />
+                    <CheckBox Content="Sat" Margin="0,0,6,0" IsChecked="{Binding Saturday}" AutomationProperties.Name="Saturday" />
+                    <CheckBox Content="Sun" Margin="0,0,6,0" IsChecked="{Binding Sunday}" AutomationProperties.Name="Sunday" />
+                </WrapPanel>
+                <DockPanel Margin="0,4,0,0"
+                           Visibility="{Binding HasDayOfMonth, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="On day" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBox Width="50" Padding="2" MaxLength="2" AutomationProperties.Name="Day of month"
+                             ToolTip="Day of the month (1-31; shorter months use their last day)"
+                             Text="{Binding DayOfMonth, UpdateSourceTrigger=LostFocus}" />
+                </DockPanel>
+                <StackPanel Visibility="{Binding IsRepeating, Converter={StaticResource BoolToVisibility}}">
+                    <CheckBox Margin="0,4,0,0" Content="Count from the completion date"
+                              AutomationProperties.Name="Repeat from the completion date"
+                              IsChecked="{Binding RepeatFromCompletion}" />
+                    <TextBlock Text="Ends on (optional)" Margin="0,4,0,0" />
+                    <DatePicker SelectedDate="{Binding EndDate}" AutomationProperties.Name="Repeat end date" />
+                </StackPanel>
+            </StackPanel>
+            <TextBlock Text="Notes" />
+            <TextBox Height="160" Margin="0,2,0,8" Padding="4" AcceptsReturn="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" MaxLength="10000"
+                     AutomationProperties.Name="Task notes"
+                     Text="{Binding DetailNotes, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Text="Subtasks" />
+            <ItemsControl ItemsSource="{Binding SubtaskItems}" Margin="0,2,0,4"
+                          AutomationProperties.Name="Subtasks">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel Margin="0,1">
+                            <Button DockPanel.Dock="Right" Content="x" Padding="5,0" Margin="2,0,0,0"
+                                    AutomationProperties.Name="Delete subtask" ToolTip="Delete subtask"
+                                    Command="{Binding DataContext.DeleteSubtaskCommand,
+                                              RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" />
+                            <Button DockPanel.Dock="Right" Content="&#x25BC;" Padding="4,0" Margin="2,0,0,0"
+                                    AutomationProperties.Name="Move subtask down" ToolTip="Move down"
+                                    Command="{Binding DataContext.MoveSubtaskDownCommand,
+                                              RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" />
+                            <Button DockPanel.Dock="Right" Content="&#x25B2;" Padding="4,0" Margin="2,0,0,0"
+                                    AutomationProperties.Name="Move subtask up" ToolTip="Move up"
+                                    Command="{Binding DataContext.MoveSubtaskUpCommand,
+                                              RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" />
+                            <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,6,0"
+                                      AutomationProperties.Name="Subtask done"
+                                      IsChecked="{Binding IsCompleted}" />
+                            <TextBox MaxLength="500" Padding="2" AutomationProperties.Name="Subtask title"
+                                     Text="{Binding Title, UpdateSourceTrigger=LostFocus}" />
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <DockPanel Margin="0,0,0,8">
+                <Button DockPanel.Dock="Right" Content="Add" Margin="4,0,0,0" Padding="8,2"
+                        Command="{Binding AddSubtaskCommand}" />
+                <TextBox Padding="4" MaxLength="500" AutomationProperties.Name="New subtask title"
+                         Text="{Binding NewSubtaskTitle, UpdateSourceTrigger=PropertyChanged}">
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Return" Command="{Binding AddSubtaskCommand}" />
+                    </TextBox.InputBindings>
+                </TextBox>
+            </DockPanel>
+            <Button Content="Delete" HorizontalAlignment="Left" Padding="12,4"
+                    Command="{Binding DeleteSelectedCommand}" />
+            <TextBlock Foreground="Firebrick" TextWrapping="Wrap" Margin="0,8,0,0" Text="{Binding ErrorMessage}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

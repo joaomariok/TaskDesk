@@ -1,0 +1,84 @@
+<UserControl x:Class="TaskDesk.App.Views.NavigationPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tasks="clr-namespace:TaskDesk.Core.Tasks;assembly=TaskDesk.Core">
+    <!-- Smart Views, Lists and Tags. -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="3*" />
+            <RowDefinition Height="2*" />
+        </Grid.RowDefinitions>
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock Text="SMART VIEWS" FontWeight="Bold" Margin="0,0,0,4" />
+            <Button Content="Today (Ctrl+1)" HorizontalContentAlignment="Left" Padding="6,2" Margin="0,0,0,2"
+                    Command="{Binding SelectSmartViewCommand}" CommandParameter="{x:Static tasks:SmartView.Today}" />
+            <Button Content="Upcoming (Ctrl+2)" HorizontalContentAlignment="Left" Padding="6,2" Margin="0,0,0,2"
+                    Command="{Binding SelectSmartViewCommand}" CommandParameter="{x:Static tasks:SmartView.Upcoming}" />
+            <Button Content="Overdue (Ctrl+3)" HorizontalContentAlignment="Left" Padding="6,2" Margin="0,0,0,2"
+                    Command="{Binding SelectSmartViewCommand}" CommandParameter="{x:Static tasks:SmartView.Overdue}" />
+            <Button Content="All (Ctrl+4)" HorizontalContentAlignment="Left" Padding="6,2" Margin="0,0,0,2"
+                    Command="{Binding SelectSmartViewCommand}" CommandParameter="{x:Static tasks:SmartView.All}" />
+            <Button Content="Completed (Ctrl+5)" HorizontalContentAlignment="Left" Padding="6,2" Margin="0,0,0,2"
+                    Command="{Binding SelectSmartViewCommand}" CommandParameter="{x:Static tasks:SmartView.Completed}" />
+        </StackPanel>
+        <DockPanel Grid.Row="1" Margin="0,0,0,8"
+                   DataContext="{Binding Lists, RelativeSource={RelativeSource AncestorType=Window}}">
+            <TextBlock DockPanel.Dock="Top" Text="LISTS" FontWeight="Bold" Margin="0,0,0,4" />
+            <TextBox DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="4"
+                     AutomationProperties.Name="New list"
+                     Text="{Binding NewListName, UpdateSourceTrigger=PropertyChanged}">
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Return" Command="{Binding CreateListCommand}" />
+                </TextBox.InputBindings>
+            </TextBox>
+            <TextBlock DockPanel.Dock="Bottom" Foreground="Firebrick" TextWrapping="Wrap"
+                       Text="{Binding ErrorMessage}" />
+            <ListBox ItemsSource="{Binding Lists}" AllowDrop="True" AutomationProperties.Name="Lists"
+                     PreviewMouseLeftButtonDown="OnListMouseDown" PreviewMouseMove="OnListMouseMove"
+                     Drop="OnListDrop">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel LastChildFill="True" Background="Transparent">
+                            <DockPanel.ContextMenu>
+                                <ContextMenu Opened="OnMenuOpened">
+                                    <MenuItem Header="Rename" Click="OnRenameClick" />
+                                    <MenuItem Header="Color">
+                                        <MenuItem Header="None" Tag="" Click="OnColorClick" />
+                                        <MenuItem Header="Red" Tag="#D13438" Click="OnColorClick" />
+                                        <MenuItem Header="Orange" Tag="#F7630C" Click="OnColorClick" />
+                                        <MenuItem Header="Yellow" Tag="#FFB900" Click="OnColorClick" />
+                                        <MenuItem Header="Green" Tag="#107C10" Click="OnColorClick" />
+                                        <MenuItem Header="Blue" Tag="#0078D4" Click="OnColorClick" />
+                                        <MenuItem Header="Purple" Tag="#744DA9" Click="OnColorClick" />
+                                    </MenuItem>
+                                    <MenuItem Header="Delete" Tag="delete" Click="OnDeleteClick" />
+                                </ContextMenu>
+                            </DockPanel.ContextMenu>
+                            <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Opacity="0.7"
+                                       Text="{Binding OpenTaskCount}" />
+                            <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Margin="0,0,6,0"
+                                     Fill="{Binding ColorHex, TargetNullValue=Transparent, FallbackValue=Transparent}" />
+                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+        <DockPanel Grid.Row="2">
+            <TextBlock DockPanel.Dock="Top" Text="TAGS" FontWeight="Bold" Margin="0,0,0,4" />
+            <Button x:Name="ShowAllButton" DockPanel.Dock="Top" Content="All tasks" Margin="0,0,0,4"
+                    AutomationProperties.Name="Show all tasks" Click="OnShowAllClick" />
+            <Button x:Name="DeleteTagButton" DockPanel.Dock="Bottom" Content="Delete tag" Margin="0,4,0,0"
+                    AutomationProperties.Name="Delete selected tag" Click="OnDeleteTagClick" />
+            <ListBox x:Name="TagList" ItemsSource="{Binding Tags}" AutomationProperties.Name="Tags"
+                     SelectionChanged="OnTagSelectionChanged">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Name, StringFormat=#{0}}" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+    </Grid>
+</UserControl>

@@ -27,8 +27,7 @@ internal sealed class ExportService(IDbContextFactory<TaskDeskDbContext> factory
         var lists = await context.Lists.AsNoTracking().ToListAsync(cancellationToken);
         var tags = await context.Tags.AsNoTracking().ToListAsync(cancellationToken);
         var tasks = await context.Tasks.AsNoTracking()
-            .Include(t => t.Tags)
-            .Include(t => t.Subtasks)
+            .WithDetails() // the export orders Tags and Subtasks itself
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
         return new ExportData(lists, tags, tasks);

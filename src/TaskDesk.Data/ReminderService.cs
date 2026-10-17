@@ -27,8 +27,7 @@ internal sealed class ReminderService(
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var task = await context.Tasks
-            .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
-            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder))
+            .WithDetails()
             .SingleOrDefaultAsync(t => t.Id == taskId, cancellationToken)
             ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
 

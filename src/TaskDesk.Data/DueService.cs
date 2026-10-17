@@ -16,8 +16,7 @@ internal sealed class DueService(
 
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var task = await context.Tasks
-            .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
-            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder))
+            .WithDetails()
             .SingleOrDefaultAsync(t => t.Id == taskId, cancellationToken)
             ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
 
@@ -54,8 +53,7 @@ internal sealed class DueService(
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var tasks = filter(context.Tasks
             .AsNoTracking()
-            .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
-            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder)));
+            .WithDetails());
         tasks = query.ViewTagId is { } tagId
             ? tasks.Where(t => t.Tags.Any(g => g.Id == tagId))
             : tasks.Where(t => context.Lists.Any(l => l.IsDefault && l.Id == t.ListId));
@@ -73,8 +71,7 @@ internal sealed class DueService(
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         IQueryable<TaskItem> tasks = context.Tasks
             .AsNoTracking()
-            .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
-            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder));
+            .WithDetails();
         if (filter is not null)
         {
             tasks = filter(tasks);
