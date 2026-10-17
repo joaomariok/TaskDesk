@@ -101,6 +101,21 @@ public sealed class TaskFlowTests : IDisposable
     }
 
     [Fact]
+    public void The_Undo_bar_is_an_InfoBar_named_Task_deleted_with_the_message_and_an_Undo_action()
+    {
+        _app.TypeInto(Ids.QuickAddBox, "Renew passport", pressEnter: true);
+        _app.SelectRow(Ids.OpenTaskList, "Renew passport");
+
+        AppSession.Press(VirtualKeyShort.DELETE);
+
+        var undo = AppSession.Eventually(() => _app.Find(Ids.UndoButton), "No Undo button.");
+        Assert.Equal("Undo", undo.Name);
+        var bar = AppSession.Eventually(() => _app.Window.FindFirstDescendant(cf => cf.ByName("Task deleted")),
+            "The Undo bar has no accessible name 'Task deleted'.");
+        Assert.True(bar.IsAvailable);
+    }
+
+    [Fact]
     public void Delete_then_Ctrl_Z_restores_the_Task()
     {
         _app.TypeInto(Ids.QuickAddBox, "Renew passport", pressEnter: true);

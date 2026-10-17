@@ -9,6 +9,7 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Styles/Foundation.xaml" />
                 <ResourceDictionary Source="Styles/TaskCheckBox.xaml" />
+                <ResourceDictionary Source="Styles/InfoBar.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
