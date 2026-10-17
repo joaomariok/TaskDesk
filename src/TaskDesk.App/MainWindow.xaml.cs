@@ -23,6 +23,7 @@ public partial class MainWindow : Window
         TaskArea.Initialize(viewModel, lists);
         Navigation.Initialize(viewModel, lists);
         ApplyPaneLimits();
+        SizeChanged += (_, _) => UpdateSidebarMode();
 
         // Open-Task counts change when Tasks are added, completed, un-completed, deleted or restored.
 #pragma warning disable VSTHRD101 // Action event; a failed count reload surfaces on the dispatcher as before
@@ -47,16 +48,59 @@ public partial class MainWindow : Window
     /// <summary>The sidebar and detail pane widths to save; a hidden detail pane measures 0.</summary>
     public IReadOnlyDictionary<string, double> MeasurePaneWidths() => new Dictionary<string, double>
     {
-        [PaneLayout.Navigation] = NavigationColumn.ActualWidth,
+        [PaneLayout.Navigation] = Navigation.IsRail ? _navigationWidth : NavigationColumn.ActualWidth,
         [PaneLayout.Detail] = ViewModel.IsDetailPaneVisible ? DetailColumn.ActualWidth : 0,
     };
 
     /// <summary>Shows the panes at the given widths (already within their limits).</summary>
     public void SetPaneWidths(double navigation, double detail)
     {
-        NavigationColumn.Width = new GridLength(navigation);
+        _navigationWidth = navigation;
+        if (!Navigation.IsRail)
+        {
+            NavigationColumn.Width = new GridLength(navigation);
+        }
+
         _detailWidth = detail;
         ShowDetailColumn(ViewModel.IsDetailPaneVisible);
+    }
+
+    // ---- Icon rail ----
+
+    private const double RailBreakpoint = 900;
+    private const double RailWidth = 56;
+    private double _navigationWidth = PaneLayout.NavigationLimits.Default;
+
+    // Below 900 px the sidebar is an icon rail of a fixed width; wider, it is the full sidebar again at the
+    // width the user had.
+    private void UpdateSidebarMode()
+    {
+        var rail = ActualWidth < RailBreakpoint;
+        if (rail == Navigation.IsRail)
+        {
+            return;
+        }
+
+        if (rail)
+        {
+            if (NavigationColumn.ActualWidth > 0)
+            {
+                _navigationWidth = PaneLayout.NavigationLimits.Clamp(NavigationColumn.ActualWidth);
+            }
+
+            NavigationColumn.MinWidth = RailWidth;
+            NavigationColumn.MaxWidth = RailWidth;
+            NavigationColumn.Width = new GridLength(RailWidth);
+        }
+        else
+        {
+            NavigationColumn.MinWidth = PaneLayout.NavigationLimits.Min;
+            NavigationColumn.MaxWidth = PaneLayout.NavigationLimits.Max;
+            NavigationColumn.Width = new GridLength(_navigationWidth);
+        }
+
+        SidebarSplitter.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
+        Navigation.SetRail(rail);
     }
 
     private void ApplyPaneLimits()

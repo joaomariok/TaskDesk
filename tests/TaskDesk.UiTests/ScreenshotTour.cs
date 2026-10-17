@@ -65,6 +65,15 @@ public sealed class ScreenshotTour : IDisposable
         AppSession.Ctrl(VirtualKeyShort.KEY_5);
         app.WaitForRows(Ids.CompletedTaskList, "Water plants");
         Shot(5, "completed");
+
+        // Below 900 px the sidebar is the icon rail; the hamburger opens the full sidebar over it.
+        app.ResizeWidth(0.94);
+        AppSession.Eventually(() => app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.RailSmartViewList)),
+            "The sidebar did not collapse to the rail.");
+        Shot(7, "narrow");
+        app.Find(Ids.SidebarExpandButton).AsButton().Invoke();
+        AppSession.Eventually(() => app.FindOnDesktop(Ids.SmartViewList), "The hamburger opened no sidebar overlay.");
+        Shot(8, "narrow-overlay");
     }
 
     [Theory]

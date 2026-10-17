@@ -34,6 +34,8 @@ public partial class NavigationPane : UserControl
     {
         ViewModel = viewModel;
         Lists = lists;
+        ListsPanel.DataContext = lists;
+        RailListsBox.ItemsSource = lists.Lists;
         viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(MainViewModel.CurrentView) or nameof(MainViewModel.TagFilter))
@@ -86,10 +88,15 @@ public partial class NavigationPane : UserControl
         _syncing = true;
         try
         {
-            SmartViewList.SelectedItem = ViewModel.CurrentView is { } view
-                ? SmartViewList.Items.OfType<ListBoxItem>().FirstOrDefault(i => i.Tag is SmartView v && v == view)
-                : null;
+            foreach (var box in new[] { SmartViewList, RailSmartViewList })
+            {
+                box.SelectedItem = ViewModel.CurrentView is { } view
+                    ? box.Items.OfType<ListBoxItem>().FirstOrDefault(i => i.Tag is SmartView v && v == view)
+                    : null;
+            }
+
             TagList.SelectedItem = ViewModel.TagFilter;
+            RailTagList.SelectedItem = ViewModel.TagFilter;
             if (ViewModel.CurrentView is not null || ViewModel.TagFilter is not null)
             {
                 ListsBox.SelectedItem = null;
@@ -99,6 +106,8 @@ public partial class NavigationPane : UserControl
                 // Neither a Smart View nor a Tag: the Default List is showing.
                 ListsBox.SelectedItem = Lists.Lists.FirstOrDefault(l => l.IsDefault);
             }
+
+            RailListsBox.SelectedItem = ListsBox.SelectedItem;
         }
         finally
         {
@@ -110,8 +119,9 @@ public partial class NavigationPane : UserControl
 
     private async void OnSmartViewSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_syncing && SmartViewList.SelectedItem is ListBoxItem { Tag: SmartView view })
+        if (!_syncing && sender is ListBox { SelectedItem: ListBoxItem { Tag: SmartView view } })
         {
+            ClosePopups();
             await ViewModel.ShowSmartViewAsync(view);
         }
     }
@@ -120,8 +130,9 @@ public partial class NavigationPane : UserControl
 
     private async void OnTagSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_syncing && TagList.SelectedItem is Tag tag)
+        if (!_syncing && sender is ListBox { SelectedItem: Tag tag })
         {
+            ClosePopups();
             await ViewModel.FilterByTagAsync(tag);
         }
     }
@@ -131,10 +142,121 @@ public partial class NavigationPane : UserControl
 
     private async void OnListSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_syncing && ListsBox.SelectedItem is ListItemViewModel { IsDefault: true }
+        if (_syncing || sender is not ListBox { SelectedItem: ListItemViewModel picked } box)
+        {
+            return;
+        }
+
+        // The full list and the rail's list show the same selection.
+        _syncing = true;
+        try
+        {
+            (box == ListsBox ? RailListsBox : ListsBox).SelectedItem = picked;
+        }
+        finally
+        {
+            _syncing = false;
+        }
+
+        ClosePopups();
+        if (picked.IsDefault
             && (ViewModel.CurrentView is not null || ViewModel.TagFilter is not null))
         {
             await ViewModel.FilterByTagAsync(null);
+        }
+    }
+
+    // ---- Icon rail (below 900 px) ----
+
+    /// <summary>True while the sidebar shows as the icon rail.</summary>
+    public bool IsRail { get; private set; }
+
+    /// <summary>
+    /// Switches between the full sidebar and the icon rail. In the rail, the full sidebar moves into the
+    /// overlay (a pop-up opened by the hamburger button); widening the window moves it back.
+    /// </summary>
+    public void SetRail(bool rail)
+    {
+        if (rail == IsRail)
+        {
+            return;
+        }
+
+        IsRail = rail;
+        ClosePopups();
+        if (rail)
+        {
+            FullHost.Children.Remove(FullSidebar);
+            OverlayHost.Child = FullSidebar;
+        }
+        else
+        {
+            OverlayHost.Child = null;
+            FullHost.Children.Add(FullSidebar);
+        }
+
+        FullHost.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
+        RailPanel.Visibility = rail ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // Closes the overlay and the Tags flyout; focus goes back to the hamburger when one was open.
+    private void ClosePopups()
+    {
+        var wasOpen = Overlay.IsOpen || TagsFlyout.IsOpen;
+        Overlay.IsOpen = false;
+        TagsFlyout.IsOpen = false;
+        if (wasOpen && IsRail)
+        {
+            ExpandButton.Focus();
+        }
+    }
+
+    private void OnExpandClick(object sender, RoutedEventArgs e) => Overlay.IsOpen = true;
+
+    private void OnOverlayOpened(object? sender, EventArgs e)
+    {
+        OverlayHost.Height = Math.Max(ActualHeight, 120);
+        _ = Dispatcher.InvokeAsync(() => FocusFirst(SmartViewList), DispatcherPriority.Background);
+    }
+
+    private void OnOverlayClosed(object? sender, EventArgs e) => OverlayHost.ClearValue(HeightProperty);
+
+    private void OnOverlayKeyDown(object sender, KeyEventArgs e)
+    {
+        // Esc in the new-List box only cancels the new List.
+        if (e.Key == Key.Escape && !ReferenceEquals(Keyboard.FocusedElement, NewListBox))
+        {
+            ClosePopups();
+            e.Handled = true;
+        }
+    }
+
+    private void OnRailTagsClick(object sender, RoutedEventArgs e) => TagsFlyout.IsOpen = true;
+
+    private void OnTagsFlyoutOpened(object? sender, EventArgs e) =>
+        _ = Dispatcher.InvokeAsync(() => FocusFirst(RailTagList), DispatcherPriority.Background);
+
+    private void OnTagsFlyoutKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            TagsFlyout.IsOpen = false;
+            RailTagsButton.Focus();
+            e.Handled = true;
+        }
+    }
+
+    // Focuses the selected row of a list, or its first row.
+    private static void FocusFirst(ListBox box)
+    {
+        var item = box.SelectedItem ?? (box.Items.Count > 0 ? box.Items[0] : null);
+        if (item is not null && box.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem container)
+        {
+            container.Focus();
+        }
+        else
+        {
+            box.Focus();
         }
     }
 

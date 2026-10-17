@@ -29,6 +29,12 @@
             <Setter Property="ContextMenu" Value="{StaticResource ListContextMenu}" />
         </Style>
 
+        <Style x:Key="RailListItemContainer" TargetType="ListBoxItem" BasedOn="{StaticResource RailListBoxItem}">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+            <Setter Property="ToolTip" Value="{Binding Name}" />
+            <Setter Property="ContextMenu" Value="{StaticResource ListContextMenu}" />
+        </Style>
+
         <Style x:Key="TagItemContainer" TargetType="ListBoxItem" BasedOn="{StaticResource SidebarListBoxItem}">
             <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
             <Setter Property="ContextMenu" Value="{StaticResource TagContextMenu}" />
@@ -37,6 +43,8 @@
     <!-- Smart Views, Lists and Tags in the Windows Settings style: one list per section, all on the
          sidebar's own background. Rename, Colour and Delete are on the context menu of each List or Tag. -->
     <Grid>
+    <Grid x:Name="FullHost">
+    <Grid x:Name="FullSidebar">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -98,8 +106,7 @@
 
         <Border Grid.Row="1" Style="{StaticResource SidebarDivider}" />
 
-        <DockPanel Grid.Row="2" Margin="0,0,0,8"
-                   DataContext="{Binding Lists, RelativeSource={RelativeSource AncestorType=Window}}">
+        <DockPanel x:Name="ListsPanel" Grid.Row="2" Margin="0,0,0,8">
             <TextBlock DockPanel.Dock="Top" Style="{StaticResource SidebarSectionHeader}" Text="Lists" />
             <StackPanel DockPanel.Dock="Bottom">
                 <TextBlock Foreground="{DynamicResource OverdueBrush}" TextWrapping="Wrap" Margin="8,4,8,0"
@@ -175,5 +182,142 @@
                 </ListBox.ItemTemplate>
             </ListBox>
         </DockPanel>
+    </Grid>
+    </Grid>
+
+    <!-- The icon rail, shown instead of the full sidebar when the window is narrower than 900 px
+         (SetRail). Same Smart Views, Lists and Tags, as icons only. -->
+    <Grid x:Name="RailPanel" Visibility="Collapsed">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Button x:Name="ExpandButton" Grid.Row="0" Style="{StaticResource SidebarActionButton}"
+                HorizontalContentAlignment="Center" Margin="0,0,0,4" ToolTip="Show the sidebar"
+                AutomationProperties.Name="Show sidebar" AutomationProperties.AutomationId="SidebarExpandButton"
+                Click="OnExpandClick">
+            <TextBlock Style="{StaticResource SidebarIcon}" Text="&#xE700;" HorizontalAlignment="Center" />
+        </Button>
+        <ListBox x:Name="RailSmartViewList" Grid.Row="1" Style="{StaticResource SidebarListBox}"
+                 ItemContainerStyle="{StaticResource RailListBoxItem}"
+                 AutomationProperties.Name="Smart Views" AutomationProperties.AutomationId="RailSmartViewList"
+                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                 SelectionChanged="OnSmartViewSelectionChanged">
+            <ListBoxItem Tag="{x:Static tasks:SmartView.Today}" ToolTip="Today (Ctrl+1)"
+                         AutomationProperties.Name="Today" AutomationProperties.AutomationId="RailSmartViewToday">
+                <Grid>
+                    <TextBlock Style="{StaticResource SidebarIcon}" Text="&#xE161;" HorizontalAlignment="Center" />
+                    <Border Style="{StaticResource RailBadge}" Tag="{Binding TodayCount}">
+                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding TodayCount}" />
+                    </Border>
+                </Grid>
+            </ListBoxItem>
+            <ListBoxItem Tag="{x:Static tasks:SmartView.Upcoming}" ToolTip="Upcoming (Ctrl+2)"
+                         AutomationProperties.Name="Upcoming" AutomationProperties.AutomationId="RailSmartViewUpcoming">
+                <Grid>
+                    <TextBlock Style="{StaticResource SidebarIcon}" Text="&#xE787;" HorizontalAlignment="Center" />
+                    <Border Style="{StaticResource RailBadge}" Tag="{Binding UpcomingCount}">
+                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding UpcomingCount}" />
+                    </Border>
+                </Grid>
+            </ListBoxItem>
+            <ListBoxItem Tag="{x:Static tasks:SmartView.Overdue}" ToolTip="Overdue (Ctrl+3)"
+                         AutomationProperties.Name="Overdue" AutomationProperties.AutomationId="RailSmartViewOverdue">
+                <Grid>
+                    <TextBlock Style="{StaticResource SidebarIcon}" Text="&#xE7BA;" HorizontalAlignment="Center" />
+                    <Border Style="{StaticResource RailBadgeOverdue}"
+                            Visibility="{Binding HasOverdueCount, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding OverdueCount}"
+                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                    </Border>
+                </Grid>
+            </ListBoxItem>
+            <ListBoxItem Tag="{x:Static tasks:SmartView.All}" ToolTip="All (Ctrl+4)"
+                         AutomationProperties.Name="All" AutomationProperties.AutomationId="RailSmartViewAll">
+                <Grid>
+                    <TextBlock Style="{StaticResource SidebarIcon}" Text="&#xE8FD;" HorizontalAlignment="Center" />
+                    <Border Style="{StaticResource RailBadge}" Tag="{Binding AllCount}">
+                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding AllCount}" />
+                    </Border>
+                </Grid>
+            </ListBoxItem>
+            <ListBoxItem Tag="{x:Static tasks:SmartView.Completed}" ToolTip="Completed (Ctrl+5)"
+                         AutomationProperties.Name="Completed" AutomationProperties.AutomationId="RailSmartViewCompleted">
+                <Grid>
+                    <TextBlock Style="{StaticResource SidebarIcon}" Text="&#xE930;" HorizontalAlignment="Center" />
+                </Grid>
+            </ListBoxItem>
+        </ListBox>
+        <Border Grid.Row="2" Style="{StaticResource SidebarDivider}" />
+        <ListBox x:Name="RailListsBox" Grid.Row="3" Style="{StaticResource SidebarListBox}"
+                 ItemContainerStyle="{StaticResource RailListItemContainer}"
+                 AutomationProperties.Name="Lists" AutomationProperties.AutomationId="RailListsList"
+                 PreviewKeyDown="OnListKeyDown" SelectionChanged="OnListSelectionChanged">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid Width="24" HorizontalAlignment="Center" Background="Transparent">
+                        <Ellipse Width="10" Height="10"
+                                 Fill="{Binding ColorHex, TargetNullValue=Transparent, FallbackValue=Transparent}" />
+                        <Ellipse Width="10" Height="10" StrokeThickness="1.5"
+                                 Stroke="{DynamicResource ListStripeBrush}">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ColorHex}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <Button x:Name="RailTagsButton" Grid.Row="4" HorizontalContentAlignment="Center" ToolTip="Tags"
+                AutomationProperties.Name="Tags" AutomationProperties.AutomationId="RailTagsButton"
+                Click="OnRailTagsClick">
+            <Button.Style>
+                <Style TargetType="Button" BasedOn="{StaticResource SidebarActionButton}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Tags.Count}" Value="0">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Button.Style>
+            <TextBlock Style="{StaticResource SidebarIcon}" FontFamily="{DynamicResource ContentControlThemeFontFamily}"
+                       FontWeight="SemiBold" Text="#" HorizontalAlignment="Center" />
+        </Button>
+    </Grid>
+
+    <!-- Flyout of the Tags, opened by the "#" button of the rail. Esc or picking a Tag closes it. -->
+    <Popup x:Name="TagsFlyout" PlacementTarget="{Binding ElementName=RailTagsButton}" Placement="Right"
+           StaysOpen="False" Opened="OnTagsFlyoutOpened">
+        <Border Style="{StaticResource SidebarOverlay}" MinWidth="160" MaxHeight="320"
+                PreviewKeyDown="OnTagsFlyoutKeyDown">
+            <ListBox x:Name="RailTagList" ItemsSource="{Binding Tags}" Style="{StaticResource SidebarListBox}"
+                     ItemContainerStyle="{StaticResource TagItemContainer}"
+                     AutomationProperties.Name="Tags" AutomationProperties.AutomationId="RailTagList"
+                     PreviewKeyDown="OnTagKeyDown" SelectionChanged="OnTagSelectionChanged">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Style="{StaticResource BodyText}" Text="{Binding Name, StringFormat=#{0}}" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+    </Popup>
+
+    <!-- The full sidebar as an overlay on top of the rail (SetRail moves FullSidebar in here). -->
+    <Popup x:Name="Overlay" PlacementTarget="{Binding RelativeSource={RelativeSource AncestorType=UserControl}}"
+           Placement="Relative" StaysOpen="False" Opened="OnOverlayOpened" Closed="OnOverlayClosed">
+        <Border x:Name="OverlayHost" Style="{StaticResource SidebarOverlay}" Width="260"
+                PreviewKeyDown="OnOverlayKeyDown" />
+    </Popup>
     </Grid>
 </UserControl>

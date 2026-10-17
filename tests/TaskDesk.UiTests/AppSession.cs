@@ -105,6 +105,23 @@ public sealed class AppSession : IDisposable
         WaitUntil(() => item.IsSelected && item.Properties.HasKeyboardFocus.ValueOrDefault, () => $"Row '{title}' did not take focus.");
     }
 
+    /// <summary>
+    /// Resizes the window to <paramref name="factor"/> times its current width (the default is 900 px wide;
+    /// the icon rail starts below that). A ratio keeps the test independent of the display scale.
+    /// </summary>
+    public void ResizeWidth(double factor)
+    {
+        var bounds = Window.BoundingRectangle;
+        var target = bounds.Width * factor;
+        Window.Patterns.Transform.Pattern.Resize(target, bounds.Height);
+        WaitUntil(() => Math.Abs(Window.BoundingRectangle.Width - target) < 4,
+            () => $"The window did not resize to {factor:P0} of its width.");
+    }
+
+    /// <summary>Looks in every window of the desktop: pop-ups (flyouts, the sidebar overlay) are windows of their own.</summary>
+    public AutomationElement? FindOnDesktop(string automationId) =>
+        _automation.GetDesktop().FindFirstDescendant(cf => cf.ByAutomationId(automationId));
+
     public string? FocusedAutomationId() => _automation.FocusedElement()?.Properties.AutomationId.ValueOrDefault;
 
     /// <summary>Gives an element keyboard focus and waits until it has it.</summary>

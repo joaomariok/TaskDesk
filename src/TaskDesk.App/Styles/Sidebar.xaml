@@ -58,6 +58,44 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!-- The icon rail (below 900 px): a centred icon per item, with the count as a small badge on its corner. -->
+    <Style x:Key="RailListBoxItem" TargetType="ListBoxItem" BasedOn="{StaticResource SidebarListBoxItem}">
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="Padding" Value="0,8" />
+    </Style>
+
+    <Style x:Key="RailBadge" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="MinWidth" Value="16" />
+        <Setter Property="Height" Value="16" />
+        <Setter Property="Padding" Value="3,0" />
+        <Setter Property="Margin" Value="0,-6,-12,0" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="0">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="RailBadgeOverdue" TargetType="Border" BasedOn="{StaticResource RailBadge}">
+        <Setter Property="Background" Value="{DynamicResource OverdueBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <!-- The box of the flyout and of the expanded sidebar overlay. -->
+    <Style x:Key="SidebarOverlay" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorBaseBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
+
     <!-- A quiet button at the end of the Lists, like "+ New List". -->
     <Style x:Key="SidebarActionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
         <Setter Property="Background" Value="Transparent" />

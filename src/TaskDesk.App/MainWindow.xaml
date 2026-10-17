@@ -33,7 +33,7 @@
             <ColumnDefinition x:Name="DetailColumn" Width="260" />
         </Grid.ColumnDefinitions>
         <views:NavigationPane x:Name="Navigation" Grid.Column="0" AutomationProperties.AutomationId="NavigationPane" />
-        <GridSplitter Grid.Column="1" AutomationProperties.AutomationId="SidebarSplitter" Width="12" HorizontalAlignment="Stretch" Background="Transparent"
+        <GridSplitter x:Name="SidebarSplitter" Grid.Column="1" AutomationProperties.AutomationId="SidebarSplitter" Width="12" HorizontalAlignment="Stretch" Background="Transparent"
                       ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Focusable="False"
                       AutomationProperties.Name="Resize sidebar" />
         <GridSplitter x:Name="DetailSplitter" AutomationProperties.AutomationId="DetailSplitter" Grid.Column="3" Width="12" HorizontalAlignment="Stretch"
