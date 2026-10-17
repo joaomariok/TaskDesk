@@ -8,6 +8,7 @@ using TaskDesk.App.Notifications;
 using TaskDesk.App.Shell;
 using TaskDesk.Core.Backups;
 using TaskDesk.Core.Export;
+using TaskDesk.Core.Import;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Shell;
@@ -51,6 +52,7 @@ public partial class App : Application
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<IListDialogs, WpfListDialogs>();
         builder.Services.AddSingleton<IExportDialogs, WpfExportDialogs>();
+        builder.Services.AddSingleton<IImportDialogs, WpfImportDialogs>();
         builder.Services.AddSingleton<IOccurrenceDialogs, WpfOccurrenceDialogs>();
         builder.Services.AddSingleton<ListsViewModel>();
         builder.Services.AddSingleton<MainWindow>();
@@ -91,7 +93,9 @@ public partial class App : Application
             sp.GetRequiredService<IBackupService>(),
             sp.GetRequiredService<IExportService>(),
             sp.GetRequiredService<IExportDialogs>(),
-            sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<IImportService>(),
+            sp.GetRequiredService<IImportDialogs>()));
         _host = builder.Build();
 
         await _host.StartAsync();
@@ -215,7 +219,15 @@ public partial class App : Application
             return;
         }
 
-        _settingsWindow = new SettingsWindow(_host!.Services.GetRequiredService<SettingsViewModel>());
+        var settings = _host!.Services.GetRequiredService<SettingsViewModel>();
+        settings.Imported += async () =>
+        {
+            // The import changed Lists, Tags and Tasks underneath the main window: reload both panes.
+            var main = _host.Services.GetRequiredService<MainWindow>();
+            await main.ViewModel.LoadAsync();
+            await main.Lists.LoadAsync();
+        };
+        _settingsWindow = new SettingsWindow(settings);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();

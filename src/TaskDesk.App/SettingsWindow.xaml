@@ -71,7 +71,11 @@
             <Button Content="Export to CSV…" Margin="8,0,0,0" Padding="12,4"
                     AutomationProperties.Name="Export tasks to CSV"
                     Command="{Binding ExportCsvCommand}" />
+            <Button Content="Import…" Margin="8,0,0,0" Padding="12,4"
+                    AutomationProperties.Name="Import a JSON export"
+                    Command="{Binding ImportCommand}" />
         </StackPanel>
         <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Opacity="0.7" Text="{Binding ExportStatus}" />
+        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Opacity="0.7" Text="{Binding ImportStatus}" />
     </StackPanel>
 </Window>

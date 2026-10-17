@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TaskDesk.Core.Backups;
 using TaskDesk.Core.Export;
+using TaskDesk.Core.Import;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Reminders;
@@ -28,6 +29,7 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<IReminderService, ReminderService>();
         services.AddSingleton<IBackupService, BackupService>();
         services.AddSingleton<IExportService, ExportService>();
+        services.AddSingleton<IImportService, ImportService>();
         services.AddSingleton<IDatabaseInitializer, DatabaseInitializer>();
         services.AddSingleton<ITaskService, TaskService>();
         services.AddSingleton<ITaskCreator>(sp => (TaskService)sp.GetRequiredService<ITaskService>());

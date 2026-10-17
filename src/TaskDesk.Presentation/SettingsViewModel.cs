@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TaskDesk.Core.Backups;
 using TaskDesk.Core.Export;
+using TaskDesk.Core.Import;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Shell;
 
@@ -21,6 +22,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IExportService? _exports;
     private readonly IExportDialogs? _exportDialogs;
     private readonly TimeProvider _clock;
+    private readonly IImportService? _imports;
+    private readonly IImportDialogs? _importDialogs;
     private readonly bool _loading = true;
 
     public SettingsViewModel(
@@ -35,8 +38,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         IBackupService? backups = null,
         IExportService? exports = null,
         IExportDialogs? exportDialogs = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        IImportService? imports = null,
+        IImportDialogs? importDialogs = null)
     {
+        _imports = imports;
+        _importDialogs = importDialogs;
         _exports = exports;
         _exportDialogs = exportDialogs;
         _clock = clock ?? TimeProvider.System;
@@ -193,6 +200,53 @@ public sealed partial class SettingsViewModel : ObservableObject
             ExportStatus = $"Export failed: {ex.Message}";
         }
     }
+
+    /// <summary>Raised after an import changed the data, so open views can reload.</summary>
+    public event Action? Imported;
+
+    /// <summary>Outcome of the last import; empty until one runs.</summary>
+    [ObservableProperty]
+    private string _importStatus = "";
+
+    [RelayCommand]
+    private async Task ImportAsync()
+    {
+        if (_imports is null || _importDialogs is null)
+        {
+            return;
+        }
+
+        var path = _importDialogs.PickImportPath();
+        if (path is null || _importDialogs.ChooseImportMode(path) is not { } mode)
+        {
+            return;
+        }
+
+        if (mode == ImportMode.Replace && !_importDialogs.ConfirmReplace())
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _imports.ImportJsonAsync(path, mode);
+            ImportStatus = Describe(result);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            ImportStatus = $"Import failed: {ex.Message}";
+            return;
+        }
+
+        Imported?.Invoke();
+    }
+
+    private static string Describe(ImportResult r) => r.Mode == ImportMode.Merge
+        ? $"Merged: {r.Tasks.Added} tasks added, {r.Tasks.Skipped} skipped; "
+            + $"{r.Lists.Added} lists added, {r.Lists.Skipped} skipped; "
+            + $"{r.Tags.Added} tags added, {r.Tags.Skipped} skipped."
+        : $"Replaced all data with {r.Tasks.Added} tasks, {r.Lists.Added} lists and {r.Tags.Added} tags. "
+            + $"Previous data backed up to {r.BackupPath}";
 
     partial void OnThemeChanged(ThemeChoice value)
     {
