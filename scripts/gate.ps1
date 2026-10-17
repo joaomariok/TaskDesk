@@ -55,6 +55,11 @@ try {
     }
 
     $test = Invoke-Step 'test' @('test')
+    # The UI suite takes over the desktop and must stay opt-in (IsTestingPlatformApplication=false in its csproj).
+    if ($test.Output | Where-Object { $_ -match 'TaskDesk\.UiTests' }) {
+        Write-Host 'GATE FAILED: dotnet test ran TaskDesk.UiTests; keep it out of the gate (run scripts/ui-tests.ps1)'
+        exit 1
+    }
     $total = Get-TestTotal $test.Output 'total'
     $failed = Get-TestTotal $test.Output 'failed'
     $passed = Get-TestTotal $test.Output 'succeeded'
