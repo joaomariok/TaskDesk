@@ -139,7 +139,7 @@
                         </Button.ContextMenu>
                     </Button>
                 </Grid>
-                <ToggleButton Grid.Column="1" Margin="8,0,8,0" Padding="8,2"
+                <controls:CommandToggleButton Grid.Column="1" Margin="8,0,8,0" Padding="8,2"
                               AutomationProperties.Name="Filter"
                               AutomationProperties.AutomationId="FilterButton"
                               ToolTip="Show or hide the Filters"
@@ -150,7 +150,7 @@
                                    VerticalAlignment="Center" Text="&#xE71C;" />
                         <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Filter" />
                     </StackPanel>
-                </ToggleButton>
+                </controls:CommandToggleButton>
                 <Grid Grid.Column="2">
                     <TextBox x:Name="SearchBox" Padding="6"
                              AutomationProperties.Name="Search (Ctrl+F)" AutomationProperties.AutomationId="SearchBox"
@@ -169,11 +169,11 @@
                     <ComboBox x:Name="PriorityFilterBox" Width="150" Margin="0,0,6,0"
                               AutomationProperties.Name="Priority filter"
                               SelectionChanged="PriorityFilterBox_SelectionChanged" />
-                    <ToggleButton Content="Has due" Padding="8,2" Margin="0,0,6,0"
+                    <controls:CommandToggleButton Content="Has due" Padding="8,2" Margin="0,0,6,0"
                                   AutomationProperties.Name="Has due filter"
                                   IsChecked="{Binding HasDueFilter, Mode=OneWay}"
                                   Command="{Binding ToggleHasDueFilterCommand}" />
-                    <ToggleButton Content="Has reminder" Padding="8,2" Margin="0,0,6,0"
+                    <controls:CommandToggleButton Content="Has reminder" Padding="8,2" Margin="0,0,6,0"
                                   AutomationProperties.Name="Has reminder filter"
                                   IsChecked="{Binding HasReminderFilter, Mode=OneWay}"
                                   Command="{Binding ToggleHasReminderFilterCommand}" />
@@ -185,7 +185,7 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <ToggleButton Content="{Binding Tag.Name}" ContentStringFormat="#{0}" Padding="8,2"
+                                <controls:CommandToggleButton Content="{Binding Tag.Name}" ContentStringFormat="#{0}" Padding="8,2"
                                               Margin="0,0,6,0" IsChecked="{Binding IsSelected, Mode=OneWay}"
                                               Command="{Binding DataContext.ToggleFilterTagCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                               CommandParameter="{Binding Tag}" />

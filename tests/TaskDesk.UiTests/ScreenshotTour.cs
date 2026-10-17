@@ -115,6 +115,23 @@ public sealed class ScreenshotTour : IDisposable
             () => "Esc did not close the detail pane.");
         Shot(10, "overdue");
 
+        // The Filter row open with one Filter on, so "Clear filters" shows; then everything back off.
+        AutomationElement? HasDue() => app.Window.FindFirstDescendant(cf => cf.ByName("Has due filter"));
+        var filter = app.Find(Ids.FilterButton);
+        filter.Click();
+        AppSession.Eventually(HasDue, "Clicking Filter did not show the Filter row.");
+        HasDue()!.Click();
+        AppSession.WaitUntil(() => HasDue()!.AsToggleButton().ToggleState == ToggleState.On,
+            () => "The Has due Filter did not turn on.");
+        AppSession.Eventually(() => app.Window.FindFirstDescendant(cf => cf.ByName("Clear filters")),
+            "Clear filters is not shown while a Filter is on.");
+        Shot(11, "filters");
+        HasDue()!.Click();
+        AppSession.WaitUntil(() => HasDue()!.AsToggleButton().ToggleState == ToggleState.Off,
+            () => "The Has due Filter did not turn off.");
+        filter.Click();
+        AppSession.WaitUntil(() => HasDue() is null, () => "Clicking Filter again did not hide the Filter row.");
+
         // Below 900 px the sidebar is the icon rail; the hamburger opens the full sidebar over it.
         app.ResizeWidth(0.94);
         AppSession.Eventually(() => app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.RailSmartViewList)),

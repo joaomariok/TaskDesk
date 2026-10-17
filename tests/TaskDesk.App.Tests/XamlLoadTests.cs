@@ -25,7 +25,7 @@ public sealed class XamlLoadTests(WpfAppFixture fixture)
     private static readonly Size LayoutSize = new(1280, 800);
 
     // Every Window and UserControl of the App project, built with the smallest data context it needs.
-    private static readonly Dictionary<string, Func<FrameworkElement>> Elements = new()
+    internal static readonly Dictionary<string, Func<FrameworkElement>> Elements = new()
     {
         [nameof(MainWindow)] = () => new MainWindow(NewMainViewModel(), NewListsViewModel()),
         [nameof(QuickAddWindow)] = () => new QuickAddWindow(new QuickAddViewModel(Stub.Of<ITaskCreator>(), Stub.Of<IListService>())),
