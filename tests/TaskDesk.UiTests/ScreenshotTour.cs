@@ -109,6 +109,10 @@ public sealed class ScreenshotTour : IDisposable
             },
             () => $"Overdue rows were [{string.Join(", ", app.Rows(Ids.OpenTaskList))}]; the typed Due '{yesterday}' did not save.");
         AppSession.WaitUntil(() => app.Find(Ids.PageHeading).Name == "Overdue", () => "The Overdue view did not open.");
+        // Close the detail pane so the row's red Due chip is in the shot.
+        AppSession.Press(VirtualKeyShort.ESCAPE);
+        AppSession.WaitUntil(() => app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.DetailTitleBox)) is null,
+            () => "Esc did not close the detail pane.");
         Shot(10, "overdue");
 
         // Below 900 px the sidebar is the icon rail; the hamburger opens the full sidebar over it.

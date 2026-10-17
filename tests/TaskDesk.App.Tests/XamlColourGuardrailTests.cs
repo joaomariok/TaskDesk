@@ -1,6 +1,7 @@
+using System.IO;
 using System.Text.RegularExpressions;
 
-namespace TaskDesk.Core.Tests;
+namespace TaskDesk.App.Tests;
 
 /// <summary>
 /// Guardrail: XAML under src takes every colour from theme resources. The only literal
