@@ -24,6 +24,14 @@ function Get-TestTotal {
     return [int](($values | Measure-Object -Sum).Sum)
 }
 
+function Test-OnlyLockErrors {
+    param([System.Collections.Generic.List[string]]$Output)
+    $errors = @($Output | Where-Object { $_ -match ':\s*error\s+[A-Z]+\d+' })
+    if ($errors.Count -eq 0) { return $false }
+    $nonLock = @($errors | Where-Object { $_ -notmatch ':\s*error\s+MSB30(21|26|27)\b' })
+    return $nonLock.Count -eq 0
+}
+
 Push-Location $repoRoot
 try {
     $shutdown = Invoke-Step 'build-server shutdown' @('build-server', 'shutdown')
@@ -33,6 +41,14 @@ try {
     }
 
     $build = Invoke-Step 'build' @('build', '-warnaserror')
+    $retried = $false
+    if ($build.Code -ne 0 -and (Test-OnlyLockErrors $build.Output)) {
+        # Another process (often the editor's background build) held an output file. Retry once.
+        Write-Host '== build failed only on locked output files; retrying once in 5 s'
+        Start-Sleep -Seconds 5
+        $build = Invoke-Step 'build' @('build', '-warnaserror')
+        $retried = $true
+    }
     if ($build.Code -ne 0) {
         Write-Host "GATE FAILED: build exit $($build.Code), tests not run"
         exit $build.Code
@@ -49,6 +65,7 @@ try {
         Write-Host "GATE FAILED: $summary"
         exit $test.Code
     }
+    if ($retried) { $summary += ' (after lock retry)' }
     Write-Host "GATE PASSED: $summary"
     exit 0
 }
