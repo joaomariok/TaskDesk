@@ -7,6 +7,7 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
 1. Create the integration branch from `main` and note its tip commit. Every brief names this tip as `<BASE>`.
 2. Read the spec issue and its tickets (see `issue-tracker.md`). Split them into tickets that can run in parallel and tickets that must wait for an earlier one.
 3. Launch one implementer per ready ticket, each in its own worktree. Set `model` explicitly. Brief each with the **Implementer brief** below, plus its ticket number, `<BASE>`, and the scratchpad subfolder it owns.
+   - If the launch fails with "core.worktree redirect", the session's working directory has become lowercase `d:`. Return to `D:\GIT\TaskDesk` and retry.
 4. When an implementer reports, read its diff and keep the diff uncommitted in its worktree. The report is a claim, not evidence.
 5. Land the tickets one at a time, in the order they finish. For each:
    - Run `pwsh scripts/integrate-worktree.ps1 -Worktree <WT> -Base <BASE>` from the integration checkout, which must be clean. It applies the worktree's tracked diff with `git apply --3way`, copies its untracked files, runs the **Gate** and exits with the gate's code. It prints the changed and new files; stage those paths by name. It never commits.
@@ -79,6 +80,7 @@ Short, with no file contents:
 
 - gate exit codes and test counts
 - files and areas changed
+- every existing test you changed, with the reason
 - acceptance criteria not verified automatically, as a manual checklist
 - decisions later tickets need
 
@@ -96,7 +98,7 @@ A merger carries one ticket's uncommitted worktree changes onto the integration 
 
 ### Line endings
 
-Many repo files are CRLF. Preserve each file's existing line endings. Worktree diffs can contain CRLF-to-LF churn: compare with `git diff --ignore-cr-at-eol` and carry over only real content changes. The final `git diff --stat` shows only real changes.
+The repo's `.gitattributes` sets `* text=auto eol=lf`, so files are stored and checked out with LF line endings. Write LF. Worktree diffs can still contain CRLF-to-LF churn: compare with `git diff --ignore-cr-at-eol` and carry over only real content changes. The final `git diff --stat` shows only real changes.
 
 ### Method
 
