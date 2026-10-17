@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The page with the detail pane of the selected Task: the page (MainView) | the detail splitter | the pane.
+    Wider than PaneLayout.DetailDockedAboveWidth the pane docks in its own column, resized by the splitter;
+    otherwise it overlays the page's right side and the splitter hides. A hidden pane takes no room.
+    The code-behind sets the column widths and limits (PaneLayout.DetailLimits).
+-->
+<UserControl
+    x:Class="TaskDesk.Views.DetailDock"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ctk="using:CommunityToolkit.WinUI.Controls">
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Key="F2" Invoked="OnF2Invoked" />
+    </UserControl.KeyboardAccelerators>
+    <Grid x:Name="DockRoot" KeyDown="OnDockKeyDown">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="PageColumn" Width="*" MinWidth="240" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition x:Name="DetailColumn" Width="0" />
+        </Grid.ColumnDefinitions>
+        <Border x:Name="PageHost" />
+        <ctk:GridSplitter x:Name="DetailSplitter" Grid.Column="1" Width="12"
+                          ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                          Background="Transparent" IsTabStop="False"
+                          AutomationProperties.AutomationId="DetailSplitter"
+                          AutomationProperties.Name="Resize detail pane" />
+    </Grid>
+</UserControl>

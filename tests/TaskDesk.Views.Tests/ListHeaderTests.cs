@@ -370,6 +370,35 @@ public sealed class ListHeaderTests
     }
 
     [UITestMethod]
+    public async Task Typing_a_search_just_before_the_window_closes_does_not_reload_after_it_closed()
+    {
+        using var db = await DatabaseAsync();
+        var (window, viewModel) = await OpenAsync(db);
+        var reloads = 0;
+        ((System.ComponentModel.INotifyPropertyChanged)viewModel.ApplySearchCommand).PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(viewModel.ApplySearchCommand.ExecutionTask))
+            {
+                reloads++;
+            }
+        };
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            // Starts the pause-in-typing timer; the window closes before it runs out.
+            VisualTree.Find<TextBox>(window.View, "SearchBox").Text = "pay";
+        }
+        finally
+        {
+            window.Close();
+        }
+
+        // The search would reload over the database the closed window no longer owns.
+        await Task.Delay(TimeSpan.FromMilliseconds(750), Ct);
+        Assert.AreEqual(0, reloads, "The search reloaded the page after its window closed.");
+    }
+
+    [UITestMethod]
     public async Task Load_more_completed_shows_on_the_Completed_view_while_more_pages_remain()
     {
         using var db = await DatabaseAsync();

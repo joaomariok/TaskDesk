@@ -44,6 +44,9 @@ public sealed partial class MainView : UserControl
         _syncingPriorityFilter = false;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         viewModel.FocusQuickAddRequested += (_, _) => FocusQuickAdd();
+        // A search still waiting for typing to pause is dropped with the page: run after its window closed,
+        // the reload would query a database the shell may already have let go of.
+        Unloaded += (_, _) => _searchTimer?.Stop();
     }
 
     /// <summary>The Overdue, open and "Completed (N)" Task lists and the Undo bar.</summary>

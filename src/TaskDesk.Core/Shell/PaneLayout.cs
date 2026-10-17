@@ -30,6 +30,27 @@ public static class PaneLayout
     /// </summary>
     public static bool IsRail(double width) => width > 0 && width < RailBelowWidth;
 
+    /// <summary>The window width above which the detail pane docks beside the list; at or below it, it overlays the list.</summary>
+    public const double DetailDockedAboveWidth = 1100;
+
+    /// <summary>The narrowest the detail pane is while it overlays the list.</summary>
+    public const double DetailOverlayMinWidth = 320;
+
+    /// <summary>
+    /// True when a window <paramref name="width"/> device-independent pixels wide docks the detail pane beside
+    /// the list. A window not measured yet (zero or not a number) docks it.
+    /// </summary>
+    public static bool IsDetailDocked(double width) => !(width > 0) || width > DetailDockedAboveWidth;
+
+    /// <summary>The width of the overlaid detail pane: its own width within its limits, but at least <see cref="DetailOverlayMinWidth"/>.</summary>
+    public static double DetailOverlayWidth(double width) => Math.Max(DetailLimits.Clamp(width), DetailOverlayMinWidth);
+
+    /// <summary>
+    /// The docked detail pane's width after its splitter, on the pane's left edge, is dragged
+    /// <paramref name="dx"/> pixels from where the pane was <paramref name="startWidth"/> wide.
+    /// </summary>
+    public static double DraggedDetailWidth(double startWidth, double dx) => DetailLimits.Clamp(startWidth - dx);
+
     public static PaneLimits LimitsOf(string pane) => pane switch
     {
         Navigation => NavigationLimits,

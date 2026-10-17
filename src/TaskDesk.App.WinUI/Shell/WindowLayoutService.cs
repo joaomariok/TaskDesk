@@ -10,7 +10,7 @@ namespace TaskDesk.App.Shell;
 /// Restores and saves the main window's size, position and state through the settings store. The stored
 /// layout is in device-independent pixels, as the WPF app writes it; <see cref="AppWindow"/> works in
 /// physical pixels, so values are converted at the window's DPI (<see cref="WindowLayoutCalculator"/>).
-/// The sidebar's width is restored and saved with it (<see cref="PaneLayout"/>); other pane widths are kept as saved.
+/// The sidebar's and the detail pane's widths are restored and saved with it (<see cref="PaneLayout"/>).
 /// </summary>
 internal sealed partial class WindowLayoutService(IShellSettingsStore store)
 {

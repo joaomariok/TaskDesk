@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The detail pane of a Task, opened on demand: a fixed header (Close, the Task's checkbox and title, and any
+    error that belongs to no field) over the fields, which scroll. Every field has a visible label above it, and
+    a validation error shows right under its field. DetailDock places the pane beside the list or over it.
+-->
+<UserControl
+    x:Class="TaskDesk.Views.DetailPane"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TaskDesk.Views">
+    <UserControl.Resources>
+        <!-- An error in Overdue red; it takes no room while there is none. -->
+        <Style x:Key="FieldErrorText" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+            <Setter Property="Foreground" Value="{ThemeResource OverdueBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,-8,0,12" />
+        </Style>
+        <!-- Small icon-only button (Close): square, no border. -->
+        <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="MinWidth" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+        </Style>
+        <!-- A button that is available but not tempting: no fill, no border, critical-coloured text. -->
+        <Style x:Key="QuietDangerButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{ThemeResource OverdueBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+    </UserControl.Resources>
+
+    <Border x:Name="PaneRoot"
+            Background="{ThemeResource SolidBackgroundFillColorSecondaryBrush}"
+            BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+            BorderThickness="1,0,0,0">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- The fixed header, parted from the fields scrolling under it by a hairline. -->
+            <Border x:Name="Header" Grid.Row="0" Padding="16,12,16,0"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Details" Style="{StaticResource SubtitleText}" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Style="{StaticResource IconButton}"
+                                ToolTipService.ToolTip="Close (Esc)"
+                                AutomationProperties.Name="Close detail pane"
+                                Command="{x:Bind ViewModel.CloseDetailPaneCommand, Mode=OneTime}">
+                            <FontIcon Glyph="&#xE711;" FontSize="12" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Title with the Task's checkbox, which completes it like the checkbox on its row. -->
+                    <TextBlock Text="Title" Style="{StaticResource FieldLabel}" />
+                    <Grid Margin="{StaticResource FieldMargin}" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <local:CommandCheckBox x:Name="DetailCompletedBox" VerticalAlignment="Center"
+                                               CornerRadius="10" Height="20" MinWidth="0" MinHeight="0" Padding="0"
+                                               AutomationProperties.Name="Completed"
+                                               AutomationProperties.AutomationId="DetailCompletedBox"
+                                               IsChecked="{x:Bind ViewModel.DetailTask.IsCompleted, Mode=OneWay, FallbackValue=False}"
+                                               Command="{x:Bind ViewModel.ToggleCompleteCommand, Mode=OneTime}"
+                                               CommandParameter="{x:Bind ViewModel.DetailTask, Mode=OneWay}" />
+                        <TextBox x:Name="DetailTitleBox" Grid.Column="1" MaxLength="500"
+                                 AutomationProperties.Name="Task title"
+                                 AutomationProperties.AutomationId="DetailTitleBox"
+                                 Text="{x:Bind ViewModel.DetailTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                    <!-- An error that belongs to no field, such as a failed save: here it is never scrolled away. -->
+                    <TextBlock x:Name="GeneralErrorText" Style="{StaticResource FieldErrorText}"
+                               Text="{x:Bind ViewModel.GeneralError, Mode=OneWay}"
+                               Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.GeneralError), Mode=OneWay}" />
+                </StackPanel>
+            </Border>
+
+            <ScrollViewer x:Name="Fields" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="16,12,16,16">
+                    <!-- Subtasks (#63) go here, first among the scrolling fields. -->
+
+                    <!-- Due: a calendar date and an optional time. -->
+                    <TextBlock Text="Due" Style="{StaticResource FieldLabel}" />
+                    <Grid Margin="{StaticResource FieldMargin}" ColumnSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="72" />
+                        </Grid.ColumnDefinitions>
+                        <CalendarDatePicker x:Name="DetailDueDatePicker" HorizontalAlignment="Stretch"
+                                            AutomationProperties.Name="Due date"
+                                            AutomationProperties.AutomationId="DetailDueDatePicker"
+                                            Date="{x:Bind local:DetailPane.ToPickerDate(ViewModel.DetailDueDate), BindBack=SetDueDate, Mode=TwoWay}" />
+                        <TextBox x:Name="DueTimeBox" Grid.Column="1" MaxLength="5" PlaceholderText="HH:mm"
+                                 AutomationProperties.Name="Due time"
+                                 AutomationProperties.HelpText="Time as HH:mm; needs a Due date"
+                                 ToolTipService.ToolTip="Due time as HH:mm (needs a Due date)"
+                                 Text="{x:Bind ViewModel.DetailDueTime, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                    </Grid>
+                    <TextBlock x:Name="DueErrorText" Style="{StaticResource FieldErrorText}"
+                               Text="{x:Bind ViewModel.DueError, Mode=OneWay}"
+                               Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.DueError), Mode=OneWay}" />
+
+                    <!-- Reminder and Repeat (#63) go here, between Due and Priority. -->
+
+                    <!-- Priority -->
+                    <TextBlock Text="Priority" Style="{StaticResource FieldLabel}" />
+                    <ComboBox x:Name="PriorityBox" Margin="{StaticResource FieldMargin}" MinWidth="160"
+                              AutomationProperties.Name="Priority"
+                              ItemsSource="{x:Bind local:DetailPane.PriorityNames, Mode=OneTime}"
+                              SelectedIndex="{x:Bind local:DetailPane.PriorityIndex(ViewModel.DetailPriority), BindBack=SetPriorityIndex, Mode=TwoWay}" />
+
+                    <!-- List: the List the Task belongs to, as text with its dot or ring; it cannot be changed here. -->
+                    <TextBlock Text="List" Style="{StaticResource FieldLabel}" />
+                    <StackPanel x:Name="ListField" Orientation="Horizontal" Spacing="8" Margin="{StaticResource FieldMargin}"
+                                AutomationProperties.Name="List">
+                        <Grid Width="10" Height="10" VerticalAlignment="Center">
+                            <Ellipse Fill="{x:Bind local:TaskRow.StripeBrush(ViewModel.DetailTask.ListColorHex), Mode=OneWay}" />
+                            <Ellipse StrokeThickness="1.5" Stroke="{ThemeResource ListStripeBrush}"
+                                     Visibility="{x:Bind local:DetailPane.ShownWithoutColour(ViewModel.DetailTask.HasListColor), Mode=OneWay}" />
+                        </Grid>
+                        <TextBlock Style="{StaticResource BodyText}" TextTrimming="CharacterEllipsis"
+                                   Text="{x:Bind ViewModel.DetailTask.ListName, Mode=OneWay, FallbackValue=''}" />
+                    </StackPanel>
+
+                    <!-- Tags (#63) go here, between List and Notes. -->
+
+                    <!-- Notes -->
+                    <TextBlock Text="Notes" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="DetailNotesBox" Height="140" Margin="{StaticResource FieldMargin}"
+                             AcceptsReturn="True" TextWrapping="Wrap" MaxLength="10000"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             AutomationProperties.Name="Task notes"
+                             AutomationProperties.AutomationId="DetailNotesBox"
+                             Text="{x:Bind ViewModel.DetailNotes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <Button Content="Delete Task" Style="{StaticResource QuietDangerButton}"
+                            AutomationProperties.Name="Delete Task"
+                            Command="{x:Bind ViewModel.DeleteDetailTaskCommand, Mode=OneTime}" />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>

@@ -5,7 +5,9 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
 using Windows.System;
@@ -42,6 +44,7 @@ public sealed partial class TaskListView : UserControl
             // With no rows (the Completed view, an empty List) a list takes no focus, so Tab skips it.
             list.IsTabStop = rows.Count > 0;
             rows.CollectionChanged += (_, _) => list.IsTabStop = rows.Count > 0;
+            list.Tapped += OnTaskListTapped;
         }
     }
 
@@ -51,11 +54,25 @@ public sealed partial class TaskListView : UserControl
     public Func<bool> AnimationsEnabled { get; set; } = () => new UISettings().AnimationsEnabled;
 
     /// <summary>
-    /// Runs the Task list shortcut for a key: Space completes and Delete deletes the selected Task, Ctrl+Z undoes
-    /// the last delete or completion. Returns false when the key is not a shortcut or there is nothing to do.
+    /// Runs the Task list shortcut for a key: Space completes and Delete deletes the selected Task, Enter opens it
+    /// in the detail pane, Ctrl+Z undoes the last delete or completion. Returns false when the key is not a
+    /// shortcut or there is nothing to do.
     /// </summary>
     public bool TryShortcut(VirtualKey key, VirtualKeyModifiers modifiers)
     {
+        // Enter opens the detail pane on the selected Task and moves focus into it.
+        if ((key, modifiers) == (VirtualKey.Enter, VirtualKeyModifiers.None))
+        {
+            if (ViewModel.SelectedTask is not { } selected)
+            {
+                return false;
+            }
+
+            ViewModel.OpenDetailPane(selected);
+            DetailFocusRequested?.Invoke(this, EventArgs.Empty);
+            return true;
+        }
+
         ICommand? command = (key, modifiers) switch
         {
             (VirtualKey.Space, VirtualKeyModifiers.None) => ViewModel.ToggleSelectedCompleteCommand,
@@ -70,6 +87,44 @@ public sealed partial class TaskListView : UserControl
 
         command.Execute(null);
         return true;
+    }
+
+    /// <summary>Raised when Enter opened the detail pane on a row and focus should move into the pane.</summary>
+    public event EventHandler? DetailFocusRequested;
+
+    /// <summary>Selects a Task's row and gives it keyboard focus (after Esc closed the detail pane).</summary>
+    public void FocusRow(TaskRowViewModel row)
+    {
+        var list = _lists.FirstOrDefault(l => l.Rows.Contains(row)).List;
+        if (list is null)
+        {
+            return;
+        }
+
+        list.SelectedItem = row;
+        list.ScrollIntoView(row);
+        list.UpdateLayout();
+        (list.ContainerFromItem(row) as ListViewItem)?.Focus(FocusState.Keyboard);
+    }
+
+    // A click on a row opens the detail pane on it (arrow keys only move the selection); a click on the row's
+    // checkbox only completes the Task.
+    private void OnTaskListTapped(object sender, TappedRoutedEventArgs e)
+    {
+        for (var element = e.OriginalSource as DependencyObject; element is not null and not ListView;
+             element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is ButtonBase)
+            {
+                return;
+            }
+
+            if (element is ListViewItem { Content: TaskRowViewModel row })
+            {
+                ViewModel.OpenDetailPane(row);
+                return;
+            }
+        }
     }
 
     // Space and Delete act on a focused row. A row's own checkbox handles Space itself.

@@ -16,8 +16,10 @@ public sealed partial class MainWindow : Window
         View = new MainView(viewModel);
         Lists = lists;
         View.Lists = lists;
+        // The page with the detail pane beside it or over it.
+        Details = new DetailDock(View);
         // The sidebar's NavigationView hosts the page as its content. Deleting a Tag asks on this window.
-        Navigation = new NavigationPane(viewModel, lists, new Dialogs.DialogService(() => this)) { PageContent = View };
+        Navigation = new NavigationPane(viewModel, lists, new Dialogs.DialogService(() => this)) { PageContent = Details };
         if (lists is not null)
         {
 #pragma warning disable VSTHRD101 // Event handlers; a failed reload reaches the app's UnhandledException log
@@ -41,16 +43,24 @@ public sealed partial class MainWindow : Window
     /// <summary>The sidebar with the Smart Views, around <see cref="View"/>.</summary>
     public NavigationPane Navigation { get; }
 
-    /// <summary>The pane widths to save (<see cref="PaneLayout"/>): the full sidebar's width, also while it is the rail.</summary>
+    /// <summary>The detail pane of the selected Task, docked beside <see cref="View"/> or over it.</summary>
+    public DetailDock Details { get; }
+
+    /// <summary>
+    /// The pane widths to save (<see cref="PaneLayout"/>): the full sidebar's width, also while it is the rail,
+    /// and the detail pane's docked width; a hidden detail pane measures 0 and keeps its saved width.
+    /// </summary>
     public IReadOnlyDictionary<string, double> MeasurePaneWidths() => new Dictionary<string, double>
     {
         [PaneLayout.Navigation] = Navigation.SidebarWidth,
+        [PaneLayout.Detail] = Details.IsPaneShown ? Details.DetailWidth : 0,
     };
 
     /// <summary>Shows the panes at their saved widths, within their limits; the defaults without a saved layout.</summary>
     public void SetPaneWidths(WindowLayout? layout)
     {
         Navigation.SidebarWidth = PaneLayout.WidthOf(layout, PaneLayout.Navigation);
+        Details.DetailWidth = PaneLayout.WidthOf(layout, PaneLayout.Detail);
     }
 
     public MainViewModel ViewModel => View.ViewModel;
