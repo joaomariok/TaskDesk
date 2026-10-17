@@ -50,6 +50,8 @@
         <ListView x:Name="OpenTaskList" Grid.Row="2" SelectionMode="Single"
                   AutomationProperties.Name="Tasks"
                   AutomationProperties.AutomationId="OpenTaskList"
+                  CanDragItems="True" AllowDrop="True"
+                  DragItemsStarting="OnDragItemsStarting" DragOver="OnTaskDragOver" Drop="OnTaskDrop"
                   ItemsSource="{x:Bind ViewModel.Tasks, Mode=OneTime}"
                   ItemContainerStyle="{StaticResource TaskRowContainer}"
                   ItemTemplate="{StaticResource TaskRowTemplate}"

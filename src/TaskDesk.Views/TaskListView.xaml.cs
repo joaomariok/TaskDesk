@@ -175,4 +175,79 @@ public sealed partial class TaskListView : UserControl
             _syncing = false;
         }
     }
+
+    // ---- Drag to reorder (the open list, in a List view only) ----
+
+    private TaskRowViewModel? _dragged;
+
+    /// <summary>
+    /// The open Task row under <paramref name="position"/> (relative to the open list), or null over empty space.
+    /// </summary>
+    public TaskRowViewModel? RowAt(Windows.Foundation.Point position)
+    {
+        for (var i = 0; i < ViewModel.Tasks.Count; i++)
+        {
+            if (OpenTaskList.ContainerFromIndex(i) is not FrameworkElement container)
+            {
+                continue;
+            }
+
+            var top = container.TransformToVisual(OpenTaskList).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+            if (position.Y >= top && position.Y < top + container.ActualHeight)
+            {
+                return ViewModel.Tasks[i];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Drops <paramref name="dragged"/> on <paramref name="target"/>, or on empty space (null) to move it to the
+    /// end, through the view model's move use case. Does nothing where reordering is off.
+    /// </summary>
+    public async Task DropAsync(TaskRowViewModel dragged, TaskRowViewModel? target)
+    {
+        if (!ViewModel.IsReorderEnabled)
+        {
+            return;
+        }
+
+        var oldIndex = ViewModel.Tasks.IndexOf(dragged);
+        var newIndex = target is null ? ViewModel.Tasks.Count - 1 : ViewModel.Tasks.IndexOf(target);
+        await ViewModel.MoveTaskAsync(oldIndex, newIndex);
+    }
+
+    private void OnDragItemsStarting(object sender, DragItemsStartingEventArgs e)
+    {
+        if (!ViewModel.IsReorderEnabled || e.Items.Count != 1 || e.Items[0] is not TaskRowViewModel row)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        _dragged = row;
+        e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+    }
+
+    private void OnTaskDragOver(object sender, DragEventArgs e)
+    {
+        e.AcceptedOperation = _dragged is not null && ViewModel.IsReorderEnabled
+            ? Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move
+            : Windows.ApplicationModel.DataTransfer.DataPackageOperation.None;
+        e.Handled = true;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "XAML event handler; the signature requires void.")]
+    private async void OnTaskDrop(object sender, DragEventArgs e)
+    {
+        var dragged = _dragged;
+        _dragged = null;
+        if (dragged is null)
+        {
+            return;
+        }
+
+        await DropAsync(dragged, RowAt(e.GetPosition(OpenTaskList)));
+    }
 }
