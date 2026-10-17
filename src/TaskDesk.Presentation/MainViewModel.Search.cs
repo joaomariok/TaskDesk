@@ -21,18 +21,21 @@ public sealed partial class MainViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNarrowed))]
     [NotifyPropertyChangedFor(nameof(HasFilter))]
+    [NotifyPropertyChangedFor(nameof(IsFilterBarShown))]
     private Priority? _minPriorityFilter;
 
     /// <summary>Only show Tasks that have a Due date.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNarrowed))]
     [NotifyPropertyChangedFor(nameof(HasFilter))]
+    [NotifyPropertyChangedFor(nameof(IsFilterBarShown))]
     private bool _hasDueFilter;
 
     /// <summary>Only show Tasks that have a Reminder.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNarrowed))]
     [NotifyPropertyChangedFor(nameof(HasFilter))]
+    [NotifyPropertyChangedFor(nameof(IsFilterBarShown))]
     private bool _hasReminderFilter;
 
     /// <summary>The Tags a Task must all carry to be shown.</summary>
@@ -47,6 +50,26 @@ public sealed partial class MainViewModel
     /// <summary>True while any Filter is on. The search text does not count: search is not a Filter.</summary>
     public bool HasFilter =>
         MinPriorityFilter is not null || HasDueFilter || HasReminderFilter || FilterTags.Count > 0;
+
+    /// <summary>The owner's choice to show the Filter row. Not saved: it starts closed at every launch.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFilterBarShown))]
+    private bool _isFilterBarOpen;
+
+    /// <summary>True while the Filter row is shown: the owner opened it, or a Filter is on and must stay visible.</summary>
+    public bool IsFilterBarShown => IsFilterBarOpen || HasFilter;
+
+    /// <summary>Opens or closes the Filter row. While a Filter is on, the row stays shown either way.</summary>
+    [RelayCommand]
+    private void ToggleFilterBar() => IsFilterBarOpen = !IsFilterBarOpen;
+
+    // For changes to FilterTags, which no generated property setter reports.
+    private void NotifyFilterTagsChanged()
+    {
+        OnPropertyChanged(nameof(IsNarrowed));
+        OnPropertyChanged(nameof(HasFilter));
+        OnPropertyChanged(nameof(IsFilterBarShown));
+    }
 
     partial void OnSearchTextChanged(string value) => OnFilterStateChanged();
 
@@ -92,8 +115,7 @@ public sealed partial class MainViewModel
 
         if (removed)
         {
-            OnPropertyChanged(nameof(IsNarrowed));
-            OnPropertyChanged(nameof(HasFilter));
+            NotifyFilterTagsChanged();
             UpdateReorderEnabled();
         }
     }
@@ -132,8 +154,7 @@ public sealed partial class MainViewModel
         HasDueFilter = false;
         HasReminderFilter = false;
         FilterTags.Clear();
-        OnPropertyChanged(nameof(IsNarrowed));
-        OnPropertyChanged(nameof(HasFilter));
+        NotifyFilterTagsChanged();
         await LoadAsync(cancellationToken);
     }
 
@@ -177,8 +198,7 @@ public sealed partial class MainViewModel
             FilterTags.Remove(existing);
         }
 
-        OnPropertyChanged(nameof(IsNarrowed));
-        OnPropertyChanged(nameof(HasFilter));
+        NotifyFilterTagsChanged();
         UpdateReorderEnabled();
         await LoadAsync(cancellationToken);
     }

@@ -82,8 +82,8 @@
             </DataTemplate.Triggers>
         </DataTemplate>
     </UserControl.Resources>
-    <!-- Search and filters, quick add, the Overdue, open and Completed Task lists, Tags of the
-         selected Task and the Undo bar. -->
+    <!-- The heading row (heading, Filter button, search), the Filter row, quick add, the Overdue, open and
+         Completed Task lists, Tags of the selected Task and the Undo bar. -->
     <DockPanel>
         <!-- Shown when Reminders fall back to tray balloons -->
         <controls:InfoBar DockPanel.Dock="Top" Margin="0,0,0,8" Severity="Warning" IsClosable="True"
@@ -97,75 +97,106 @@
                           ActionContent="Undo" ActionCommand="{Binding UndoCommand}" ActionAutomationId="UndoButton"
                           Visibility="{Binding IsUndoBarVisible, Converter={StaticResource BoolToVisibility}}"
                           Content="{Binding UndoBarText}" />
-        <!-- Page heading: what the view shows and its List menu, with the filter chips on a row of their own
-             under it, so they wrap without pushing the heading around. -->
+        <!-- Heading row: the heading and its List menu on the left (a long heading ends with an ellipsis),
+             then the Filter button and the scoped search box on the right. The Filter row sits under it only
+             while asked for or while a Filter is on. Element order follows the screen, so Tab does too. -->
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Style="{StaticResource SubtitleText}" VerticalAlignment="Center"
-                           AutomationProperties.AutomationId="PageHeading"
-                           Text="{Binding PageHeading}" />
-                <Button x:Name="ListMenuButton" Content="&#x22EF;" Margin="4,0,0,0" Padding="8,2"
-                        VerticalAlignment="Center" Click="ListMenuButton_Click"
-                        AutomationProperties.Name="List settings"
-                        AutomationProperties.AutomationId="ListMenuButton"
-                        ToolTip="List settings"
-                        Visibility="{Binding IsListPage, Converter={StaticResource BoolToVisibility}}">
-                    <Button.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="Rename" Click="ListRename_Click" />
-                            <MenuItem Header="Colour">
-                                <MenuItem Header="None" Tag="" Click="ListColour_Click" />
-                                <MenuItem Header="Red" Tag="#D13438" Click="ListColour_Click" />
-                                <MenuItem Header="Orange" Tag="#F7630C" Click="ListColour_Click" />
-                                <MenuItem Header="Yellow" Tag="#FFB900" Click="ListColour_Click" />
-                                <MenuItem Header="Green" Tag="#107C10" Click="ListColour_Click" />
-                                <MenuItem Header="Blue" Tag="#0078D4" Click="ListColour_Click" />
-                                <MenuItem Header="Purple" Tag="#744DA9" Click="ListColour_Click" />
-                            </MenuItem>
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
-            </StackPanel>
-            <WrapPanel Margin="0,8,0,0">
-                <ComboBox x:Name="PriorityFilterBox" Width="150" Margin="0,0,6,0"
-                          AutomationProperties.Name="Priority filter"
-                          SelectionChanged="PriorityFilterBox_SelectionChanged" />
-                <ToggleButton Content="Has due" Padding="8,2" Margin="0,0,6,0"
-                              AutomationProperties.Name="Has due filter"
-                              IsChecked="{Binding HasDueFilter, Mode=OneWay}"
-                              Command="{Binding ToggleHasDueFilterCommand}" />
-                <ToggleButton Content="Has reminder" Padding="8,2" Margin="0,0,6,0"
-                              AutomationProperties.Name="Has reminder filter"
-                              IsChecked="{Binding HasReminderFilter, Mode=OneWay}"
-                              Command="{Binding ToggleHasReminderFilterCommand}" />
-                <ItemsControl ItemsSource="{Binding FilterTagChips}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <ToggleButton Content="{Binding Tag.Name}" ContentStringFormat="#{0}" Padding="8,2"
-                                          Margin="0,0,6,0" IsChecked="{Binding IsSelected, Mode=OneWay}"
-                                          Command="{Binding DataContext.ToggleFilterTagCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                          CommandParameter="{Binding Tag}" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <Button Content="Clear filters" Padding="8,2" Command="{Binding ClearAllFiltersCommand}"
-                        Visibility="{Binding HasFilter, Converter={StaticResource BoolToVisibility}}" />
-            </WrapPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" MinWidth="160" MaxWidth="280" />
+                </Grid.ColumnDefinitions>
+                <!-- Left-aligned, so the star column is as wide as the heading until space runs out. -->
+                <Grid HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource SubtitleText}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               AutomationProperties.AutomationId="PageHeading"
+                               Text="{Binding PageHeading}" ToolTip="{Binding PageHeading}" />
+                    <Button x:Name="ListMenuButton" Grid.Column="1" Content="&#x22EF;" Margin="4,0,0,0" Padding="8,2"
+                            VerticalAlignment="Center" Click="ListMenuButton_Click"
+                            AutomationProperties.Name="List settings"
+                            AutomationProperties.AutomationId="ListMenuButton"
+                            ToolTip="List settings"
+                            Visibility="{Binding IsListPage, Converter={StaticResource BoolToVisibility}}">
+                        <Button.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Rename" Click="ListRename_Click" />
+                                <MenuItem Header="Colour">
+                                    <MenuItem Header="None" Tag="" Click="ListColour_Click" />
+                                    <MenuItem Header="Red" Tag="#D13438" Click="ListColour_Click" />
+                                    <MenuItem Header="Orange" Tag="#F7630C" Click="ListColour_Click" />
+                                    <MenuItem Header="Yellow" Tag="#FFB900" Click="ListColour_Click" />
+                                    <MenuItem Header="Green" Tag="#107C10" Click="ListColour_Click" />
+                                    <MenuItem Header="Blue" Tag="#0078D4" Click="ListColour_Click" />
+                                    <MenuItem Header="Purple" Tag="#744DA9" Click="ListColour_Click" />
+                                </MenuItem>
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                </Grid>
+                <ToggleButton Grid.Column="1" Margin="8,0,8,0" Padding="8,2"
+                              AutomationProperties.Name="Filter"
+                              AutomationProperties.AutomationId="FilterButton"
+                              ToolTip="Show or hide the Filters"
+                              IsChecked="{Binding IsFilterBarShown, Mode=OneWay}"
+                              Command="{Binding ToggleFilterBarCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="{DynamicResource SymbolThemeFontFamily}" FontSize="16"
+                                   VerticalAlignment="Center" Text="&#xE71C;" />
+                        <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Filter" />
+                    </StackPanel>
+                </ToggleButton>
+                <Grid Grid.Column="2">
+                    <TextBox x:Name="SearchBox" Padding="6"
+                             AutomationProperties.Name="Search (Ctrl+F)" AutomationProperties.AutomationId="SearchBox"
+                             ToolTip="Search (Ctrl+F). Esc clears."
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             TextChanged="SearchBox_TextChanged" />
+                    <TextBlock Style="{StaticResource HintText}" Text="{Binding SearchScope}"
+                               Tag="{Binding Text, ElementName=SearchBox}" />
+                </Grid>
+            </Grid>
+            <!-- A UserControl, unlike a bare panel, is exposed to UI Automation with its name and Id. -->
+            <UserControl Margin="0,8,0,0" IsTabStop="False" Focusable="False"
+                         AutomationProperties.Name="Filters" AutomationProperties.AutomationId="FilterBar"
+                         Visibility="{Binding IsFilterBarShown, Converter={StaticResource BoolToVisibility}}">
+                <WrapPanel>
+                    <ComboBox x:Name="PriorityFilterBox" Width="150" Margin="0,0,6,0"
+                              AutomationProperties.Name="Priority filter"
+                              SelectionChanged="PriorityFilterBox_SelectionChanged" />
+                    <ToggleButton Content="Has due" Padding="8,2" Margin="0,0,6,0"
+                                  AutomationProperties.Name="Has due filter"
+                                  IsChecked="{Binding HasDueFilter, Mode=OneWay}"
+                                  Command="{Binding ToggleHasDueFilterCommand}" />
+                    <ToggleButton Content="Has reminder" Padding="8,2" Margin="0,0,6,0"
+                                  AutomationProperties.Name="Has reminder filter"
+                                  IsChecked="{Binding HasReminderFilter, Mode=OneWay}"
+                                  Command="{Binding ToggleHasReminderFilterCommand}" />
+                    <ItemsControl ItemsSource="{Binding FilterTagChips}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <ToggleButton Content="{Binding Tag.Name}" ContentStringFormat="#{0}" Padding="8,2"
+                                              Margin="0,0,6,0" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                              Command="{Binding DataContext.ToggleFilterTagCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              CommandParameter="{Binding Tag}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Content="Clear filters" Padding="8,2" Command="{Binding ClearAllFiltersCommand}"
+                            Visibility="{Binding HasFilter, Converter={StaticResource BoolToVisibility}}" />
+                </WrapPanel>
+            </UserControl>
         </StackPanel>
-        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
-            <TextBox x:Name="SearchBox" Padding="6"
-                     AutomationProperties.Name="Search (Ctrl+F)" AutomationProperties.AutomationId="SearchBox"
-                     ToolTip="Search (Ctrl+F). Esc clears."
-                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                     TextChanged="SearchBox_TextChanged" />
-            <TextBlock Style="{StaticResource HintText}" Text="{Binding SearchScope}"
-                       Tag="{Binding Text, ElementName=SearchBox}" />
-        </Grid>
         <TextBlock DockPanel.Dock="Top" Style="{StaticResource FieldLabel}"
                    AutomationProperties.AutomationId="QuickAddLabel"
                    Text="{Binding QuickAddTarget}" />

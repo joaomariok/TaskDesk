@@ -250,6 +250,107 @@ public class SearchViewModelTests
     }
 
     [Fact]
+    public async Task The_filter_row_is_hidden_by_default()
+    {
+        var (_, _, _, vm) = await StartAsync("a");
+
+        Assert.False(vm.IsFilterBarOpen);
+        Assert.False(vm.IsFilterBarShown);
+    }
+
+    [Fact]
+    public async Task Toggling_the_filter_bar_shows_the_row_and_toggling_again_hides_it()
+    {
+        var (_, _, _, vm) = await StartAsync("a");
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        vm.ToggleFilterBarCommand.Execute(null);
+        Assert.True(vm.IsFilterBarShown);
+        Assert.Contains(nameof(MainViewModel.IsFilterBarShown), changed);
+
+        vm.ToggleFilterBarCommand.Execute(null);
+        Assert.False(vm.IsFilterBarShown);
+    }
+
+    [Fact]
+    public async Task Turning_on_a_filter_shows_the_row_and_closing_the_toggle_cannot_hide_it()
+    {
+        var (_, _, _, vm) = await StartAsync("a");
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        await vm.ToggleHasDueFilterCommand.ExecuteAsync(null);
+        Assert.False(vm.IsFilterBarOpen);
+        Assert.True(vm.IsFilterBarShown);
+        Assert.Contains(nameof(MainViewModel.IsFilterBarShown), changed);
+
+        vm.ToggleFilterBarCommand.Execute(null);
+        vm.ToggleFilterBarCommand.Execute(null);
+        Assert.False(vm.IsFilterBarOpen);
+        Assert.True(vm.IsFilterBarShown);
+    }
+
+    [Fact]
+    public async Task Search_text_alone_narrows_the_view_but_does_not_show_the_filter_row()
+    {
+        var (_, _, _, vm) = await StartAsync("a");
+
+        vm.SearchText = "a";
+        await vm.ApplySearchCommand.ExecuteAsync(null);
+
+        Assert.True(vm.IsNarrowed);
+        Assert.False(vm.HasFilter);
+        Assert.False(vm.IsFilterBarShown);
+    }
+
+    [Fact]
+    public async Task Clear_filters_hides_the_row_when_the_toggle_was_closed()
+    {
+        var (service, tags, _, vm) = await StartAsync("a");
+        var tag = await tags.AddTagToTaskAsync(service.All[0].Id, "t", Ct);
+        await vm.LoadAsync(Ct);
+        vm.SearchText = "a";
+        await vm.ToggleFilterTagCommand.ExecuteAsync(tag);
+        Assert.True(vm.IsFilterBarShown);
+
+        await vm.ClearAllFiltersCommand.ExecuteAsync(null);
+
+        Assert.Equal("a", vm.SearchText);
+        Assert.False(vm.HasFilter);
+        Assert.False(vm.IsFilterBarShown);
+    }
+
+    [Fact]
+    public async Task Clear_filters_keeps_the_row_shown_when_the_toggle_was_open()
+    {
+        var (_, _, _, vm) = await StartAsync("a");
+        vm.ToggleFilterBarCommand.Execute(null);
+        await vm.SetMinPriorityFilterAsync(Priority.High, Ct);
+
+        await vm.ClearAllFiltersCommand.ExecuteAsync(null);
+
+        Assert.False(vm.HasFilter);
+        Assert.True(vm.IsFilterBarOpen);
+        Assert.True(vm.IsFilterBarShown);
+    }
+
+    [Fact]
+    public async Task The_filter_row_keeps_its_state_across_view_switches()
+    {
+        var (service, tags, _, vm) = await StartAsync("a");
+        await tags.AddTagToTaskAsync(service.All[0].Id, "t", Ct);
+        await vm.LoadAsync(Ct);
+        vm.ToggleFilterBarCommand.Execute(null);
+
+        await vm.FilterByTagAsync(vm.Tags.Single(), Ct);
+        Assert.True(vm.IsFilterBarShown);
+
+        await vm.FilterByTagAsync(null, Ct);
+        Assert.True(vm.IsFilterBarShown);
+    }
+
+    [Fact]
     public async Task A_task_added_while_searching_is_shown_only_if_it_matches()
     {
         var (_, _, _, vm) = await StartAsync("milk");

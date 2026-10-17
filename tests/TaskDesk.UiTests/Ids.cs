@@ -9,6 +9,8 @@ internal static class Ids
     public const string DetailPane = nameof(DetailPane);
     public const string DetailSplitter = nameof(DetailSplitter);
     public const string DetailTitleBox = nameof(DetailTitleBox);
+    public const string FilterBar = nameof(FilterBar);
+    public const string FilterButton = nameof(FilterButton);
     public const string ListsList = nameof(ListsList);
     public const string NavigationPane = nameof(NavigationPane);
     public const string NewListBox = nameof(NewListBox);

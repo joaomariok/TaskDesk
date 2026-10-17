@@ -55,6 +55,27 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
+    public void Clicking_Filter_shows_the_priority_Filter_and_clicking_again_hides_it()
+    {
+        AutomationElement? PriorityFilter() =>
+            _app.Window.FindFirstDescendant(cf => cf.ByName("Priority filter"));
+        var filter = _app.Find(Ids.FilterButton);
+        Assert.Null(_app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.FilterBar)));
+        Assert.Null(PriorityFilter());
+
+        filter.Click();
+        AppSession.Eventually(PriorityFilter, "Clicking Filter did not show the priority Filter.");
+        AppSession.WaitUntil(() => filter.AsToggleButton().ToggleState == ToggleState.On,
+            () => "The Filter button is not shown pressed while the Filter row is shown.");
+
+        filter.Click();
+        AppSession.WaitUntil(() => PriorityFilter() is null,
+            () => "Clicking Filter again did not hide the priority Filter.");
+        AppSession.WaitUntil(() => filter.AsToggleButton().ToggleState == ToggleState.Off,
+            () => "The Filter button still looks pressed after the Filter row was hidden.");
+    }
+
+    [Fact]
     public void Ctrl_F_searches_and_Esc_clears_the_search()
     {
         _app.TypeInto(Ids.QuickAddBox, "Alpha report", pressEnter: true);
