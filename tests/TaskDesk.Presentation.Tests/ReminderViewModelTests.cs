@@ -254,6 +254,20 @@ public class ReminderViewModelTests
     }
 
     [Fact]
+    public async Task A_rejected_Reminder_time_is_shown_under_the_Reminder_field()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+
+        s.Vm.DetailReminderTime = "noon";
+        await s.Vm.PendingSave;
+
+        Assert.Equal("Enter the Reminder time as HH:mm, for example 14:30.", s.Vm.ReminderError);
+        Assert.Null(s.Vm.DueError);
+        Assert.Null(s.Vm.GeneralError);
+    }
+
+    [Fact]
     public async Task Clearing_the_Reminder_date_clears_the_time_and_the_Reminder()
     {
         var s = await StartAsync("a");

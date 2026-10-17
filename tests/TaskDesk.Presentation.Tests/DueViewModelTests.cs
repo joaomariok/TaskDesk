@@ -501,6 +501,50 @@ public class DueViewModelTests
         Assert.Empty(due.SetCalls);
     }
 
+    [Theory]
+    [InlineData("abc", null)]
+    [InlineData("14:30", "A Due time needs a Due date.")]
+    public async Task A_rejected_Due_time_is_shown_under_the_Due_field(string text, string? expected)
+    {
+        var (_, vm, _) = await SelectedAsync(expected is null ? Day(25) : (DateOnly?)null);
+
+        vm.DetailDueTime = text;
+        await vm.PendingSave;
+
+        Assert.Equal(expected ?? vm.ErrorMessage, vm.DueError);
+        Assert.NotNull(vm.DueError);
+        Assert.Null(vm.ReminderError);
+        Assert.Null(vm.RepeatError);
+        Assert.Null(vm.GeneralError);
+    }
+
+    [Fact]
+    public async Task A_later_failure_replaces_a_Due_field_error_as_a_general_error()
+    {
+        var (_, vm, _) = await SelectedAsync(Day(25));
+        vm.DetailDueTime = "abc";
+        await vm.PendingSave;
+
+        vm.ErrorMessage = "Could not save the changes: disk full";
+
+        Assert.Null(vm.DueError);
+        Assert.Equal("Could not save the changes: disk full", vm.GeneralError);
+    }
+
+    [Fact]
+    public async Task Fixing_the_Due_time_clears_its_error()
+    {
+        var (_, vm, _) = await SelectedAsync(Day(25));
+        vm.DetailDueTime = "abc";
+        await vm.PendingSave;
+
+        vm.DetailDueTime = "14:30";
+        await vm.PendingSave;
+
+        Assert.Null(vm.DueError);
+        Assert.Null(vm.GeneralError);
+    }
+
     [Fact]
     public async Task Clearing_the_Due_date_clears_the_Due_time_too()
     {

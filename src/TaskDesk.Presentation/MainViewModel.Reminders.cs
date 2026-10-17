@@ -159,7 +159,7 @@ public sealed partial class MainViewModel
             if (!TimeOnly.TryParseExact(
                     text, ["H:mm", "HH:mm"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
             {
-                ErrorMessage = "Enter the Reminder time as HH:mm, for example 14:30.";
+                ShowFieldError(ErrorPlace.Reminder, "Enter the Reminder time as HH:mm, for example 14:30.");
                 return;
             }
 
@@ -183,7 +183,7 @@ public sealed partial class MainViewModel
         }
         else if (time is not null)
         {
-            ErrorMessage = "A Reminder time needs a Reminder date.";
+            ShowFieldError(ErrorPlace.Reminder, "A Reminder time needs a Reminder date.");
             return;
         }
 

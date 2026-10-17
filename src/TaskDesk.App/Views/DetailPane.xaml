@@ -18,31 +18,35 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <StackPanel Grid.Row="0" Margin="16,12,16,0">
-                <DockPanel Margin="0,0,0,8">
-                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE711;"
-                            Command="{Binding CloseDetailPaneCommand}" ToolTip="Close (Esc)"
-                            AutomationProperties.Name="Close detail pane" />
-                    <TextBlock Text="Details" Style="{StaticResource SubtitleText}" VerticalAlignment="Center" />
-                </DockPanel>
+            <Border Grid.Row="0" Style="{StaticResource DetailHeader}">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,8">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE711;"
+                                Command="{Binding CloseDetailPaneCommand}" ToolTip="Close (Esc)"
+                                AutomationProperties.Name="Close detail pane" />
+                        <TextBlock Text="Details" Style="{StaticResource SubtitleText}" VerticalAlignment="Center" />
+                    </DockPanel>
 
-                <!-- Title with the Task checkbox -->
-                <TextBlock Text="Title" Style="{StaticResource FieldLabel}" />
-                <DockPanel Margin="{StaticResource FieldMargin}">
-                    <!-- Completes the shown Task, like the checkbox on its row. -->
-                    <controls:CommandCheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0" MinWidth="0"
-                              AutomationProperties.Name="Completed" AutomationProperties.AutomationId="DetailCompletedBox"
-                              IsChecked="{Binding DetailTask.IsCompleted, Mode=OneWay}"
-                              Command="{Binding ToggleCompleteCommand}"
-                              CommandParameter="{Binding DetailTask}" />
-                    <TextBox x:Name="DetailTitleBox" MaxLength="500"
-                             AutomationProperties.Name="Task title" AutomationProperties.AutomationId="DetailTitleBox"
-                             Text="{Binding DetailTitle, UpdateSourceTrigger=PropertyChanged}" />
-                </DockPanel>
-            </StackPanel>
+                    <!-- Title with the Task checkbox -->
+                    <TextBlock Text="Title" Style="{StaticResource FieldLabel}" />
+                    <DockPanel Margin="{StaticResource FieldMargin}">
+                        <!-- Completes the shown Task, like the checkbox on its row. -->
+                        <controls:CommandCheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0" MinWidth="0"
+                                  AutomationProperties.Name="Completed" AutomationProperties.AutomationId="DetailCompletedBox"
+                                  IsChecked="{Binding DetailTask.IsCompleted, Mode=OneWay}"
+                                  Command="{Binding ToggleCompleteCommand}"
+                                  CommandParameter="{Binding DetailTask}" />
+                        <TextBox x:Name="DetailTitleBox" MaxLength="500"
+                                 AutomationProperties.Name="Task title" AutomationProperties.AutomationId="DetailTitleBox"
+                                 Text="{Binding DetailTitle, UpdateSourceTrigger=PropertyChanged}" />
+                    </DockPanel>
+                    <!-- An error that belongs to no field, such as a failed save: here it is never scrolled away. -->
+                    <TextBlock Style="{StaticResource FieldErrorText}" Text="{Binding GeneralError}" />
+                </StackPanel>
+            </Border>
 
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="16,0,16,16">
+                <StackPanel Margin="16,12,16,16">
                     <!-- Subtasks with their progress and an add row -->
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Right" Style="{StaticResource SecondaryCaptionText}"
@@ -96,23 +100,36 @@
                     <!-- Due -->
                     <TextBlock Text="Due" Style="{StaticResource FieldLabel}" />
                     <DockPanel Margin="{StaticResource FieldMargin}">
-                        <TextBox DockPanel.Dock="Right" Width="64" Margin="6,0,0,0" MaxLength="5"
-                                 AutomationProperties.Name="Due time"
-                                 ToolTip="Due time as HH:mm (needs a Due date)"
-                                 Text="{Binding DetailDueTime, UpdateSourceTrigger=LostFocus}" />
+                        <Grid DockPanel.Dock="Right" Width="64" Margin="6,0,0,0">
+                            <TextBox x:Name="DueTimeBox" MaxLength="5"
+                                     AutomationProperties.Name="Due time"
+                                     AutomationProperties.HelpText="Time as HH:mm; needs a Due date"
+                                     ToolTip="Due time as HH:mm (needs a Due date)"
+                                     Text="{Binding DetailDueTime, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Style="{StaticResource TimeHint}" Text="HH:mm"
+                                       Tag="{Binding ElementName=DueTimeBox}" />
+                        </Grid>
                         <DatePicker SelectedDate="{Binding DetailDueDate}" AutomationProperties.Name="Due date"
                                     AutomationProperties.AutomationId="DetailDueDatePicker" />
                     </DockPanel>
+                    <TextBlock Style="{StaticResource FieldErrorText}" Text="{Binding DueError}" />
 
                     <!-- Reminder -->
                     <TextBlock Text="Reminder" Style="{StaticResource FieldLabel}" />
                     <DockPanel Margin="0,0,0,4">
-                        <TextBox DockPanel.Dock="Right" Width="64" Margin="6,0,0,0" MaxLength="5"
-                                 AutomationProperties.Name="Reminder time"
-                                 ToolTip="Reminder time as HH:mm (empty means 09:00)"
-                                 Text="{Binding DetailReminderTime, UpdateSourceTrigger=LostFocus}" />
+                        <Grid DockPanel.Dock="Right" Width="64" Margin="6,0,0,0">
+                            <TextBox x:Name="ReminderTimeBox" MaxLength="5"
+                                     AutomationProperties.Name="Reminder time"
+                                     AutomationProperties.HelpText="Time as HH:mm; empty means 09:00"
+                                     ToolTip="Reminder time as HH:mm (empty means 09:00)"
+                                     Text="{Binding DetailReminderTime, UpdateSourceTrigger=LostFocus}" />
+                            <!-- The time an empty box stands for. -->
+                            <TextBlock Style="{StaticResource TimeHint}" Text="09:00"
+                                       Tag="{Binding ElementName=ReminderTimeBox}" />
+                        </Grid>
                         <DatePicker SelectedDate="{Binding DetailReminderDate}" AutomationProperties.Name="Reminder date" />
                     </DockPanel>
+                    <TextBlock Style="{StaticResource FieldErrorText}" Margin="0,0,0,4" Text="{Binding ReminderError}" />
                     <DockPanel Margin="0,0,0,4"
                                Visibility="{Binding HasDetailSnooze, Converter={StaticResource BoolToVisibility}}">
                         <Button DockPanel.Dock="Right" Content="Clear Snooze"
@@ -165,17 +182,35 @@
                             </StackPanel>
                         </StackPanel>
                     </StackPanel>
+                    <!-- Outside the Repeat section, which hides without a Due date, so "needs a Due date" still shows. -->
+                    <TextBlock Style="{StaticResource FieldErrorText}" Text="{Binding RepeatError}" />
 
                     <!-- Priority -->
                     <TextBlock Text="Priority" Style="{StaticResource FieldLabel}" />
                     <ComboBox x:Name="PriorityBox" Margin="{StaticResource FieldMargin}"
                               AutomationProperties.Name="Priority" SelectedItem="{Binding DetailPriority}" />
 
-                    <!-- List (the List the Task belongs to; read-only) -->
+                    <!-- List: the List the Task belongs to, as text with its dot or ring; it cannot be changed here. -->
                     <TextBlock Text="List" Style="{StaticResource FieldLabel}" />
-                    <TextBox IsReadOnly="True" Margin="{StaticResource FieldMargin}"
-                             Text="{Binding DetailTask.ListName, Mode=OneWay}"
-                             AutomationProperties.Name="List" />
+                    <DockPanel Margin="{StaticResource FieldMargin}" AutomationProperties.Name="List">
+                        <Grid DockPanel.Dock="Left" Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <Ellipse Fill="{Binding DetailTask.ListColorHex, TargetNullValue=Transparent, FallbackValue=Transparent}" />
+                            <Ellipse StrokeThickness="1.5" Stroke="{DynamicResource ListStripeBrush}">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DetailTask.HasListColor}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                        </Grid>
+                        <TextBlock Style="{StaticResource BodyText}" TextTrimming="CharacterEllipsis"
+                                   Text="{Binding DetailTask.ListName}" />
+                    </DockPanel>
 
                     <!-- Tags -->
                     <TextBlock Text="Tags" Style="{StaticResource FieldLabel}" />
@@ -222,8 +257,6 @@
 
                     <Button Content="Delete Task" Style="{StaticResource QuietDangerButton}"
                             AutomationProperties.Name="Delete Task" Command="{Binding DeleteDetailTaskCommand}" />
-                    <TextBlock Foreground="{DynamicResource OverdueBrush}" TextWrapping="Wrap" Margin="0,8,0,0"
-                               Text="{Binding ErrorMessage}" />
                 </StackPanel>
             </ScrollViewer>
         </Grid>

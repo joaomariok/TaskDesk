@@ -19,7 +19,7 @@ public sealed partial class MainViewModel
 
         if (Repeat.IsRepeating && DetailDueDate is null)
         {
-            ErrorMessage = "A repeating Task needs a Due date.";
+            ShowFieldError(ErrorPlace.Repeat, "A repeating Task needs a Due date.");
             return;
         }
 
@@ -30,7 +30,7 @@ public sealed partial class MainViewModel
         }
         catch (ArgumentException ex)
         {
-            ErrorMessage = ex.Message;
+            ShowFieldError(ErrorPlace.Repeat, ex.Message);
             return;
         }
 

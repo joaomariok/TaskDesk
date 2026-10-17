@@ -160,7 +160,7 @@ public sealed partial class MainViewModel
             if (!TimeOnly.TryParseExact(
                     text, ["H:mm", "HH:mm"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
             {
-                ErrorMessage = "Enter the Due time as HH:mm, for example 14:30.";
+                ShowFieldError(ErrorPlace.Due, "Enter the Due time as HH:mm, for example 14:30.");
                 return;
             }
 
@@ -169,7 +169,7 @@ public sealed partial class MainViewModel
 
         if (time is not null && date is null)
         {
-            ErrorMessage = "A Due time needs a Due date.";
+            ShowFieldError(ErrorPlace.Due, "A Due time needs a Due date.");
             return;
         }
 

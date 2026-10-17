@@ -468,4 +468,18 @@ public class RecurrenceViewModelTests
         Assert.Empty(s.Recurrence.SetCalls);
         Assert.NotNull(s.Vm.ErrorMessage);
     }
+
+    [Fact]
+    public async Task A_rejected_Repeat_is_shown_under_the_Repeat_field()
+    {
+        var s = await StartAsync(("a", Day(20), Recurrence.Daily()));
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+
+        s.Vm.Repeat.Interval = 0;
+        await s.Vm.PendingSave;
+
+        Assert.Equal(s.Vm.ErrorMessage, s.Vm.RepeatError);
+        Assert.NotNull(s.Vm.RepeatError);
+        Assert.Null(s.Vm.GeneralError);
+    }
 }
