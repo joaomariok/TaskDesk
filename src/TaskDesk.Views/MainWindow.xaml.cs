@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using TaskDesk.Core.Shell;
 using TaskDesk.Presentation;
 
 namespace TaskDesk.Views;
@@ -13,12 +14,29 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         View = new MainView(viewModel);
-        Content = View;
+        // The sidebar's NavigationView hosts the page as its content.
+        Navigation = new NavigationPane(viewModel) { PageContent = View };
+        Content = Navigation;
         // The quick-add box has the initial focus of the window.
         View.Loaded += (_, _) => View.FocusQuickAdd();
     }
 
     public MainView View { get; }
+
+    /// <summary>The sidebar with the Smart Views, around <see cref="View"/>.</summary>
+    public NavigationPane Navigation { get; }
+
+    /// <summary>The pane widths to save (<see cref="PaneLayout"/>): the full sidebar's width, also while it is the rail.</summary>
+    public IReadOnlyDictionary<string, double> MeasurePaneWidths() => new Dictionary<string, double>
+    {
+        [PaneLayout.Navigation] = Navigation.SidebarWidth,
+    };
+
+    /// <summary>Shows the panes at their saved widths, within their limits; the defaults without a saved layout.</summary>
+    public void SetPaneWidths(WindowLayout? layout)
+    {
+        Navigation.SidebarWidth = PaneLayout.WidthOf(layout, PaneLayout.Navigation);
+    }
 
     public MainViewModel ViewModel => View.ViewModel;
 }

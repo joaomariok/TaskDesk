@@ -21,6 +21,15 @@ public static class PaneLayout
     public static readonly PaneLimits NavigationLimits = new(Default: 180, Min: 140, Max: 400);
     public static readonly PaneLimits DetailLimits = new(Default: 260, Min: 220, Max: 600);
 
+    /// <summary>The window width below which the sidebar shows as the icon rail.</summary>
+    public const double RailBelowWidth = 900;
+
+    /// <summary>
+    /// True when a window <paramref name="width"/> device-independent pixels wide shows the sidebar as the
+    /// icon rail. A window not measured yet (zero or not a number) shows the full sidebar.
+    /// </summary>
+    public static bool IsRail(double width) => width > 0 && width < RailBelowWidth;
+
     public static PaneLimits LimitsOf(string pane) => pane switch
     {
         Navigation => NavigationLimits,

@@ -16,6 +16,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Sizers" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinUIAnalyzer" PrivateAssets="all" />
   </ItemGroup>
 </Project>

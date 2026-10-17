@@ -10,7 +10,7 @@ namespace TaskDesk.App.Shell;
 /// Restores and saves the main window's size, position and state through the settings store. The stored
 /// layout is in device-independent pixels, as the WPF app writes it; <see cref="AppWindow"/> works in
 /// physical pixels, so values are converted at the window's DPI (<see cref="WindowLayoutCalculator"/>).
-/// Pane widths are kept as saved until the panes exist in the WinUI build.
+/// The sidebar's width is restored and saved with it (<see cref="PaneLayout"/>); other pane widths are kept as saved.
 /// </summary>
 internal sealed partial class WindowLayoutService(IShellSettingsStore store)
 {
@@ -22,6 +22,7 @@ internal sealed partial class WindowLayoutService(IShellSettingsStore store)
         var appWindow = window.AppWindow;
         appWindow.Changed += (sender, _) => RememberNormalBounds(sender);
         var saved = store.Load().Layout;
+        window.SetPaneWidths(saved);
         if (saved is not null)
         {
             var scale = ScaleOf(window);
@@ -61,7 +62,7 @@ internal sealed partial class WindowLayoutService(IShellSettingsStore store)
                 WindowLayoutCalculator.ToDips(bounds.Width, scale),
                 WindowLayoutCalculator.ToDips(bounds.Height, scale),
                 appWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized },
-                PaneLayout.Update(settings.Layout?.PaneWidths, new Dictionary<string, double>())),
+                PaneLayout.Update(settings.Layout?.PaneWidths, window.MeasurePaneWidths())),
         });
     }
 
