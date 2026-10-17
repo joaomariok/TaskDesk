@@ -10,6 +10,7 @@ using System.Windows.Media;
 using TaskDesk.App.Views;
 using TaskDesk.Core.Tags;
 using TaskDesk.Presentation;
+using static TaskDesk.App.Tests.ElementTree;
 
 namespace TaskDesk.App.Tests;
 
@@ -144,34 +145,6 @@ public sealed class CommandToggleTests(WpfAppFixture fixture)
         return string.IsNullOrEmpty(name)
             ? UIElementAutomationPeer.CreatePeerForElement(button).GetName()
             : name;
-    }
-
-    // The visual and the logical tree together, so nothing is missed whether layout reached it or not.
-    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
-    {
-        var seen = new HashSet<DependencyObject>();
-        var pending = new Stack<DependencyObject>([root]);
-        while (pending.TryPop(out var node))
-        {
-            if (!seen.Add(node))
-            {
-                continue;
-            }
-
-            yield return node;
-            if (node is Visual)
-            {
-                for (var i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++)
-                {
-                    pending.Push(VisualTreeHelper.GetChild(node, i));
-                }
-            }
-
-            foreach (var child in LogicalTreeHelper.GetChildren(node).OfType<DependencyObject>())
-            {
-                pending.Push(child);
-            }
-        }
     }
 
     private sealed class RecordingCommand : ICommand

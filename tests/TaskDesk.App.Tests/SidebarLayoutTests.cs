@@ -6,6 +6,7 @@ using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
+using static TaskDesk.App.Tests.ElementTree;
 
 namespace TaskDesk.App.Tests;
 
@@ -185,34 +186,4 @@ public sealed class SidebarLayoutTests(WpfAppFixture fixture)
 
     private static double TopOf(UIElement element, UIElement relativeTo) =>
         element.TranslatePoint(new Point(0, 0), relativeTo).Y;
-
-    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
-    {
-        var seen = new HashSet<DependencyObject>();
-        var pending = new Stack<DependencyObject>([root]);
-        while (pending.TryPop(out var node))
-        {
-            if (!seen.Add(node))
-            {
-                continue;
-            }
-
-            yield return node;
-            if (node is Visual)
-            {
-                for (var i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++)
-                {
-                    pending.Push(VisualTreeHelper.GetChild(node, i));
-                }
-            }
-
-            if (node is ContentElement or FrameworkElement)
-            {
-                foreach (var child in LogicalTreeHelper.GetChildren(node).OfType<DependencyObject>())
-                {
-                    pending.Push(child);
-                }
-            }
-        }
-    }
 }

@@ -20,10 +20,10 @@
         <Setter Property="MinHeight" Value="32" />
     </Style>
 
-    <!-- The remove button inside a Tag chip: the Cancel glyph (U+E711) at caption size, fitting the pill. -->
+    <!-- The remove button inside a Tag chip: the Cancel glyph (U+E711) at caption size, as on the InfoBar's close button. -->
     <Style x:Key="TagRemoveButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
         <Setter Property="Content" Value="&#xE711;" />
-        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontSize" Value="12" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Margin" Value="4,0,0,0" />
         <Setter Property="Width" Value="16" />

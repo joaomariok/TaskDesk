@@ -8,6 +8,7 @@ using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
+using static TaskDesk.App.Tests.ElementTree;
 
 namespace TaskDesk.App.Tests;
 
@@ -67,7 +68,8 @@ public sealed class TagChipTests(WpfAppFixture fixture)
             var chip = Assert.Single(Descendants(tags).OfType<ContentPresenter>(), p => p.Content == health);
             var remove = Assert.Single(Descendants(chip).OfType<ButtonBase>());
 
-            Assert.Equal(["#health"], Texts(chip).Where(t => t.Length > 1));
+            // The chip's own text, not the Cancel glyph its remove button draws.
+            Assert.Equal(["#health"], Texts(chip).Except(Texts(remove)));
             Assert.Equal("Remove #health", AutomationProperties.GetName(remove));
             Assert.Equal("Remove tag", remove.ToolTip);
             Assert.Same(viewModel.RemoveTagCommand, remove.Command);
@@ -89,19 +91,5 @@ public sealed class TagChipTests(WpfAppFixture fixture)
     }
 
     private static List<string> Texts(DependencyObject root) =>
-        [.. Descendants(root).OfType<TextBlock>().Where(t => t.IsVisible || t.Visibility == Visibility.Visible)
-            .Select(t => t.Text).Where(t => t.Length > 0)];
-
-    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
-    {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            yield return child;
-            foreach (var descendant in Descendants(child))
-            {
-                yield return descendant;
-            }
-        }
-    }
+        [.. Descendants(root).OfType<TextBlock>().Select(t => t.Text)];
 }

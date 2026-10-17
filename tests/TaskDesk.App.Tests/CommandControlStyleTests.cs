@@ -6,6 +6,7 @@ using TaskDesk.App.Controls;
 using TaskDesk.App.Views;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
+using static TaskDesk.App.Tests.ElementTree;
 
 namespace TaskDesk.App.Tests;
 
@@ -55,17 +56,4 @@ public sealed class CommandControlStyleTests(WpfAppFixture fixture)
     private static ControlTemplate TemplateOf(Style style) =>
         style.Setters.OfType<Setter>().Where(s => s.Property == Control.TemplateProperty)
             .Select(s => (ControlTemplate)s.Value).FirstOrDefault() ?? TemplateOf(style.BasedOn!);
-
-    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
-    {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            yield return child;
-            foreach (var descendant in Descendants(child))
-            {
-                yield return descendant;
-            }
-        }
-    }
 }
