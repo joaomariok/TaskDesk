@@ -353,7 +353,9 @@ public sealed partial class MainViewModel(
     {
         var updated = await taskService.SetCompletedAsync(row.Id, isCompleted, cancellationToken);
         row.Apply(updated);
-        var delay = isCompleted ? CompletionMoveDelay() : TimeSpan.Zero;
+        // Completing holds the row before it joins "Completed (N)"; in the Completed Smart View, un-completing
+        // holds it before it leaves the page.
+        var delay = isCompleted != IsCompletedPage ? CompletionMoveDelay() : TimeSpan.Zero;
         if (delay > TimeSpan.Zero)
         {
             // The row shows struck through and dimmed in place; the move follows without holding up the caller.
@@ -371,7 +373,10 @@ public sealed partial class MainViewModel(
     {
         await Task.Delay(delay, _clock, CancellationToken.None);
         // Undone, deleted or reloaded meanwhile: whoever did that has placed the row already.
-        if (row.IsCompleted && _all.Contains(row) && !CompletedTasks.Contains(row))
+        var stillHeld = IsCompletedPage
+            ? !row.IsCompleted && Tasks.Contains(row)
+            : row.IsCompleted && !CompletedTasks.Contains(row);
+        if (stillHeld && _all.Contains(row))
         {
             Place(row);
         }
@@ -385,7 +390,16 @@ public sealed partial class MainViewModel(
         Tasks.Remove(row);
         OverdueTasks.Remove(row);
         CompletedTasks.Remove(row);
-        if (row.IsCompleted)
+        if (IsCompletedPage)
+        {
+            // Completed rows are the page's main list; an un-completed one has left it.
+            if (row.IsCompleted)
+            {
+                Tasks.Add(row);
+                SortCompleted();
+            }
+        }
+        else if (row.IsCompleted)
         {
             CompletedTasks.Add(row);
             SortCompleted();
@@ -404,7 +418,7 @@ public sealed partial class MainViewModel(
     private bool InOverdueGroup(TaskRowViewModel row) => CurrentView == SmartView.Today && row.IsOverdue;
 
     private ObservableCollection<TaskRowViewModel> GroupOf(TaskRowViewModel row) =>
-        row.IsCompleted ? CompletedTasks : InOverdueGroup(row) ? OverdueTasks : Tasks;
+        row.IsCompleted && !IsCompletedPage ? CompletedTasks : InOverdueGroup(row) ? OverdueTasks : Tasks;
 
     private void NotifyCompletedChanged()
     {
@@ -416,15 +430,19 @@ public sealed partial class MainViewModel(
         NotifyPageStateChanged();
     }
 
+    // The Completed Smart View shows its Tasks in the main list and leaves "Completed (N)" empty.
+    private bool IsCompletedPage => CurrentView == SmartView.Completed;
+
     private void SortCompleted()
     {
-        var sorted = CompletedTasks.OrderByDescending(r => r.Item.CompletedUtc).ToList();
+        var target = IsCompletedPage ? Tasks : CompletedTasks;
+        var sorted = target.OrderByDescending(r => r.Item.CompletedUtc).ToList();
         for (var i = 0; i < sorted.Count; i++)
         {
-            var from = CompletedTasks.IndexOf(sorted[i]);
+            var from = target.IndexOf(sorted[i]);
             if (from != i)
             {
-                CompletedTasks.Move(from, i);
+                target.Move(from, i);
             }
         }
     }

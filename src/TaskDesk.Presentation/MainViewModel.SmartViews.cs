@@ -14,11 +14,6 @@ public sealed partial class MainViewModel
     {
         TagFilter = null;
         CurrentView = view;
-        if (view == SmartView.Completed)
-        {
-            IsCompletedExpanded = true;
-        }
-
         await LoadAsync(cancellationToken);
     }
 
@@ -48,7 +43,7 @@ public sealed partial class MainViewModel
         {
             var row = CreateRow(task);
             _all.Add(row);
-            CompletedTasks.Add(row);
+            GroupOf(row).Add(row);
         }
 
         SortCompleted();

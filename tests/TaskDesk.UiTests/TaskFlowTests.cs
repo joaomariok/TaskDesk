@@ -37,7 +37,7 @@ public sealed class TaskFlowTests : IDisposable
 
         _app.WaitForRows(Ids.OpenTaskList);
         AppSession.Ctrl(VirtualKeyShort.KEY_5);
-        _app.WaitForRows(Ids.CompletedTaskList, "Water plants");
+        _app.WaitForRows(Ids.OpenTaskList, "Water plants");
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public sealed class TaskFlowTests : IDisposable
 
         _app.WaitForRows(Ids.OpenTaskList);
         AppSession.Ctrl(VirtualKeyShort.KEY_5);
-        _app.WaitForRows(Ids.CompletedTaskList, "Water plants");
+        _app.WaitForRows(Ids.OpenTaskList, "Water plants");
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class TaskFlowTests : IDisposable
         AppSession.WaitUntil(() => check.Patterns.Toggle.Pattern.ToggleState.Value == ToggleState.On,
             () => "The detail pane checkbox did not show the Task as completed.");
         AppSession.Ctrl(VirtualKeyShort.KEY_5);
-        _app.WaitForRows(Ids.CompletedTaskList, "Book dentist");
+        _app.WaitForRows(Ids.OpenTaskList, "Book dentist");
     }
 
     [Fact]

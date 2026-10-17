@@ -74,7 +74,7 @@ public sealed class ScreenshotTour : IDisposable
         app.SelectRow(Ids.OpenTaskList, "Water plants");
         AppSession.Press(VirtualKeyShort.SPACE);
         AppSession.Ctrl(VirtualKeyShort.KEY_5);
-        app.WaitForRows(Ids.CompletedTaskList, "Water plants");
+        app.WaitForRows(Ids.OpenTaskList, "Water plants");
         Shot(5, "completed");
 
         // Ctrl+, opens Settings, the same window as the tray menu's Settings.

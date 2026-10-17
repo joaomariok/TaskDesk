@@ -30,8 +30,7 @@ public sealed class NavigationTests : IDisposable
         _app.WaitForRows(Ids.OpenTaskList, "Due today");
 
         AppSession.Ctrl(VirtualKeyShort.KEY_5);
-        _app.WaitForRows(Ids.OpenTaskList);
-        _app.WaitForRows(Ids.CompletedTaskList, "No due");
+        _app.WaitForRows(Ids.OpenTaskList, "No due");
         AppSession.Ctrl(VirtualKeyShort.KEY_3);
         _app.WaitForRows(Ids.OpenTaskList);
         AppSession.Ctrl(VirtualKeyShort.KEY_1);

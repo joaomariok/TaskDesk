@@ -238,17 +238,86 @@ public class DueViewModelTests
 
         await vm.ShowSmartViewAsync(SmartView.Completed, Ct);
 
-        Assert.Equal(100, vm.CompletedTasks.Count);
-        Assert.Equal("t149", vm.CompletedTasks[0].Title);
+        Assert.Equal(100, vm.Tasks.Count);
+        Assert.Equal("t149", vm.Tasks[0].Title);
         Assert.True(vm.HasMoreCompleted);
-        Assert.True(vm.IsCompletedExpanded);
+        Assert.Empty(vm.CompletedTasks);
 
         await vm.LoadMoreCompletedCommand.ExecuteAsync(null);
 
-        Assert.Equal(150, vm.CompletedTasks.Count);
-        Assert.Equal("t000", vm.CompletedTasks[^1].Title);
+        Assert.Equal(150, vm.Tasks.Count);
+        Assert.Equal("t000", vm.Tasks[^1].Title);
         Assert.False(vm.HasMoreCompleted);
         Assert.Contains((SmartView.Completed, 100), due.ListCalls);
+    }
+
+    private static async Task<(FakeTaskService Service, MainViewModel Vm, FakeTimeProvider Clock)>
+        StartCompletedAsync(params string[] titles)
+    {
+        var (service, _, vm, clock) = Start();
+        for (var i = 0; i < titles.Length; i++)
+        {
+            var task = await AddAsync(service, titles[i], null);
+            task.IsCompleted = true;
+            task.CompletedUtc = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc).AddMinutes(i);
+        }
+
+        await vm.ShowSmartViewAsync(SmartView.Completed, Ct);
+        return (service, vm, clock);
+    }
+
+    [Fact]
+    public async Task Completed_view_puts_the_newest_completed_Task_first_in_the_main_list()
+    {
+        var (_, vm, _) = await StartCompletedAsync("old", "mid", "new");
+
+        Assert.Equal(["new", "mid", "old"], vm.Tasks.Select(t => t.Title));
+        Assert.Empty(vm.CompletedTasks);
+        Assert.False(vm.HasCompletedTasks);
+    }
+
+    [Fact]
+    public async Task Un_completing_in_the_Completed_view_keeps_the_row_until_the_hold_passes()
+    {
+        var (_, vm, clock) = await StartCompletedAsync("a", "b");
+        vm.CompletionMoveDelay = () => TimeSpan.FromMilliseconds(400);
+        var row = vm.Tasks.Single(t => t.Title == "a");
+
+        await vm.ToggleCompleteCommand.ExecuteAsync(row);
+
+        Assert.False(row.IsCompleted);
+        Assert.Contains(row, vm.Tasks);
+
+        clock.Advance(TimeSpan.FromMilliseconds(400));
+        await vm.CompletionMove;
+
+        Assert.Equal(["b"], vm.Tasks.Select(t => t.Title));
+        Assert.Empty(vm.CompletedTasks);
+    }
+
+    [Fact]
+    public async Task Un_completing_in_the_Completed_view_with_a_zero_hold_removes_the_row_at_once()
+    {
+        var (_, vm, _) = await StartCompletedAsync("a", "b");
+
+        await vm.ToggleCompleteCommand.ExecuteAsync(vm.Tasks.Single(t => t.Title == "a"));
+
+        Assert.Equal(["b"], vm.Tasks.Select(t => t.Title));
+    }
+
+    [Fact]
+    public async Task Undo_after_un_completing_in_the_Completed_view_brings_the_Task_back_completed()
+    {
+        var (_, vm, _) = await StartCompletedAsync("a", "b");
+        var row = vm.Tasks.Single(t => t.Title == "a");
+        await vm.ToggleCompleteCommand.ExecuteAsync(row);
+
+        await vm.UndoCommand.ExecuteAsync(null);
+
+        Assert.True(row.IsCompleted);
+        Assert.Contains(row, vm.Tasks);
+        Assert.Equal(2, vm.Tasks.Count);
+        Assert.Empty(vm.CompletedTasks);
     }
 
     [Fact]
@@ -647,7 +716,7 @@ public class DueViewModelTests
         task.IsCompleted = true;
         await vm.ShowSmartViewAsync(SmartView.Completed, Ct);
 
-        Assert.Equal(DueState.Later, vm.CompletedTasks.Single().DueState);
+        Assert.Equal(DueState.Later, vm.Tasks.Single().DueState);
     }
 
     [Fact]
