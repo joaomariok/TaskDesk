@@ -1,0 +1,78 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "-warnaserror"],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "test",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test"],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "test", "isDefault": true }
+    },
+    {
+      "label": "gate",
+      "detail": "Build-server shutdown, warnings-as-errors build and tests; must exit 0.",
+      "type": "process",
+      "command": "pwsh",
+      "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/gate.ps1"],
+      "problemMatcher": "$msCompile",
+      "group": "test"
+    },
+    {
+      "label": "run (sandbox)",
+      "detail": "Runs the app against %TEMP%\\TaskDesk-dev; no Run key, no toast registration.",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["run", "--project", "src/TaskDesk.App"],
+      "options": { "env": { "TASKDESK_DATA_DIR": "${env:TEMP}\\TaskDesk-dev" } },
+      "problemMatcher": "$msCompile",
+      "isBackground": false
+    },
+    {
+      "label": "generate sample data",
+      "detail": "Writes a 5,000-Task database into an empty folder you name.",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["run", "--project", "tools/TaskDesk.SampleData", "--", "${input:sampleFolder}", "5000"],
+      "problemMatcher": []
+    },
+    {
+      "label": "publish (self-contained)",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["publish", "src/TaskDesk.App", "-p:PublishProfile=win-x64"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "add migration",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "tool", "run", "dotnet-ef", "migrations", "add", "${input:migrationName}",
+        "--project", "src/TaskDesk.Data", "--output-dir", "Migrations"
+      ],
+      "problemMatcher": "$msCompile"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "sampleFolder",
+      "type": "promptString",
+      "description": "Empty folder for the sample database",
+      "default": "${env:TEMP}\\TaskDesk-sample"
+    },
+    {
+      "id": "migrationName",
+      "type": "promptString",
+      "description": "Migration name, e.g. Ticket24_Thing"
+    }
+  ]
+}
