@@ -27,7 +27,9 @@ public partial class MainWindow : Window
         ApplyPaneLimits();
 
         // Open-Task counts change when Tasks are added, completed, un-completed, deleted or restored.
+#pragma warning disable VSTHRD101 // Action event; a failed count reload surfaces on the dispatcher as before
         viewModel.OpenTaskCountsChanged += async (_, _) => await lists.LoadAsync();
+#pragma warning restore VSTHRD101
         viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MainViewModel.SelectedTask))
@@ -155,6 +157,8 @@ public partial class MainWindow : Window
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF event handler; the signature requires void.")]
+
     private async void OnTagSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_syncingTagSelection)
@@ -172,6 +176,8 @@ public partial class MainWindow : Window
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF event handler; the signature requires void.")]
+
     private async void OnShowAllClick(object sender, RoutedEventArgs e)
     {
         await ViewModel.FilterByTagAsync(null);
@@ -179,6 +185,8 @@ public partial class MainWindow : Window
         TagList.SelectedItem = null;
         _syncingTagSelection = false;
     }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF event handler; the signature requires void.")]
 
     private async void OnDeleteTagClick(object sender, RoutedEventArgs e)
     {
@@ -219,6 +227,8 @@ public partial class MainWindow : Window
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF event handler; the signature requires void.")]
+
     private async void OnRenameClick(object sender, RoutedEventArgs e)
     {
         if (ItemOf(sender) is { } item)
@@ -227,6 +237,8 @@ public partial class MainWindow : Window
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF event handler; the signature requires void.")]
+
     private async void OnDeleteClick(object sender, RoutedEventArgs e)
     {
         if (ItemOf(sender) is { } item)
@@ -234,6 +246,8 @@ public partial class MainWindow : Window
             await Lists.DeleteCommand.ExecuteAsync(item);
         }
     }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF event handler; the signature requires void.")]
 
     private async void OnColorClick(object sender, RoutedEventArgs e)
     {
@@ -264,6 +278,8 @@ public partial class MainWindow : Window
             DragDrop.DoDragDrop(box, item, DragDropEffects.Move);
         }
     }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF event handler; the signature requires void.")]
 
     private async void OnListDrop(object sender, DragEventArgs e)
     {
@@ -304,6 +320,8 @@ public partial class MainWindow : Window
             : DragDropEffects.None;
         e.Handled = true;
     }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF event handler; the signature requires void.")]
 
     private async void TaskList_Drop(object sender, DragEventArgs e)
     {
@@ -356,6 +374,8 @@ public partial class MainWindow : Window
         _searchTimer?.Stop();
         ViewModel.ApplySearchCommand.Execute(null);
     }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF event handler; the signature requires void.")]
 
     private async void PriorityFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

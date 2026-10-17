@@ -39,7 +39,7 @@ public sealed class ReminderScheduler(
     public Task StartAsync()
     {
         taskChanges.TasksChanged += OnTasksChanged;
-        _timer = clock.CreateTimer(_ => RequestCheck(), null, Interval, Interval);
+        _timer = clock.CreateTimer(_ => _ = RequestCheck(), null, Interval, Interval);
         return RequestCheck();
     }
 
@@ -80,7 +80,7 @@ public sealed class ReminderScheduler(
         _timer = null;
     }
 
-    private void OnTasksChanged() => RequestCheck();
+    private void OnTasksChanged() => _ = RequestCheck();
 
     private async Task RunChecksAsync()
     {

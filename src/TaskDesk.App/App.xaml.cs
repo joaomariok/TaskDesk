@@ -30,6 +30,7 @@ public partial class App : Application
     private NotificationDelivery? _notifications;
     private ReminderScheduler? _reminders;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF override with a void signature; start-up failures are not recoverable.")]
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -146,8 +147,8 @@ public partial class App : Application
             args.Cancel = _shell.OnWindowClosing();
         };
         _shell.SettingsRequested += () => Dispatcher.Invoke(ShowSettings);
-        _shell.ActivationRequested += activation => Dispatcher.InvokeAsync(() => HandleActivationAsync(activation));
-        _shell.QuickAddRequested += () => Dispatcher.InvokeAsync(ShowQuickAddAsync);
+        _shell.ActivationRequested += activation => _ = Dispatcher.InvokeAsync(() => HandleActivationAsync(activation));
+        _shell.QuickAddRequested += () => _ = Dispatcher.InvokeAsync(ShowQuickAddAsync);
 
         // A conflict is logged and shown in Settings; it never blocks start-up.
         _hotkeys = _host.Services.GetRequiredService<HotkeyService>();
@@ -157,8 +158,8 @@ public partial class App : Application
         // Rich notifications, or the tray balloon fallback with a banner explaining why (SPEC 7.3).
         _notifications = _host.Services.GetRequiredService<NotificationDelivery>();
         _notifications.FellBack += reason =>
-            Dispatcher.InvokeAsync(() => window.ViewModel.ShowNotificationBanner(reason));
-        _notifications.Activated += activation => Dispatcher.InvokeAsync(() => HandleActivationAsync(activation));
+            _ = Dispatcher.InvokeAsync(() => window.ViewModel.ShowNotificationBanner(reason));
+        _notifications.Activated += activation => _ = Dispatcher.InvokeAsync(() => HandleActivationAsync(activation));
         _notifications.Register();
         var launch = _notifications.GetLaunchActivation();
 
@@ -195,7 +196,7 @@ public partial class App : Application
     {
         if (e.Mode == PowerModes.Resume)
         {
-            _reminders?.RequestCheck();
+            _ = _reminders?.RequestCheck();
         }
     }
 
@@ -221,6 +222,7 @@ public partial class App : Application
 
         var viewModel = _host!.Services.GetRequiredService<QuickAddViewModel>();
         var main = _host.Services.GetRequiredService<MainWindow>();
+#pragma warning disable VSTHRD101 // Action event; a failed reload surfaces on the dispatcher as before
         viewModel.TaskCreated += async () =>
         {
             // MainViewModel.LoadAsync does not raise OpenTaskCountsChanged, so reload the Lists
@@ -228,6 +230,7 @@ public partial class App : Application
             await main.ViewModel.LoadAsync();
             await main.Lists.LoadAsync();
         };
+#pragma warning restore VSTHRD101
         await viewModel.LoadAsync();
 
         _quickAddWindow = new QuickAddWindow(viewModel);
@@ -248,12 +251,14 @@ public partial class App : Application
         var main = _host.Services.GetRequiredService<MainWindow>();
         // Save the pending detail edit and close the pane first, so no stale edit lands on imported data.
         settings.BeforeImport = main.ViewModel.PrepareForImportAsync;
+#pragma warning disable VSTHRD101 // Action event; a failed reload surfaces on the dispatcher as before
         settings.Imported += async () =>
         {
             // The import changed Lists, Tags and Tasks underneath the main window: reload both panes.
             await main.ViewModel.LoadAsync();
             await main.Lists.LoadAsync();
         };
+#pragma warning restore VSTHRD101
         _settingsWindow = new SettingsWindow(settings);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
@@ -285,7 +290,7 @@ public partial class App : Application
         }
 
         var frame = new DispatcherFrame();
-        task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
+        _ = task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
         Dispatcher.PushFrame(frame);
     }
 

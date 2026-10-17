@@ -1048,6 +1048,7 @@ public sealed partial class MainViewModel(
     {
         var done = new TaskCompletionSource();
         _dueRefresh = done.Task;
+#pragma warning disable VSTHRD101 // Async void is intended: the body catches everything and always completes the TCS
         SendOrPostCallback run = async _ =>
         {
             try
@@ -1063,6 +1064,7 @@ public sealed partial class MainViewModel(
                 done.TrySetResult();
             }
         };
+#pragma warning restore VSTHRD101
 
         if (_uiContext is { } context)
         {

@@ -21,3 +21,5 @@ Running `/implement-spec`, or fanning tickets out to worktree agents: follow `do
 ## Verification
 
 Gate: `pwsh scripts/gate.ps1` (must exit 0).
+
+Review: `CODING_STANDARDS.md`
