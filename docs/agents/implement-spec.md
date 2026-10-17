@@ -89,6 +89,7 @@ Invoke the Skill tool with `mattpocock-skills:tdd` and follow it. Finish with th
 Short, with no file contents:
 
 - gate exit codes and test counts
+- the red run: each new test's name and its failure message before the code existed
 - files and areas changed
 - every existing test you changed, with the reason
 - acceptance criteria not verified automatically, as a manual checklist

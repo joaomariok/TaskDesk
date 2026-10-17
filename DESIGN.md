@@ -263,7 +263,7 @@ Plain soft-ink body text with no box or outline, specific to the page ("Nothing 
 - **Do** let Windows' animation setting switch motion off; the 400 ms completion hold drops to zero.
 
 ### Don't:
-- **Don't** hard-code a colour in XAML; only the six List presets are literal.
+- **Don't** hard-code a colour in XAML; only the six List presets are literal. `Transparent` is not a colour and is allowed.
 - **Don't** use spacing resources of type `Double` for `Margin` or `Padding`; write `Thickness` values.
 - **Don't** add a second typeface or sizes outside the Fluent ramp.
 - **Don't** invent shadow values; use Fluent's own elevation or none.
