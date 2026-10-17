@@ -55,6 +55,7 @@ Beyond that one fast-forward, leave git alone: no commit, branch, checkout, merg
 - Confirm that any package or API exists in the version you pick before you use it.
 - Write everything in English. Tests are never weakened, skipped or deleted.
 - Tests write only to temp locations, never to `%LOCALAPPDATA%` or the registry. Do not run the WPF app.
+- To measure startup time or working set, use `pwsh scripts/measure-startup.ps1 -Publish <publish dir>` (sandbox mode, temp data folder, no leftover processes) instead of an ad-hoc script. It is the one allowed way to run the app. `scripts/verify-toast.ps1` is owner-run only.
 
 ### Migrations
 

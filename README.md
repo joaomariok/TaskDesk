@@ -77,6 +77,13 @@ $env:TASKDESK_DATA_DIR = "C:\temp\taskdesk-perf"
 
 Sandbox mode keeps the test run away from your Run key. Measured results and method are in the ticket report for issue #20; targets are cold start to visible window under 1.5 s and `--minimized` working set under 150 MB.
 
+## Developer scripts
+
+- `scripts/gate.ps1`: build with warnings as errors, then run all tests; exit 0 is green.
+- `scripts/integrate-worktree.ps1`: apply a worktree's uncommitted diff onto a clean checkout and run the gate (see `docs/agents/implement-spec.md`).
+- `scripts/measure-startup.ps1`: measure cold start and `--minimized` working set of a publish against fresh sample data (`-Publish <dir> [-Runs 7] [-Tasks 5000] [-Label <name>]`).
+- `scripts/verify-toast.ps1`: owner-run check that a real Windows toast appears for a due Reminder; it registers a notification AppUserModelId for that exe (`-Publish <dir> [-DryRun]`).
+
 ## Known limits
 
 - The self-contained publish is still about 222 MB: most of it is the .NET and WPF runtime and the 25 MB Windows SDK projection (`Microsoft.Windows.SDK.NET.dll`). Use `win-x64-fdd` where the .NET 10 Desktop Runtime is installed.
