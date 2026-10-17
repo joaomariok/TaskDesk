@@ -41,6 +41,33 @@ internal sealed class DueService(
         SmartView view, int skip = 0, CancellationToken cancellationToken = default)
         => ListViewAsync(view, skip, null, cancellationToken);
 
+    public async Task<SmartViewCounts> CountSmartViewsAsync(CancellationToken cancellationToken = default)
+    {
+        var now = clock.GetUtcNow();
+        var zone = clock.LocalTimeZone;
+        var today = DueCalculator.LocalToday(now, zone);
+        var last = today.AddDays(DueCalculator.UpcomingDays);
+
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var open = context.Tasks.AsNoTracking().Where(t => !t.IsCompleted);
+        var all = await open.CountAsync(cancellationToken);
+        var dueToday = await open.CountAsync(t => t.DueDate != null && t.DueDate <= today, cancellationToken);
+        var upcoming = await open.CountAsync(
+            t => t.DueDate != null && t.DueDate > today && t.DueDate <= last, cancellationToken);
+        var beforeToday = await open.CountAsync(t => t.DueDate != null && t.DueDate < today, cancellationToken);
+
+        // A Task due later today is Overdue once its Due time has passed: the Core predicate decides, over
+        // the Due times of today's timed Tasks only.
+        var timesToday = await open
+            .Where(t => t.DueDate == today && t.DueTime != null)
+            .Select(t => t.DueTime)
+            .ToListAsync(cancellationToken);
+        var overdue = beforeToday
+            + timesToday.Count(time => DueCalculator.IsOverdue(today, time, false, now, zone));
+
+        return new SmartViewCounts(dueToday, upcoming, overdue, all);
+    }
+
     public async Task<IReadOnlyList<TaskItem>> SearchAsync(
         TaskSearchQuery query, CancellationToken cancellationToken = default)
     {

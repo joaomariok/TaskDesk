@@ -27,8 +27,8 @@ public sealed partial class MainViewModel
     public bool HasOverdueCount => OverdueCount > 0;
 
     /// <summary>
-    /// Recounts the open Tasks of Today, Upcoming, Overdue and All from the Smart View queries. Does
-    /// nothing when no Due service was supplied.
+    /// Recounts the open Tasks of Today, Upcoming, Overdue and All with count queries (no Task is loaded).
+    /// Does nothing when no Due service was supplied.
     /// </summary>
     public async Task RefreshSmartViewCountsAsync(CancellationToken cancellationToken = default)
     {
@@ -37,13 +37,10 @@ public sealed partial class MainViewModel
             return;
         }
 
-        var today = await dueService.ListSmartViewAsync(SmartView.Today, 0, cancellationToken);
-        var upcoming = await dueService.ListSmartViewAsync(SmartView.Upcoming, 0, cancellationToken);
-        var overdue = await dueService.ListSmartViewAsync(SmartView.Overdue, 0, cancellationToken);
-        var all = await dueService.ListSmartViewAsync(SmartView.All, 0, cancellationToken);
-        TodayCount = today.Count;
-        UpcomingCount = upcoming.Count;
-        OverdueCount = overdue.Count;
-        AllCount = all.Count;
+        var counts = await dueService.CountSmartViewsAsync(cancellationToken);
+        TodayCount = counts.Today;
+        UpcomingCount = counts.Upcoming;
+        OverdueCount = counts.Overdue;
+        AllCount = counts.All;
     }
 }

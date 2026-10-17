@@ -40,6 +40,13 @@ public class SidebarCountsTests
             };
             return Task.FromResult<IReadOnlyList<TaskItem>>([.. result]);
         }
+
+        public async Task<SmartViewCounts> CountSmartViewsAsync(CancellationToken cancellationToken = default)
+            => new(
+                (await ListSmartViewAsync(SmartView.Today, 0, cancellationToken)).Count,
+                (await ListSmartViewAsync(SmartView.Upcoming, 0, cancellationToken)).Count,
+                (await ListSmartViewAsync(SmartView.Overdue, 0, cancellationToken)).Count,
+                (await ListSmartViewAsync(SmartView.All, 0, cancellationToken)).Count);
     }
 
     // Local time is UTC-3: 2026-10-20 10:00.

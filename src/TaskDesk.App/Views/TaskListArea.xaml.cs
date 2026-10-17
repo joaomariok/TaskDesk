@@ -63,15 +63,6 @@ public partial class TaskListArea : UserControl
         ViewModel = viewModel;
         Lists = lists;
         InitializeSearch();
-
-        // The heading, quick-add label and empty states name the Default List; keep its name current.
-        lists.Lists.CollectionChanged += (_, _) =>
-        {
-            if (lists.Lists.FirstOrDefault(l => l.IsDefault) is { } defaultList)
-            {
-                viewModel.DefaultListName = defaultList.Name;
-            }
-        };
         viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MainViewModel.SelectedTask))

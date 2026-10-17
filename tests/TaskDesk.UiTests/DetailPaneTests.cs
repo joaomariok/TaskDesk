@@ -63,6 +63,26 @@ public sealed class DetailPaneTests : IDisposable
     }
 
     [Fact]
+    public void A_docked_pane_closed_with_Esc_stays_closed_while_arrow_keys_move_the_selection()
+    {
+        _app.ResizeTo(1200, 600);
+        _app.TypeInto(Ids.QuickAddBox, "First", pressEnter: true);
+        _app.TypeInto(Ids.QuickAddBox, "Second", pressEnter: true);
+        _app.WaitForRows(Ids.OpenTaskList, "First", "Second");
+        _app.SelectRow(Ids.OpenTaskList, "First");
+        AppSession.Press(VirtualKeyShort.RETURN);
+        AppSession.WaitUntil(PaneIsOpen, () => "The pane did not open.");
+        AppSession.Press(VirtualKeyShort.ESCAPE);
+        AppSession.WaitUntil(() => !PaneIsOpen() && _app.FocusedName() == "First",
+            () => $"Esc left the pane open or focus on '{_app.FocusedName()}'.");
+
+        AppSession.Press(VirtualKeyShort.DOWN);
+        AppSession.WaitUntil(() => _app.FocusedName() == "Second", () => $"Focus was on '{_app.FocusedName()}'.");
+
+        Assert.False(PaneIsOpen(), "An arrow key reopened the closed pane.");
+    }
+
+    [Fact]
     public void An_overlaid_pane_stays_on_its_Task_while_arrow_keys_move_the_selection()
     {
         _app.TypeInto(Ids.QuickAddBox, "First", pressEnter: true);

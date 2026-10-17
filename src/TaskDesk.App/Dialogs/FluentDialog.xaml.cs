@@ -34,16 +34,20 @@ internal sealed partial class FluentDialog : Window
         {
             if (i != request.PrimaryIndex)
             {
-                ButtonRow.Children.Add(MakeButton(request.Choices[i], i, isPrimary: false));
+                ButtonRow.Children.Add(MakeButton(request.Choices[i], i, isPrimary: false, isDefault: false));
             }
         }
 
-        ButtonRow.Children.Add(MakeCancel(request.CancelText));
-        var primaryButton = MakeButton(request.Choices[request.PrimaryIndex], request.PrimaryIndex, isPrimary: true);
+        // A destructive request makes Cancel the Enter default and the focus, so Enter never destroys data.
+        var cancelButton = MakeCancel(request.CancelText, isDefault: request.IsDestructive);
+        ButtonRow.Children.Add(cancelButton);
+        var primaryButton = MakeButton(
+            request.Choices[request.PrimaryIndex], request.PrimaryIndex, isPrimary: true,
+            isDefault: !request.IsDestructive);
         ButtonRow.Children.Add(primaryButton);
         if (request.Input is null)
         {
-            Loaded += (_, _) => primaryButton.Focus();
+            Loaded += (_, _) => (request.IsDestructive ? cancelButton : primaryButton).Focus();
         }
     }
 
@@ -53,19 +57,26 @@ internal sealed partial class FluentDialog : Window
     /// <summary>The text in the input box, or null when the dialog has no input.</summary>
     internal string? InputText => InputPanel.Visibility == Visibility.Visible ? InputBox.Text : null;
 
-    private static Button MakeCancel(string text)
-    {
-        var button = new Button { Content = text, IsCancel = true, MinWidth = 96, Margin = new Thickness(8, 0, 0, 0) };
-        AutomationProperties.SetName(button, text);
-        return button;
-    }
-
-    private Button MakeButton(string text, int index, bool isPrimary)
+    private static Button MakeCancel(string text, bool isDefault)
     {
         var button = new Button
         {
             Content = text,
-            IsDefault = isPrimary,
+            IsCancel = true,
+            IsDefault = isDefault,
+            MinWidth = 96,
+            Margin = new Thickness(8, 0, 0, 0),
+        };
+        AutomationProperties.SetName(button, text);
+        return button;
+    }
+
+    private Button MakeButton(string text, int index, bool isPrimary, bool isDefault)
+    {
+        var button = new Button
+        {
+            Content = text,
+            IsDefault = isDefault,
             MinWidth = 96,
             Margin = new Thickness(8, 0, 0, 0),
         };

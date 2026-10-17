@@ -23,4 +23,10 @@ public interface IDueService
     /// </summary>
     Task<IReadOnlyList<TaskItem>> ListSmartViewAsync(
         SmartView view, int skip = 0, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Counts the open Tasks of Today, Upcoming, Overdue and All without loading them: the numbers the
+    /// sidebar shows, equal to the sizes of the matching <see cref="ListSmartViewAsync"/> results.
+    /// </summary>
+    Task<SmartViewCounts> CountSmartViewsAsync(CancellationToken cancellationToken = default);
 }

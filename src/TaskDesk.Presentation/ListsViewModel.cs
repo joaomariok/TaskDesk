@@ -42,6 +42,12 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
     [ObservableProperty]
     private string? _errorMessage;
 
+    /// <summary>
+    /// Raised after a List was renamed or recoloured, so the views that show its name or colour (the page
+    /// heading, the rows' stripes and captions) reload.
+    /// </summary>
+    public event EventHandler? ListEdited;
+
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
         var summaries = await listService.GetListsAsync(cancellationToken);
@@ -78,6 +84,7 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
 
             await listService.RenameListAsync(item.Id, name, cancellationToken);
             await LoadAsync(cancellationToken);
+            ListEdited?.Invoke(this, EventArgs.Empty);
         });
 
     /// <param name="item">The List to colour.</param>
@@ -89,6 +96,7 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
             await listService.SetListColorAsync(
                 item.Id, string.IsNullOrEmpty(colorHex) ? null : colorHex, cancellationToken);
             await LoadAsync(cancellationToken);
+            ListEdited?.Invoke(this, EventArgs.Empty);
         });
 
     [RelayCommand]

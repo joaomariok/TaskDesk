@@ -36,8 +36,8 @@ public sealed partial class MainViewModel
 
     /// <summary>
     /// True when the view docks the pane beside the list (a wide window); false when it overlays the list.
-    /// The view sets it from the window width. Docked, a selection loads the pane; overlaid, only
-    /// <see cref="OpenDetailPane"/> does.
+    /// The view sets it from the window width. Docked, a selection loads the pane (without reopening it);
+    /// overlaid, only <see cref="OpenDetailPane"/> does.
     /// </summary>
     [ObservableProperty]
     private bool _isDetailDocked = true;
@@ -83,22 +83,21 @@ public sealed partial class MainViewModel
         IsDetailPaneOpen = true;
     }
 
+    // Docked, the pane follows the selection, but a selection never reopens a pane the owner closed:
+    // only OpenDetailPane does (a click, Enter, F2 or a notification).
     partial void OnSelectedTaskChanged(TaskRowViewModel? value)
     {
         if (IsDetailDocked)
         {
             DetailTask = value;
-            if (value is not null)
-            {
-                IsDetailPaneOpen = true;
-            }
         }
     }
 
-    // A pane that overlaid the list and is now docked beside it follows the selection again.
+    // A pane that overlaid the list and is now docked beside it follows the selection again, including a
+    // selection made while it overlaid the list and showed nothing. A closed pane stays closed.
     partial void OnIsDetailDockedChanged(bool value)
     {
-        if (value && SelectedTask is not null && DetailTask is not null && SelectedTask != DetailTask)
+        if (value && SelectedTask is not null && SelectedTask != DetailTask)
         {
             DetailTask = SelectedTask;
         }

@@ -73,4 +73,15 @@
         <Setter Property="MaxWidth" Value="96" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
+
+    <!-- A Task list that takes no keyboard focus while it has no rows (no empty focus rectangle, Tab skips
+         it); with rows it behaves like any Fluent ListBox. -->
+    <Style x:Key="FocusableWhenNotEmptyListBox" TargetType="ListBox" BasedOn="{StaticResource {x:Type ListBox}}">
+        <Style.Triggers>
+            <Trigger Property="HasItems" Value="False">
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="IsTabStop" Value="False" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
 </ResourceDictionary>

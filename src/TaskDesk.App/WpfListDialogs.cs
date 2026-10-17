@@ -9,7 +9,7 @@ internal sealed class WpfListDialogs : IListDialogs
     public bool ConfirmDelete(string listName, int taskCount)
     {
         var body = $"Delete the list \"{listName}\" and all its tasks ({taskCount} open)? This cannot be undone.";
-        return FluentDialogService.Confirm("Delete list", body, "Delete");
+        return FluentDialogService.Confirm("Delete list", body, "Delete", destructive: true);
     }
 
     public string? PromptName(string currentName)

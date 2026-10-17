@@ -32,6 +32,9 @@ public partial class MainWindow : Window
         // Open-Task counts change when Tasks are added, completed, un-completed, deleted or restored.
 #pragma warning disable VSTHRD101 // Action event; a failed count reload surfaces on the dispatcher as before
         viewModel.OpenTaskCountsChanged += async (_, _) => await lists.LoadAsync();
+
+        // A renamed or recoloured List: reload so the heading and the rows show its new name and colour.
+        lists.ListEdited += async (_, _) => await viewModel.LoadAsync();
 #pragma warning restore VSTHRD101
         viewModel.PropertyChanged += (_, e) =>
         {

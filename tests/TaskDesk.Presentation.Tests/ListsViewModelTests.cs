@@ -150,7 +150,7 @@ public class ListsViewModelTests
         return (vm, service, dialogs);
     }
 
-    private sealed class FakeDialogs : IListDialogs
+    internal sealed class FakeDialogs : IListDialogs
     {
         public bool ConfirmResult { get; set; }
         public string? PromptResult { get; set; }
@@ -165,7 +165,7 @@ public class ListsViewModelTests
         public string? PromptName(string currentName) => PromptResult;
     }
 
-    private sealed class FakeListService : IListService
+    internal sealed class FakeListService : IListService
     {
         private readonly List<TaskList> _lists =
             [new() { Id = Guid.NewGuid(), Name = "Inbox", IsDefault = true }];

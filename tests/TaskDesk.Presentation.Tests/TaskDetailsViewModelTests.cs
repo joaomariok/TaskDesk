@@ -179,16 +179,63 @@ public class TaskDetailsViewModelTests
     }
 
     [Fact]
-    public async Task The_detail_pane_can_be_closed_and_reopens_on_the_next_selection()
+    public async Task A_closed_docked_pane_stays_closed_on_the_next_selection_until_an_explicit_open()
     {
         var (_, vm, _) = await StartAsync("a", "b");
+        vm.IsDetailDocked = true;
         vm.SelectedTask = vm.Tasks[0];
 
         vm.CloseDetailPaneCommand.Execute(null);
         Assert.False(vm.IsDetailPaneVisible);
 
-        vm.SelectedTask = vm.Tasks[1];
+        vm.SelectedTask = vm.Tasks[1]; // an arrow key
+        Assert.False(vm.IsDetailPaneVisible);
+
+        vm.OpenDetailPane(); // a click, Enter or F2
         Assert.True(vm.IsDetailPaneVisible);
+        Assert.Equal("b", vm.DetailTitle);
+    }
+
+    [Fact]
+    public async Task An_open_docked_pane_follows_the_selection()
+    {
+        var (_, vm, _) = await StartAsync("a", "b");
+        vm.IsDetailDocked = true;
+        vm.OpenDetailPane(vm.Tasks[0]);
+
+        vm.SelectedTask = vm.Tasks[1];
+
+        Assert.True(vm.IsDetailPaneVisible);
+        Assert.Equal("b", vm.DetailTitle);
+    }
+
+    [Fact]
+    public async Task Docking_loads_a_selection_made_while_the_pane_overlaid_the_list()
+    {
+        var (_, vm, _) = await StartAsync("a");
+        vm.IsDetailDocked = false;
+        vm.SelectedTask = vm.Tasks[0];
+        Assert.Null(vm.DetailTask);
+
+        vm.IsDetailDocked = true;
+
+        Assert.Same(vm.Tasks[0], vm.DetailTask);
+        Assert.Equal("a", vm.DetailTitle);
+        Assert.True(vm.IsDetailPaneVisible);
+    }
+
+    [Fact]
+    public async Task Docking_keeps_a_closed_pane_closed()
+    {
+        var (_, vm, _) = await StartAsync("a", "b");
+        vm.IsDetailDocked = false;
+        vm.OpenDetailPane(vm.Tasks[0]);
+        vm.CloseDetailPaneCommand.Execute(null);
+        vm.SelectedTask = vm.Tasks[1];
+
+        vm.IsDetailDocked = true;
+
+        Assert.False(vm.IsDetailPaneVisible);
     }
 
     [Fact]

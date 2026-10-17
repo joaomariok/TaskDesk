@@ -370,4 +370,40 @@ public class DueServiceTests
         Assert.Empty(await TitlesAsync(db, SmartView.All));
         Assert.Equal(["done"], await TitlesAsync(db, SmartView.Completed));
     }
+
+    [Fact]
+    public async Task Smart_View_counts_count_the_open_Tasks_of_each_view_across_Lists()
+    {
+        using var db = await StartAsync(); // local now: 2026-10-20 10:00
+        var home = await db.Get<IListService>().CreateListAsync("Home", Ct);
+        await AddAsync(db, "two days late", Day(18));
+        await AddAsync(db, "earlier today", Day(20), new TimeOnly(9, 0));
+        await AddAsync(db, "later today", Day(20), new TimeOnly(18, 0), home.Id);
+        await AddAsync(db, "today, no time", Day(20));
+        await AddAsync(db, "in two days", Day(22), listId: home.Id);
+        await AddAsync(db, "beyond the window", Day(28));
+        await AddAsync(db, "no due", null);
+        var done = await AddAsync(db, "done", Day(19));
+        await db.Get<ITaskService>().SetCompletedAsync(done.Id, true, Ct);
+
+        var counts = await db.Get<IDueService>().CountSmartViewsAsync(Ct);
+
+        Assert.Equal(new SmartViewCounts(Today: 4, Upcoming: 1, Overdue: 2, All: 7), counts);
+    }
+
+    [Fact]
+    public async Task Smart_View_counts_agree_with_the_Smart_View_lists()
+    {
+        using var db = await StartAsync();
+        await AddAsync(db, "late", Day(19));
+        await AddAsync(db, "now", Day(20), new TimeOnly(10, 0));
+        await AddAsync(db, "soon", Day(27));
+
+        var counts = await db.Get<IDueService>().CountSmartViewsAsync(Ct);
+
+        Assert.Equal((await TitlesAsync(db, SmartView.Today)).Count, counts.Today);
+        Assert.Equal((await TitlesAsync(db, SmartView.Upcoming)).Count, counts.Upcoming);
+        Assert.Equal((await TitlesAsync(db, SmartView.Overdue)).Count, counts.Overdue);
+        Assert.Equal((await TitlesAsync(db, SmartView.All)).Count, counts.All);
+    }
 }

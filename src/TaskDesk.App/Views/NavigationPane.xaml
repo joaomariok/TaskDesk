@@ -211,7 +211,7 @@
                 <Grid>
                     <TextBlock Style="{StaticResource SidebarIcon}" Text="&#xE161;" HorizontalAlignment="Center" />
                     <Border Style="{StaticResource RailBadge}" Tag="{Binding TodayCount}">
-                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding TodayCount}" />
+                        <TextBlock Style="{StaticResource RailBadgeText}" Text="{Binding TodayCount}" />
                     </Border>
                 </Grid>
             </ListBoxItem>
@@ -220,7 +220,7 @@
                 <Grid>
                     <TextBlock Style="{StaticResource SidebarIcon}" Text="&#xE787;" HorizontalAlignment="Center" />
                     <Border Style="{StaticResource RailBadge}" Tag="{Binding UpcomingCount}">
-                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding UpcomingCount}" />
+                        <TextBlock Style="{StaticResource RailBadgeText}" Text="{Binding UpcomingCount}" />
                     </Border>
                 </Grid>
             </ListBoxItem>
@@ -240,7 +240,7 @@
                 <Grid>
                     <TextBlock Style="{StaticResource SidebarIcon}" Text="&#xE8FD;" HorizontalAlignment="Center" />
                     <Border Style="{StaticResource RailBadge}" Tag="{Binding AllCount}">
-                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding AllCount}" />
+                        <TextBlock Style="{StaticResource RailBadgeText}" Text="{Binding AllCount}" />
                     </Border>
                 </Grid>
             </ListBoxItem>

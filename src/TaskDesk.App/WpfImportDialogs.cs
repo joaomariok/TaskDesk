@@ -41,6 +41,6 @@ internal sealed class WpfImportDialogs : IImportDialogs
         const string body =
             "Replace deletes all your current lists, tags and tasks and replaces them with the file's data.\n\n"
             + "A backup of the current data is saved in the backups folder first.\n\nReplace everything now?";
-        return FluentDialogService.Confirm("Replace all data", body, "Replace everything");
+        return FluentDialogService.Confirm("Replace all data", body, "Replace everything", destructive: true);
     }
 }

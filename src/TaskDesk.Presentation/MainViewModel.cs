@@ -191,6 +191,10 @@ public sealed partial class MainViewModel(
         }
 
         _lists = lists.ToDictionary(s => s.List.Id, s => s.List);
+        if (lists.FirstOrDefault(s => s.List.IsDefault) is { } defaultList)
+        {
+            DefaultListName = defaultList.List.Name; // the heading, quick-add label and empty state name it
+        }
 
         Tags.Clear();
         foreach (var tag in tags)

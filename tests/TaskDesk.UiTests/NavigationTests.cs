@@ -119,6 +119,21 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
+    public void An_empty_Task_list_takes_no_keyboard_focus_and_a_list_with_rows_does()
+    {
+        AppSession.Ctrl(VirtualKeyShort.KEY_5); // Completed: no open rows
+        AppSession.WaitUntil(() => _app.Find(Ids.PageHeading).Name == "Completed",
+            () => $"The page heading was '{_app.Find(Ids.PageHeading).Name}'.");
+        AppSession.WaitUntil(() => !_app.Find(Ids.OpenTaskList).Properties.IsKeyboardFocusable.ValueOrDefault,
+            () => "The empty open-Task list can take keyboard focus.");
+
+        AppSession.Ctrl(VirtualKeyShort.KEY_4);
+        _app.TypeInto(Ids.QuickAddBox, "Pay rent", pressEnter: true);
+        _app.WaitForRows(Ids.OpenTaskList, "Pay rent");
+        _app.SelectRow(Ids.OpenTaskList, "Pay rent");
+    }
+
+    [Fact]
     public void Selecting_Overdue_in_the_sidebar_shows_the_Overdue_view()
     {
         _app.TypeInto(Ids.QuickAddBox, "No due yet", pressEnter: true);
@@ -130,7 +145,7 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
-    public void Delete_on_a_List_asks_in_the_Fluent_dialog_where_Esc_keeps_it_and_Delete_removes_it()
+    public void Delete_on_a_List_asks_in_the_Fluent_dialog_where_Esc_and_Enter_keep_it_and_Delete_removes_it()
     {
         _app.Find(Ids.NewListButton).AsButton().Invoke();
         _app.TypeInto(Ids.NewListBox, "Groceries", pressEnter: true);
@@ -144,6 +159,14 @@ public sealed class NavigationTests : IDisposable
         AppSession.Eventually(Dialog, "Delete on a List showed no Fluent dialog.");
         AppSession.Press(VirtualKeyShort.ESCAPE);
         AppSession.WaitUntil(() => Dialog() is null, () => "Esc did not close the dialog.");
+        Assert.Contains("Groceries", _app.Rows(Ids.ListsList));
+
+        // Deleting is destructive, so Enter answers Cancel.
+        _app.SelectRow(Ids.ListsList, "Groceries");
+        AppSession.Press(VirtualKeyShort.DELETE);
+        AppSession.Eventually(Dialog, "Delete on a List showed no Fluent dialog.");
+        AppSession.Press(VirtualKeyShort.RETURN);
+        AppSession.WaitUntil(() => Dialog() is null, () => "Enter did not close the dialog.");
         Assert.Contains("Groceries", _app.Rows(Ids.ListsList));
 
         _app.SelectRow(Ids.ListsList, "Groceries");

@@ -43,10 +43,9 @@ public partial class NavigationPane : UserControl
                 SyncSelection();
             }
         };
-        viewModel.OpenTaskCountsChanged += (_, _) => QueueCountRefresh();
-
         // Every reload of the Lists (including from the quick-add window) clears their selection and may
-        // have changed the counts.
+        // have changed the counts. OpenTaskCountsChanged is not handled here: the main window answers it
+        // by reloading the Lists, which lands here, so handling both would recount twice per change.
         lists.Lists.CollectionChanged += (_, _) => QueueCountRefresh();
         Loaded += (_, _) => QueueCountRefresh();
     }
@@ -382,7 +381,8 @@ public partial class NavigationPane : UserControl
             "Delete tag",
             $"Delete the tag #{tag.Name}? It is removed from all tasks. This cannot be undone.",
             "Delete",
-            Window.GetWindow(this)))
+            destructive: true,
+            owner: Window.GetWindow(this)))
         {
             await ViewModel.DeleteTagAsync(tag);
         }

@@ -38,6 +38,9 @@ public class DueViewModelTests
             return Task.FromResult(task);
         }
 
+        public Task<SmartViewCounts> CountSmartViewsAsync(CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<TaskItem>> ListSmartViewAsync(
             SmartView view, int skip = 0, CancellationToken cancellationToken = default)
         {

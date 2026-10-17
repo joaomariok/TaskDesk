@@ -67,6 +67,9 @@ public class ReminderViewModelTests
             Guid taskId, DateOnly? dueDate, TimeOnly? dueTime, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<SmartViewCounts> CountSmartViewsAsync(CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<TaskItem>> ListSmartViewAsync(
             SmartView view, int skip = 0, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<TaskItem>>(view switch
