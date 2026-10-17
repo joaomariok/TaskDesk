@@ -334,13 +334,14 @@ Undoing a completion toggle (Ctrl+Z) on an Occurrence also deletes the next Occu
 
 ### 6.7 Settings window
 
-- Theme: System / Light / Dark
-- Start with Windows (on by default on first run)
-- Close button behavior: hide to tray (default) / exit
-- Global hotkey: capture box ("press a key combination") + "Disable"
-- Default reminder time for date-only reminders (default 09:00)
-- Data: "Open data folder", "Export…", "Import…", "Back up now"
-- About: version, data folder path, log folder path
+One scrolling page in the Windows 11 Settings style. Settings are grouped under headings; each setting is a card with its title and a one-line description on the left and its control on the right. Every control has a visible title and an accessible name, and the page follows Light, Dark and high contrast.
+
+- **Appearance:** Theme: System / Light / Dark
+- **Startup and tray:** Start with Windows (on by default on first run); Close button behavior: hide to tray (default) / exit
+- **Quick add:** Global hotkey: capture box ("press a key combination") + "Disable". When the hotkey cannot be registered (for example, another app owns it), the reason shows as a warning bar inside this group, directly under the setting.
+- **Reminders:** Default reminder time for date-only reminders (default 09:00)
+- **Data:** "Open data folder", "Export to JSON…" / "Export to CSV…", "Import…", "Back up now". Import asks Merge or Replace in the shared Fluent dialog, with Replace's warning explicit. The outcome of each action shows under its card.
+- **About:** version; data folder path and log folder path, each with a "Copy" button that puts the exact path on the clipboard
 
 Settings are stored in `%LOCALAPPDATA%\TaskDesk\settings.json` (not in the database), written atomically (write temp file, then replace).
 

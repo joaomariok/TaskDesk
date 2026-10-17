@@ -24,6 +24,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly TimeProvider _clock;
     private readonly IImportService? _imports;
     private readonly IImportDialogs? _importDialogs;
+    private readonly IClipboardService? _clipboard;
     private readonly bool _loading = true;
 
     public SettingsViewModel(
@@ -40,8 +41,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         IExportDialogs? exportDialogs = null,
         TimeProvider? clock = null,
         IImportService? imports = null,
-        IImportDialogs? importDialogs = null)
+        IImportDialogs? importDialogs = null,
+        IClipboardService? clipboard = null)
     {
+        _clipboard = clipboard;
         _imports = imports;
         _importDialogs = importDialogs;
         _exports = exports;
@@ -131,6 +134,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         HotkeyText = FormatHotkey(null);
         HotkeyError = null;
     }
+
+    [RelayCommand]
+    private void CopyDataFolder() => _clipboard?.SetText(DataFolder);
+
+    [RelayCommand]
+    private void CopyLogFolder() => _clipboard?.SetText(LogFolder);
 
     [RelayCommand]
     private void OpenDataFolder() => _folderOpener.Open(DataFolder);

@@ -12,6 +12,7 @@
                 <ResourceDictionary Source="Styles/InfoBar.xaml" />
                 <ResourceDictionary Source="Styles/DueChip.xaml" />
                 <ResourceDictionary Source="Styles/Sidebar.xaml" />
+                <ResourceDictionary Source="Styles/SettingsCard.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

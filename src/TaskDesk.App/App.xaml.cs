@@ -103,6 +103,7 @@ public partial class App : Application
         builder.Services.AddTransient<QuickAddViewModel>();
         builder.Services.AddSingleton<IThemeService, WpfThemeService>();
         builder.Services.AddSingleton<IFolderOpener, ExplorerFolderOpener>();
+        builder.Services.AddSingleton<IClipboardService, WpfClipboardService>();
         builder.Services.AddSingleton<WindowLayoutService>();
         builder.Services.AddTransient<SettingsViewModel>(sp => new SettingsViewModel(
             sp.GetRequiredService<IShellSettingsStore>(),
@@ -118,7 +119,8 @@ public partial class App : Application
             sp.GetRequiredService<IExportDialogs>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<IImportService>(),
-            sp.GetRequiredService<IImportDialogs>()));
+            sp.GetRequiredService<IImportDialogs>(),
+            sp.GetRequiredService<IClipboardService>()));
         _host = builder.Build();
 
         await _host.StartAsync();

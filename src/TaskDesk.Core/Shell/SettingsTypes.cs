@@ -25,6 +25,12 @@ public interface IFolderOpener
     void Open(string path);
 }
 
+/// <summary>Puts text on the system clipboard.</summary>
+public interface IClipboardService
+{
+    void SetText(string text);
+}
+
 /// <summary>Remembered main-window geometry. <c>PaneWidths</c> is keyed by pane name.</summary>
 public sealed record WindowLayout(
     double Left,
