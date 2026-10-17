@@ -10,7 +10,7 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
    - If the launch fails with "core.worktree redirect", the session's working directory has become lowercase `d:`. Return to `D:\GIT\TaskDesk` and retry.
 4. When an implementer reports, read its diff and keep the diff uncommitted in its worktree. The report is a claim, not evidence.
 5. Land the tickets one at a time, in the order they finish. For each:
-   - Run `pwsh scripts/integrate-worktree.ps1 -Worktree <WT> -Base <BASE>` from the integration checkout, which must be clean. It applies the worktree's tracked diff with `git apply --3way`, copies its untracked files, runs the **Gate** and exits with the gate's code. It prints the changed and new files; stage those paths by name. It never commits.
+   - Run `pwsh scripts/integrate-worktree.ps1 -Worktree <WT> -Base <BASE>` from the integration checkout, which must be clean. It applies the worktree's tracked diff with `git apply --3way`, copies its untracked files, runs the **Gate** and exits with the gate's code. It prints the changed and new files; stage those paths by name. It never commits. On conflicts it still copies the untracked files and auto-resolves the `App.xaml` merged-dictionary lines. Add `-UiTests` (and `-Screenshots <dir>`) to run `scripts/ui-tests.ps1` after a green gate.
    - Exit 3 means conflicts: it lists the conflicted files and stops. Launch a merger with the **Merger brief** below. Exit 2 means a pre-check failed (dirty target, or worktree HEAD is not `<BASE>`) and nothing was changed.
    - Commit once, as `<type>: <what changed>`, after the gate exits 0 and the owner approves.
 6. Advance `<BASE>` to the new integration tip before launching the next wave of implementers.
