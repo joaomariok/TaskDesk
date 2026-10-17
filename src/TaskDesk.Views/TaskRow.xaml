@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    One Task row, read at a glance: the List colour stripe, the round Completed checkbox, the title and, on the
+    right, the Repeats icon, Subtask progress, Tag chips, the List caption, the Priority flag and the Due chip.
+    A completed row is dimmed and struck through until it moves into "Completed (N)", except on the Completed
+    Smart View. Colours come from theme resources only, so Light, Dark and high contrast follow the theme.
+-->
+<UserControl
+    x:Class="TaskDesk.Views.TaskRow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TaskDesk.Views"
+    xmlns:tags="using:TaskDesk.Core.Tags">
+    <UserControl.Resources>
+        <!-- Small secondary text on a row: Subtask progress, the List caption, "+N" Tags. -->
+        <Style x:Key="RowCaptionText" TargetType="TextBlock" BasedOn="{StaticResource SecondaryCaptionText}">
+            <Setter Property="TextWrapping" Value="NoWrap" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- A glyph from the icon font on a row (Repeats, Priority). -->
+        <Style x:Key="RowIcon" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{ThemeResource SymbolThemeFontFamily}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- Critical for High, caution for Medium, neutral for Low. The row hides the flag for None. -->
+        <Style x:Key="PriorityFlagHigh" TargetType="TextBlock" BasedOn="{StaticResource RowIcon}">
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+        </Style>
+        <Style x:Key="PriorityFlagMedium" TargetType="TextBlock" BasedOn="{StaticResource RowIcon}">
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCautionBrush}" />
+        </Style>
+        <!-- The Due chip: a small outlined pill whose colour says the Due state. -->
+        <Style x:Key="DueChipLater" TargetType="Border">
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorDefaultBrush}" />
+        </Style>
+        <Style x:Key="DueChipOverdue" TargetType="Border" BasedOn="{StaticResource DueChipLater}">
+            <Setter Property="BorderBrush" Value="{ThemeResource OverdueBrush}" />
+        </Style>
+        <Style x:Key="DueChipToday" TargetType="Border" BasedOn="{StaticResource DueChipLater}">
+            <Setter Property="BorderBrush" Value="{ThemeResource TodayBrush}" />
+        </Style>
+        <Style x:Key="DueTextLater" TargetType="TextBlock" BasedOn="{StaticResource RowCaptionText}" />
+        <Style x:Key="DueTextOverdue" TargetType="TextBlock" BasedOn="{StaticResource RowCaptionText}">
+            <Setter Property="Foreground" Value="{ThemeResource OverdueBrush}" />
+        </Style>
+        <Style x:Key="DueTextToday" TargetType="TextBlock" BasedOn="{StaticResource RowCaptionText}">
+            <Setter Property="Foreground" Value="{ThemeResource TodayBrush}" />
+        </Style>
+        <Style x:Key="TagChip" TargetType="Border">
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,1" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorDefaultBrush}" />
+            <Setter Property="Background" Value="{ThemeResource ControlFillColorDefaultBrush}" />
+        </Style>
+        <Style x:Key="TagChipText" TargetType="TextBlock" BasedOn="{StaticResource RowCaptionText}">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+            <Setter Property="MaxWidth" Value="96" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid x:Name="RowRoot" ColumnSpacing="8"
+          Opacity="{x:Bind local:TaskRow.RowOpacity(Row.IsCompleted, Row.KeepsFullStrength), Mode=OneWay}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <!-- The title comes first in the tree, so a row's first text is its title; columns set the order on screen. -->
+        <TextBlock x:Name="RowTitle" Grid.Column="2" Style="{StaticResource BodyText}"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                   Text="{x:Bind Row.Title, Mode=OneWay}"
+                   TextDecorations="{x:Bind local:TaskRow.TitleDecorations(Row.IsCompleted, Row.KeepsFullStrength), Mode=OneWay}"
+                   ToolTipService.ToolTip="{x:Bind Row.Title, Mode=OneWay}" />
+        <!-- The List's colour as a thin bar; transparent (but still taking its space) when the List has none. -->
+        <Border x:Name="ListStripe" Width="3" CornerRadius="1.5" Margin="0,4"
+                Background="{x:Bind local:TaskRow.StripeBrush(Row.ListColorHex), Mode=OneWay}"
+                Opacity="{x:Bind local:TaskRow.StripeOpacity(Row.HasListColor), Mode=OneWay}" />
+        <!-- Fluent's box made round, without the room Fluent reserves for a label, so the row stays compact. -->
+        <local:CommandCheckBox x:Name="CompletedBox" Grid.Column="1"
+                               MinWidth="0" MinHeight="0" Height="20" Padding="0" CornerRadius="10"
+                               VerticalAlignment="Center"
+                               AutomationProperties.Name="Completed"
+                               IsChecked="{x:Bind Row.IsCompleted, Mode=OneWay}"
+                               Command="{x:Bind ToggleCompleteCommand, Mode=OneWay}"
+                               CommandParameter="{x:Bind Row, Mode=OneWay}" />
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Style="{StaticResource RowIcon}" Text="&#xE8EE;"
+                       AutomationProperties.Name="Repeats" ToolTipService.ToolTip="Repeats"
+                       Visibility="{x:Bind Row.IsRecurring, Mode=OneWay}" />
+            <TextBlock Style="{StaticResource RowCaptionText}" AutomationProperties.Name="Subtask progress"
+                       Text="{x:Bind Row.SubtaskProgress, Mode=OneWay}"
+                       Visibility="{x:Bind Row.HasSubtasks, Mode=OneWay}" />
+            <ItemsControl AutomationProperties.Name="Tags" VerticalAlignment="Center" IsTabStop="False"
+                          ItemsSource="{x:Bind Row.VisibleTags, Mode=OneWay}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="tags:Tag">
+                        <Border Style="{StaticResource TagChip}">
+                            <TextBlock Style="{StaticResource TagChipText}"
+                                       Text="{x:Bind local:TaskRow.Hash(Name), Mode=OneTime}" />
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Style="{StaticResource RowCaptionText}" AutomationProperties.Name="More tags"
+                       Text="{x:Bind Row.TagOverflowText, Mode=OneWay}"
+                       Visibility="{x:Bind Row.HasTagOverflow, Mode=OneWay}" />
+            <TextBlock Style="{StaticResource RowCaptionText}" AutomationProperties.Name="List"
+                       Text="{x:Bind Row.ListName, Mode=OneWay}"
+                       Visibility="{x:Bind Row.ShowListName, Mode=OneWay}" />
+            <TextBlock Style="{x:Bind PriorityFlagStyle(Row.Priority), Mode=OneWay}" Text="&#xE7C1;"
+                       AutomationProperties.Name="{x:Bind Row.PriorityLabel, Mode=OneWay}"
+                       ToolTipService.ToolTip="{x:Bind Row.PriorityLabel, Mode=OneWay}"
+                       Visibility="{x:Bind Row.HasPriorityFlag, Mode=OneWay}" />
+            <Border x:Name="DueChip" Style="{x:Bind DueChipStyle(Row.DueState), Mode=OneWay}"
+                    Visibility="{x:Bind Row.HasDue, Mode=OneWay}">
+                <TextBlock x:Name="DueText" Style="{x:Bind DueTextStyle(Row.DueState), Mode=OneWay}"
+                           AutomationProperties.Name="Due" Text="{x:Bind Row.DueText, Mode=OneWay}" />
+            </Border>
+        </StackPanel>
+    </Grid>
+</UserControl>

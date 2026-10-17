@@ -2,10 +2,9 @@
 <UserControl
     x:Class="TaskDesk.Views.MainView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:presentation="using:TaskDesk.Presentation">
-    <!-- Walking skeleton: quick add (the start-up focus target) over the page's Task rows, title only. -->
-    <Grid Padding="12" RowSpacing="8">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Quick add (the start-up focus target) over the Task list area (TaskListView, added in code). -->
+    <Grid x:Name="RootGrid" Padding="12" RowSpacing="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -15,18 +14,5 @@
                  AutomationProperties.Name="Quick add"
                  PlaceholderText="{x:Bind ViewModel.QuickAddTarget, Mode=OneWay}"
                  Text="{x:Bind ViewModel.QuickAddTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-        <ListView x:Name="OpenTaskList"
-                  Grid.Row="1"
-                  AutomationProperties.AutomationId="OpenTaskList"
-                  AutomationProperties.Name="Tasks"
-                  SelectionMode="Single"
-                  ItemsSource="{x:Bind ViewModel.Tasks, Mode=OneTime}"
-                  ContainerContentChanging="OnRowContainerChanging">
-            <ListView.ItemTemplate>
-                <DataTemplate x:DataType="presentation:TaskRowViewModel">
-                    <TextBlock Text="{x:Bind Title, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
-                </DataTemplate>
-            </ListView.ItemTemplate>
-        </ListView>
     </Grid>
 </UserControl>

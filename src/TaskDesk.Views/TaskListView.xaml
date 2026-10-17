@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The Task list area: the Overdue group (Today view only), the open Tasks, the "Completed (N)" group and the
+    Undo bar. The Completed Smart View shows its completed Tasks as the plain main list and leaves the groups
+    empty. Space completes and Delete deletes the selected Task; Ctrl+Z undoes the last delete or completion.
+-->
+<UserControl
+    x:Class="TaskDesk.Views.TaskListView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TaskDesk.Views"
+    xmlns:presentation="using:TaskDesk.Presentation">
+    <UserControl.Resources>
+        <!-- Fluent's list item, one compact line instead of Fluent's 40 px. -->
+        <Style x:Key="TaskRowContainer" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <DataTemplate x:Key="TaskRowTemplate" x:DataType="presentation:TaskRowViewModel">
+            <local:TaskRow Row="{x:Bind Mode=OneTime}" />
+        </DataTemplate>
+    </UserControl.Resources>
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Key="Z" Modifiers="Control" Invoked="OnUndoInvoked" />
+    </UserControl.KeyboardAccelerators>
+
+    <Grid RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="OverdueHeading" Style="{StaticResource BodyStrongText}"
+                   Foreground="{ThemeResource OverdueBrush}"
+                   Text="{x:Bind ViewModel.OverdueHeader, Mode=OneWay}"
+                   Visibility="{x:Bind ViewModel.HasOverdueTasks, Mode=OneWay}" />
+        <ListView x:Name="OverdueTaskList" Grid.Row="1" MaxHeight="160" SelectionMode="Single"
+                  AutomationProperties.Name="Overdue tasks"
+                  AutomationProperties.AutomationId="OverdueTaskList"
+                  Visibility="{x:Bind ViewModel.HasOverdueTasks, Mode=OneWay}"
+                  ItemsSource="{x:Bind ViewModel.OverdueTasks, Mode=OneTime}"
+                  ItemContainerStyle="{StaticResource TaskRowContainer}"
+                  ItemTemplate="{StaticResource TaskRowTemplate}"
+                  ContainerContentChanging="OnRowContainerChanging"
+                  SelectionChanged="OnTaskSelectionChanged"
+                  PreviewKeyDown="OnTaskListPreviewKeyDown" />
+        <ListView x:Name="OpenTaskList" Grid.Row="2" SelectionMode="Single"
+                  AutomationProperties.Name="Tasks"
+                  AutomationProperties.AutomationId="OpenTaskList"
+                  ItemsSource="{x:Bind ViewModel.Tasks, Mode=OneTime}"
+                  ItemContainerStyle="{StaticResource TaskRowContainer}"
+                  ItemTemplate="{StaticResource TaskRowTemplate}"
+                  ContainerContentChanging="OnRowContainerChanging"
+                  SelectionChanged="OnTaskSelectionChanged"
+                  PreviewKeyDown="OnTaskListPreviewKeyDown" />
+        <Expander Grid.Row="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                  Header="{x:Bind ViewModel.CompletedHeader, Mode=OneWay}"
+                  IsExpanded="{x:Bind ViewModel.IsCompletedExpanded, Mode=TwoWay}"
+                  Visibility="{x:Bind ViewModel.HasCompletedTasks, Mode=OneWay}">
+            <ListView x:Name="CompletedTaskList" MaxHeight="160" SelectionMode="Single"
+                      AutomationProperties.Name="Completed tasks"
+                      AutomationProperties.AutomationId="CompletedTaskList"
+                      ItemsSource="{x:Bind ViewModel.CompletedTasks, Mode=OneTime}"
+                      ItemContainerStyle="{StaticResource TaskRowContainer}"
+                      ItemTemplate="{StaticResource TaskRowTemplate}"
+                      ContainerContentChanging="OnRowContainerChanging"
+                      SelectionChanged="OnTaskSelectionChanged"
+                      PreviewKeyDown="OnTaskListPreviewKeyDown" />
+        </Expander>
+        <InfoBar x:Name="UndoBar" Grid.Row="4" IsClosable="False"
+                 AutomationProperties.Name="Task deleted"
+                 IsOpen="{x:Bind ViewModel.IsUndoBarVisible, Mode=OneWay}"
+                 Message="{x:Bind ViewModel.UndoBarText, Mode=OneWay}">
+            <InfoBar.ActionButton>
+                <Button Content="Undo" AutomationProperties.AutomationId="UndoButton"
+                        Command="{x:Bind ViewModel.UndoCommand, Mode=OneTime}" />
+            </InfoBar.ActionButton>
+        </InfoBar>
+    </Grid>
+</UserControl>
