@@ -53,7 +53,7 @@ public sealed class CommandToggleTests(WpfAppFixture fixture)
     public void Main_window_command_driven_toggles_are_all_found() => fixture.Run(() =>
     {
         WithLaidOut(nameof(MainWindow), toggles =>
-            Assert.Equal(["Filter", "Has due filter", "Has reminder filter", "work"], toggles.Select(Describe).Order()));
+            Assert.Equal(["Completed", "Filter", "Has due filter", "Has reminder filter", "work"], toggles.Select(Describe).Order()));
     });
 
     [Fact]
@@ -85,7 +85,7 @@ public sealed class CommandToggleTests(WpfAppFixture fixture)
         WithLaidOut(nameof(TaskListArea), toggles =>
         {
             var style = fixture.App.FindResource(typeof(ToggleButton));
-            Assert.All(toggles, button => Assert.Same(style, button.Style));
+            Assert.All(toggles.Where(b => b is not CheckBox), button => Assert.Same(style, button.Style));
         });
     });
 
@@ -109,8 +109,7 @@ public sealed class CommandToggleTests(WpfAppFixture fixture)
     });
 
     // Builds the element with the Filter row open and one Tag chip, lays it out, and hands over every
-    // toggle button in it that has a Command. CheckBoxes are left out: the Task "Completed" boxes bind
-    // IsChecked two-way and are a separate case.
+    // toggle button in it that has a Command, CheckBoxes included.
     private static void WithLaidOut(string name, Action<List<ToggleButton>> act)
     {
         var element = XamlLoadTests.Elements[name]();
@@ -131,7 +130,7 @@ public sealed class CommandToggleTests(WpfAppFixture fixture)
                 root.UpdateLayout();
             }
 
-            act([.. Descendants(element).OfType<ToggleButton>().Where(b => b is not CheckBox && b.Command is not null)]);
+            act([.. Descendants(element).OfType<ToggleButton>().Where(b => b.Command is not null)]);
         }
         finally
         {

@@ -46,13 +46,20 @@ public sealed class CommandToggleButton : ToggleButton
         }
 
         // Reached from UI Automation's Toggle pattern: do what a click would.
-        switch (Command)
+        ExecuteCommand(this);
+    }
+
+    /// <summary>Runs a toggle's Command as a click would, if it can execute.</summary>
+    internal static void ExecuteCommand(ToggleButton button)
+    {
+        var target = button.CommandTarget ?? button;
+        switch (button.Command)
         {
-            case RoutedCommand routed when routed.CanExecute(CommandParameter, CommandTarget ?? this):
-                routed.Execute(CommandParameter, CommandTarget ?? this);
+            case RoutedCommand routed when routed.CanExecute(button.CommandParameter, target):
+                routed.Execute(button.CommandParameter, target);
                 break;
-            case { } command and not RoutedCommand when command.CanExecute(CommandParameter):
-                command.Execute(CommandParameter);
+            case { } command and not RoutedCommand when command.CanExecute(button.CommandParameter):
+                command.Execute(button.CommandParameter);
                 break;
         }
     }

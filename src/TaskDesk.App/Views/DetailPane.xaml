@@ -2,7 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:presentation="clr-namespace:TaskDesk.Presentation;assembly=TaskDesk.Presentation"
-             xmlns:views="clr-namespace:TaskDesk.App.Views">
+             xmlns:views="clr-namespace:TaskDesk.App.Views"
+             xmlns:controls="clr-namespace:TaskDesk.App.Controls">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
         <views:SubtaskProgressTextConverter x:Key="SubtaskProgressText" />
@@ -29,10 +30,10 @@
                 <TextBlock Text="Title" Style="{StaticResource FieldLabel}" />
                 <DockPanel Margin="{StaticResource FieldMargin}">
                     <!-- Completes the shown Task, like the checkbox on its row. -->
-                    <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0" MinWidth="0"
+                    <controls:CommandCheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0" MinWidth="0"
                               Style="{StaticResource TaskCheckBox}"
                               AutomationProperties.Name="Completed" AutomationProperties.AutomationId="DetailCompletedBox"
-                              IsChecked="{Binding DetailTask.IsCompleted, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
+                              IsChecked="{Binding DetailTask.IsCompleted, Mode=OneWay}"
                               Command="{Binding ToggleCompleteCommand}"
                               CommandParameter="{Binding DetailTask}" />
                     <TextBox x:Name="DetailTitleBox" MaxLength="500"

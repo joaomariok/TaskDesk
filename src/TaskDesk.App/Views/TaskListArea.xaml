@@ -26,10 +26,10 @@
             <DockPanel x:Name="RowRoot" LastChildFill="True">
                 <Border DockPanel.Dock="Left" Style="{StaticResource RowListStripe}"
                         Background="{Binding ListColorHex}" />
-                <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"
+                <controls:CommandCheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"
                           Style="{StaticResource TaskCheckBox}"
                           AutomationProperties.Name="Completed"
-                          IsChecked="{Binding IsCompleted, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
+                          IsChecked="{Binding IsCompleted, Mode=OneWay}"
                           Command="{Binding DataContext.ToggleCompleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                           CommandParameter="{Binding}" />
                 <Border DockPanel.Dock="Right" Margin="8,0,0,0" VerticalAlignment="Center"
