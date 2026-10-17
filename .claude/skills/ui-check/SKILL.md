@@ -9,7 +9,7 @@ Two passes: the UI suite (does it behave) and a look at the states the change to
 
 ## 1. Behaviour
 
-Run `pwsh scripts/ui-tests.ps1` and judge it by the exit code. A failed test leaves a PNG of the window in the folder printed as "Failure screenshots": read it (a dialog in the way, focus elsewhere, text in the wrong box), then rerun that class once with `-Class <name>`. A pass on rerun is a **flake**, reported as such; a second failure is real.
+Run `pwsh scripts/ui-tests.ps1` and judge it by the exit code. A failed test leaves a PNG of the window in the folder printed as "Failure screenshots": read it (a dialog in the way, focus elsewhere, text in the wrong box), then rerun that one test once with `-Method <test method name>`. A pass on rerun is a **flake**, reported as such; a second failure is real.
 
 ## 2. Look
 

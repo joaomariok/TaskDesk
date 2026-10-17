@@ -355,9 +355,18 @@ public sealed class AppSession : IDisposable
         _app = Application.Launch(start);
         Window = _app.GetMainWindow(_automation, TimeSpan.FromSeconds(20))
                  ?? throw new InvalidOperationException("TaskDesk showed no main window.");
+        // Windows can refuse SetForeground while another app is in front, and the test's keys would then go to that
+        // app. A click on the title bar is input, which always activates the window; the app still picks the element
+        // that takes focus.
         Window.SetForeground();
+        var bounds = Window.BoundingRectangle;
+        Mouse.Click(new Point(bounds.Left + bounds.Width / 2, bounds.Top + 16));
         // The window shows before its first load finishes; quick add is enabled once it has.
         WaitUntil(() => Find(Ids.QuickAddBox).IsEnabled, () => "Quick add never became ready.");
+        // Wait for start-up focus to land in quick add, without moving it there, so a test's first shortcut
+        // reaches the app and start-up focus stays tested.
+        WaitUntil(() => FocusedAutomationId() == Ids.QuickAddBox,
+            () => $"Start-up focus never reached quick add; it is on '{FocusedAutomationId()}'.");
     }
 
     private static string AppPath()

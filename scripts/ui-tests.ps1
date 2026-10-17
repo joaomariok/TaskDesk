@@ -4,12 +4,14 @@
 # Each test uses a fresh temp data folder (sandbox mode: no Run key, no notification registration).
 #   -Publish <dir>  test TaskDesk.App.exe in a publish folder instead of the Debug build
 #   -Class <name>   run one test class, for example NavigationTests
+#   -Method <name>  run the tests whose method name matches, with * as a wildcard, for example *Ctrl_comma*
 # Before the run it stops TaskDesk.App processes left over from earlier UI runs (identified by running from this
 # repo's bin folder, or from -Publish; the TASKDESK_DATA_DIR environment cannot be read from another process) and
 # warns about any other running TaskDesk.App without touching it.
 param(
     [string]$Publish,
-    [string]$Class
+    [string]$Class,
+    [string]$Method
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -54,6 +56,7 @@ try {
 
     $runArgs = @('run', '--project', 'tests/TaskDesk.UiTests', '--no-build', '--')
     if ($Class) { $runArgs += @('-class', "TaskDesk.UiTests.$Class") }
+    if ($Method) { $runArgs += @('-method', ($Method.Contains('.') ? $Method : "*.$Method")) }
     & dotnet @runArgs | Tee-Object -Variable runOutput
     $code = $LASTEXITCODE
     $failed = @($runOutput | Where-Object { "$_" -match '\[FAIL\]' }).Count

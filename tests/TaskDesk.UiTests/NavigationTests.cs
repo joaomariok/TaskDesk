@@ -147,8 +147,6 @@ public sealed class NavigationTests : IDisposable
     [Fact]
     public void Ctrl_comma_opens_Settings_and_closing_it_closes_the_window()
     {
-        // A shortcut goes to the focused element; right after launch the window may not have keyboard focus yet.
-        _app.Focus(Ids.QuickAddBox);
         // Ctrl+, opens Settings, the same window as the tray menu's Settings.
         AppSession.Ctrl(VirtualKeyShort.OEM_COMMA);
         var settings = _app.SettingsWindow();
