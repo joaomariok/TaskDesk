@@ -67,7 +67,7 @@ public sealed partial class MainViewModel(
     private bool ShowsListNames => CurrentView is not null || TagFilter is not null || IsNarrowed;
 
     private TaskRowViewModel CreateRow(TaskItem task) =>
-        new(task, _clock, _lists.GetValueOrDefault(task.ListId), ShowsListNames);
+        new(task, _clock, _lists.GetValueOrDefault(task.ListId), ShowsListNames, IsCompletedPage);
 
     private int _completedFetched;
     private bool _completedHasMore;

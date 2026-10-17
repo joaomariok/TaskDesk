@@ -16,9 +16,12 @@ public sealed partial class TaskRowViewModel : ObservableObject
     /// <param name="clock">The clock the Due state is judged by.</param>
     /// <param name="list">The List the Task belongs to, when known.</param>
     /// <param name="showListName">True in Smart Views and a Tag's page, where the List's name is a caption.</param>
+    /// <param name="keepsFullStrength">True on the Completed Smart View, where completed rows are not dimmed.</param>
     public TaskRowViewModel(
-        TaskItem item, TimeProvider? clock = null, TaskList? list = null, bool showListName = false)
+        TaskItem item, TimeProvider? clock = null, TaskList? list = null, bool showListName = false,
+        bool keepsFullStrength = false)
     {
+        KeepsFullStrength = keepsFullStrength;
         _clock = clock ?? TimeProvider.System;
         ListName = list?.Name ?? "";
         ListColorHex = list?.ColorHex;
@@ -35,6 +38,9 @@ public sealed partial class TaskRowViewModel : ObservableObject
 
     /// <summary>The List's colour as "#RRGGBB", or null when the List has none.</summary>
     public string? ListColorHex { get; }
+
+    /// <summary>True when the row shows a completed Task at full strength (no dimming, no strike-through).</summary>
+    public bool KeepsFullStrength { get; }
 
     /// <summary>True when the List has a colour, so the row shows its stripe.</summary>
     public bool HasListColor => ListColorHex is not null;

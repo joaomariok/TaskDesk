@@ -20,15 +20,19 @@
         </Style.Triggers>
     </Style>
 
-    <!-- One line, trimmed with an ellipsis; struck through once the Task is completed. -->
+    <!-- One line, trimmed with an ellipsis; struck through once the Task is completed (not on the Completed Smart View). -->
     <Style x:Key="RowTitleText" TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         <Setter Property="TextWrapping" Value="NoWrap" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Style.Triggers>
-            <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding IsCompleted}" Value="True" />
+                    <Condition Binding="{Binding KeepsFullStrength}" Value="False" />
+                </MultiDataTrigger.Conditions>
                 <Setter Property="TextDecorations" Value="Strikethrough" />
-            </DataTrigger>
+            </MultiDataTrigger>
         </Style.Triggers>
     </Style>
 

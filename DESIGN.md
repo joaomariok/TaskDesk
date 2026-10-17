@@ -209,7 +209,7 @@ Corners follow Fluent: 4 px (`rounded.control`) on buttons, inputs, Settings car
 The signature pieces are listed first; reuse them before building anything new.
 
 ### Task Row
-One line, read left to right: List stripe, round checkbox, title, then repeat icon, Subtask progress ("2/5"), up to two Tag chips plus "+N", the List's name (only in Smart Views, Tag pages and searches), the Priority flag, and the Due chip at the far right. Right-hand items are 8 px apart. A completed Task dims to 60 % with its title struck through, stays in place for 400 ms, then moves into "Completed (N)". The move is instant when Windows animations are off.
+One line, read left to right: List stripe, round checkbox, title, then repeat icon, Subtask progress ("2/5"), up to two Tag chips plus "+N", the List's name (only in Smart Views, Tag pages and searches), the Priority flag, and the Due chip at the far right. Right-hand items are 8 px apart. A completed Task dims to 60 % with its title struck through, stays in place for 400 ms, then moves into "Completed (N)". The move is instant when Windows animations are off. The Completed Smart View shows its rows at full strength, with no dimming and no strike-through (the checked round checkbox stays). The Overdue and "Completed (N)" groups draw their rows without a border or background, like the open Task list.
 
 ### Task Checkbox
 A 20 px circle on Fluent's CheckBox: the unchecked ring uses the strong stroke, and hover previews the check glyph in soft ink. Checked, it fills with the system accent and shows a white or black check (U+E73E). It is used only for completing a Task, in rows and in the detail pane; Subtasks and options keep Fluent's square checkbox.

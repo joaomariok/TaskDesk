@@ -306,6 +306,28 @@ public class DueViewModelTests
     }
 
     [Fact]
+    public async Task Completed_view_rows_are_marked_to_keep_full_strength()
+    {
+        var (_, vm, _) = await StartCompletedAsync("a", "b");
+
+        Assert.All(vm.Tasks, row => Assert.True(row.KeepsFullStrength));
+    }
+
+    [Fact]
+    public async Task Completed_rows_elsewhere_are_not_marked_to_keep_full_strength()
+    {
+        var (service, _, vm, _) = Start();
+        await AddAsync(service, "a", null);
+        await vm.ShowSmartViewAsync(SmartView.All, Ct);
+        var row = vm.Tasks.Single();
+
+        await vm.ToggleCompleteCommand.ExecuteAsync(row);
+
+        Assert.Contains(row, vm.CompletedTasks);
+        Assert.False(row.KeepsFullStrength);
+    }
+
+    [Fact]
     public async Task Undo_after_un_completing_in_the_Completed_view_brings_the_Task_back_completed()
     {
         var (_, vm, _) = await StartCompletedAsync("a", "b");
