@@ -1,5 +1,15 @@
 <Application x:Class="TaskDesk.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Application.Resources />
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ThemeMode="System">
+    <!-- ThemeMode comes first so Fluent's resources are merged before the dictionaries below, whose
+         styles are BasedOn Fluent's. WpfThemeService applies the saved theme at start-up. -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/Foundation.xaml" />
+                <ResourceDictionary Source="Styles/TaskCheckBox.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
 </Application>

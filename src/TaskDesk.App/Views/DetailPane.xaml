@@ -15,9 +15,18 @@
                 <TextBlock Text="Details" FontWeight="Bold" VerticalAlignment="Center" />
             </DockPanel>
             <TextBlock Text="Title" />
-            <TextBox x:Name="DetailTitleBox" Padding="4" Margin="0,2,0,8" MaxLength="500"
-                     AutomationProperties.Name="Task title" AutomationProperties.AutomationId="DetailTitleBox"
-                     Text="{Binding DetailTitle, UpdateSourceTrigger=PropertyChanged}" />
+            <DockPanel Margin="0,2,0,8">
+                <!-- Completes the selected Task, like the checkbox on its row. -->
+                <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"
+                          Style="{StaticResource TaskCheckBox}"
+                          AutomationProperties.Name="Completed" AutomationProperties.AutomationId="DetailCompletedBox"
+                          IsChecked="{Binding SelectedTask.IsCompleted, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
+                          Command="{Binding ToggleCompleteCommand}"
+                          CommandParameter="{Binding SelectedTask}" />
+                <TextBox x:Name="DetailTitleBox" Padding="4" MaxLength="500"
+                         AutomationProperties.Name="Task title" AutomationProperties.AutomationId="DetailTitleBox"
+                         Text="{Binding DetailTitle, UpdateSourceTrigger=PropertyChanged}" />
+            </DockPanel>
             <TextBlock Text="Priority" />
             <ComboBox x:Name="PriorityBox" Margin="0,2,0,8" AutomationProperties.Name="Priority"
                       SelectedItem="{Binding DetailPriority}" />

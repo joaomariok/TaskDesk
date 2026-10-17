@@ -10,6 +10,7 @@
         <DataTemplate x:Key="TaskRowTemplate">
             <DockPanel LastChildFill="True">
                 <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"
+                          Style="{StaticResource TaskCheckBox}"
                           AutomationProperties.Name="Completed"
                           IsChecked="{Binding IsCompleted, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
                           Command="{Binding DataContext.ToggleCompleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"

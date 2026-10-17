@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Win32;
 using TaskDesk.App.Notifications;
 using TaskDesk.App.Shell;
+using TaskDesk.App.Styles;
 using TaskDesk.Core.Backups;
 using TaskDesk.Core.Export;
 using TaskDesk.Core.Import;
@@ -35,6 +36,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        FoundationResources.Install(this);
 
         var mode = RuntimeMode.FromEnvironment();
 

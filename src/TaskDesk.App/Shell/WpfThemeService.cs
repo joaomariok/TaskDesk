@@ -4,8 +4,9 @@ using TaskDesk.Core.Shell;
 namespace TaskDesk.App.Shell;
 
 /// <summary>
-/// The only place that touches the experimental <c>Application.ThemeMode</c> API (WPF0001),
-/// so it is easy to replace if the API changes.
+/// The only code that touches the experimental <c>Application.ThemeMode</c> API (WPF0001), so it is
+/// easy to replace if the API changes. App.xaml also sets it, to System, so Fluent's styles exist
+/// before the app's own styles are loaded.
 /// </summary>
 internal sealed class WpfThemeService : IThemeService
 {

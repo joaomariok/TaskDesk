@@ -4,6 +4,7 @@ namespace TaskDesk.UiTests;
 internal static class Ids
 {
     public const string CompletedTaskList = nameof(CompletedTaskList);
+    public const string DetailCompletedBox = nameof(DetailCompletedBox);
     public const string DetailNotesBox = nameof(DetailNotesBox);
     public const string DetailPane = nameof(DetailPane);
     public const string DetailSplitter = nameof(DetailSplitter);

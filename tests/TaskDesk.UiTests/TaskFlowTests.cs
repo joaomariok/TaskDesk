@@ -1,4 +1,5 @@
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
 using FlaUI.Core.WindowsAPI;
 
 namespace TaskDesk.UiTests;
@@ -37,6 +38,53 @@ public sealed class TaskFlowTests : IDisposable
         _app.WaitForRows(Ids.OpenTaskList);
         AppSession.Ctrl(VirtualKeyShort.KEY_5);
         _app.WaitForRows(Ids.CompletedTaskList, "Water plants");
+    }
+
+    [Fact]
+    public void The_round_Task_checkbox_on_a_row_is_a_checkbox_and_Space_on_it_completes_the_Task()
+    {
+        _app.TypeInto(Ids.QuickAddBox, "Water plants", pressEnter: true);
+        var row = AppSession.Eventually(
+            () => _app.Find(Ids.OpenTaskList).FindFirstChild(cf => cf.ByControlType(ControlType.ListItem).And(cf.ByName("Water plants"))),
+            "No row 'Water plants'.");
+        var check = AppSession.Eventually(() => row.FindFirstDescendant(cf => cf.ByControlType(ControlType.CheckBox)),
+            "The row has no checkbox.");
+
+        Assert.Equal("Completed", check.Name);
+        Assert.True(check.Patterns.Toggle.IsSupported, "The Task checkbox does not expose the toggle pattern.");
+        Assert.Equal(ToggleState.Off, check.Patterns.Toggle.Pattern.ToggleState.Value);
+
+        check.Focus();
+        AppSession.WaitUntil(() => check.Properties.HasKeyboardFocus.ValueOrDefault, () => "The Task checkbox did not take focus.");
+        AppSession.Press(VirtualKeyShort.SPACE);
+
+        _app.WaitForRows(Ids.OpenTaskList);
+        AppSession.Ctrl(VirtualKeyShort.KEY_5);
+        _app.WaitForRows(Ids.CompletedTaskList, "Water plants");
+    }
+
+    [Fact]
+    public void The_detail_pane_has_the_round_Task_checkbox_and_Space_on_it_completes_the_Task()
+    {
+        _app.TypeInto(Ids.QuickAddBox, "Book dentist", pressEnter: true);
+        _app.SelectRow(Ids.OpenTaskList, "Book dentist");
+        AppSession.Press(VirtualKeyShort.F2);
+        AppSession.WaitUntil(() => _app.TextBox(Ids.DetailTitleBox).Text == "Book dentist",
+            () => "The detail pane did not open.");
+
+        var check = _app.Find(Ids.DetailCompletedBox);
+        Assert.Equal(ControlType.CheckBox, check.ControlType);
+        Assert.Equal("Completed", check.Name);
+        Assert.True(check.Patterns.Toggle.IsSupported, "The detail pane checkbox does not expose the toggle pattern.");
+
+        _app.Focus(Ids.DetailCompletedBox);
+        AppSession.Press(VirtualKeyShort.SPACE);
+
+        _app.WaitForRows(Ids.OpenTaskList);
+        AppSession.WaitUntil(() => check.Patterns.Toggle.Pattern.ToggleState.Value == ToggleState.On,
+            () => "The detail pane checkbox did not show the Task as completed.");
+        AppSession.Ctrl(VirtualKeyShort.KEY_5);
+        _app.WaitForRows(Ids.CompletedTaskList, "Book dentist");
     }
 
     [Fact]
