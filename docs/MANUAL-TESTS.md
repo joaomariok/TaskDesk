@@ -1,6 +1,6 @@
 # Manual test checklist
 
-What automated tests cannot cover (SPEC 11.3), plus checks per feature. Run against a published build (`dotnet publish src/TaskDesk.App -p:PublishProfile=win-x64`). To keep your real data safe, set `TASKDESK_DATA_DIR` to a scratch folder first. That also turns on sandbox mode: the Run key is never written or removed and reminders use tray balloons. Checks of auto-start or of rich toasts need the real behaviour, so also set `TASKDESK_SANDBOX=0` for them (and then keep `{"startWithWindows":false}` in the scratch `settings.json` unless you are testing auto-start). The log shows the active mode at start-up.
+What automated tests cannot cover (SPEC 11.3), plus checks per feature. Run against a published build (`dotnet publish src/TaskDesk.App -p:PublishProfile=win-x64`). To keep your real data safe, set `TASKDESK_DATA_DIR` to a scratch folder first. That also turns on sandbox mode: the Run key is never read or written and reminders use tray balloons. Checks of rich toasts need notification registration, so also set `TASKDESK_SANDBOX=0` for them; this still never touches the Run key. Checks of auto-start need a normal run (no `TASKDESK_DATA_DIR`) of a published build, which uses your real data folder, so back it up first. Turning "Start with Windows" off removes the Run entry only when it points at the running exe. The log shows the active mode at start-up.
 
 Mark each item with the date and result.
 

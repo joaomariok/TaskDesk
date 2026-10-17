@@ -289,7 +289,7 @@ public sealed class ShellControllerTests
     public async Task Start_removes_run_key_when_setting_is_off()
     {
         _settings.Current = new ShellSettings(StartWithWindows: false);
-        _runKey.Values["TaskDesk"] = "x";
+        _runKey.Values["TaskDesk"] = "\"C:\\TaskDesk\\TaskDesk.exe\" --minimized";
 
         await StartedAsync();
 

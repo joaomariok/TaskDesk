@@ -58,7 +58,7 @@ Settings has "Open data folder", Export, Import and "Back up now".
 
 To use another folder (for example to try the app without touching your real data), set the environment variable `TASKDESK_DATA_DIR` to that folder before launching. When it is unset or blank the default location is used.
 
-Setting `TASKDESK_DATA_DIR` to a non-blank value also turns on sandbox mode, so a trial run leaves the rest of the machine alone: the "Start with Windows" setting never writes or removes the Run key, and reminders use tray balloons instead of registering Windows app notifications (no AppUserModelId keys, COM class or icon file are left behind). The `Runtime mode` line in the startup log shows which mode is active. To keep the real behaviour while using another data folder, also set `TASKDESK_SANDBOX=0`.
+Setting `TASKDESK_DATA_DIR` to a non-blank value also turns on sandbox mode, so a trial run leaves the rest of the machine alone: the Run key is never read or written, so the "Start with Windows" setting has no effect, and reminders use tray balloons instead of registering Windows app notifications (no AppUserModelId keys, COM class or icon file are left behind). The `Runtime mode` line in the startup log shows which mode is active. To register Windows app notifications while using another data folder, also set `TASKDESK_SANDBOX=0`; that never re-enables the Run key. In a normal run, turning "Start with Windows" off removes the Run entry only if it points at the running exe.
 
 ## Windows App SDK
 

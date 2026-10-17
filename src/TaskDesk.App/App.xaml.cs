@@ -45,7 +45,7 @@ public partial class App : Application
             // Forward --minimized and a Reminder notification click to the running instance (SPEC 7.1).
             var forwarded = SecondLaunchArguments.Build(
                 e.Args.Contains(SecondLaunchArguments.MinimizedFlag, StringComparer.OrdinalIgnoreCase),
-                mode.IsSandbox ? null : ReadLaunchActivation());
+                mode.RegistersNotifications ? ReadLaunchActivation() : null);
             await singleInstance.SignalExistingAsync(forwarded, CancellationToken.None);
             singleInstance.Dispose();
             Shutdown();
@@ -73,7 +73,7 @@ public partial class App : Application
         builder.Services.AddSingleton<HNotifyTrayIcon>();
         builder.Services.AddSingleton<ITrayIcon>(sp => sp.GetRequiredService<HNotifyTrayIcon>());
         builder.Services.AddSingleton<TrayBalloonNotificationService>();
-        if (mode.IsSandbox)
+        if (!mode.RegistersNotifications)
         {
             // No AppNotificationManager registration: balloons only, so nothing is left behind in the registry.
             builder.Services.AddSingleton<INotificationService>(
