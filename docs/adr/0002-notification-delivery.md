@@ -52,7 +52,7 @@ Reminders are delivered as Windows toasts through the Windows App SDK `AppNotifi
 **Verification (2026-10-17).**
 
 - Every published deps.json lists only files present in its folder, and both profiles start after each stage (sandbox-mode run, log line `Runtime mode: sandbox`).
-- `AppNotificationManager.Register()` with sandbox off: "App notifications registered" was logged by the untrimmed `win-x64-fdd` publish. The runs for both profiles after Stage A and Stage B were not made, because the agent's permission policy blocked the registry-writing launches, so registration on the trimmed publishes is still **unverified**. Stage B carries the risk, if any: no import table of the kept runtime DLLs points to a Stage B file, but a DLL loaded at run time would not show there. If a trimmed run falls back to the tray balloon, remove Stage B from `_TaskDeskUnusedWinUiPayload` first.
+- `AppNotificationManager.Register()` with sandbox off: "App notifications registered" was logged by the untrimmed `win-x64-fdd` publish. On 2026-10-17 the owner ran all four trimmed publishes (`win-x64` and `win-x64-fdd`, after Stage A and after Stage B). Each one logged "App notifications registered; Windows setting: Enabled". Those runs checked registration only; no Reminder was due, so no toast was shown. If a trimmed build ever falls back to the tray balloon, remove Stage B from `_TaskDeskUnusedWinUiPayload` first.
 
 ## Owner verification (2026-10-16, spike, Windows 11, from `NotificationSpike.log`)
 
