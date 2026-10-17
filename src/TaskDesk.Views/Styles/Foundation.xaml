@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The shared theme foundation every window builds on: type ramp, spacing, the field-label style and
+    meaning-named brushes. Everything sits on top of WinUI's Fluent resources (XamlControlsResources, merged
+    before this dictionary), so Light, Dark and high contrast all come from Fluent's own resources. No colour
+    is hard-coded. Use the brushes through ThemeResource.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Meaning-named brushes, use through ThemeResource:
+           OverdueBrush     Overdue Due text, icons and badges (Fluent's critical colour)
+           TodayBrush       Due-today text and icons (the system accent, readable accent-text shade)
+           ListStripeBrush  the ring of a colourless List; stands in for List colours in high contrast
+         Each theme takes the colours Fluent gives SystemFillColorCriticalBrush, AccentTextFillColorPrimaryBrush and
+         ControlStrongStrokeColorDefaultBrush in that theme. A StaticResource alias to those brushes would resolve
+         once, in the app's theme, and not follow a window's requested theme. -->
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="OverdueBrush" Color="{ThemeResource SystemFillColorCritical}" />
+            <SolidColorBrush x:Key="TodayBrush" Color="{ThemeResource SystemAccentColorLight3}" />
+            <SolidColorBrush x:Key="ListStripeBrush" Color="{ThemeResource ControlStrongStrokeColorDefault}" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="OverdueBrush" Color="{ThemeResource SystemFillColorCritical}" />
+            <SolidColorBrush x:Key="TodayBrush" Color="{ThemeResource SystemAccentColorDark2}" />
+            <SolidColorBrush x:Key="ListStripeBrush" Color="{ThemeResource ControlStrongStrokeColorDefault}" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="OverdueBrush" Color="{ThemeResource SystemFillColorCritical}" />
+            <SolidColorBrush x:Key="TodayBrush" Color="{ThemeResource SystemAccentColorLight3}" />
+            <SolidColorBrush x:Key="ListStripeBrush" Color="{ThemeResource ControlStrongStrokeColorDefault}" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="OverdueBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="TodayBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="ListStripeBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- Type ramp: the Windows 11 ramp from Fluent's TextBlock styles. -->
+    <Style x:Key="CaptionText" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}" />
+    <Style x:Key="BodyText" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}" />
+    <Style x:Key="BodyStrongText" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}" />
+    <Style x:Key="SubtitleText" TargetType="TextBlock" BasedOn="{StaticResource SubtitleTextBlockStyle}" />
+    <Style x:Key="TitleText" TargetType="TextBlock" BasedOn="{StaticResource TitleTextBlockStyle}" />
+
+    <!-- Secondary text, such as a row's caption or a count: the caption size in Fluent's secondary colour. -->
+    <Style x:Key="SecondaryCaptionText" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <!-- Gap between a field's label and its control, and between one labelled field and the next. -->
+    <Thickness x:Key="FieldLabelMargin">0,0,0,4</Thickness>
+    <Thickness x:Key="FieldMargin">0,0,0,12</Thickness>
+
+    <!-- A visible label above an input, like a WinUI control header. -->
+    <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+        <Setter Property="Margin" Value="{StaticResource FieldLabelMargin}" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+</ResourceDictionary>

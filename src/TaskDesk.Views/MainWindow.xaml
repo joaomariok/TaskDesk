@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Mica behind the content (MainView draws no background of its own) and the standard title bar. -->
 <Window
     x:Class="TaskDesk.Views.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="TaskDesk" />
+    Title="TaskDesk">
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+</Window>

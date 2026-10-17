@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tags;
@@ -46,6 +47,26 @@ public sealed class MainWindowTests
                 rows.Select(AutomationProperties.GetName).ToList());
             Assert.AreEqual("OpenTaskList", AutomationProperties.GetAutomationId(list));
             Assert.AreEqual("TaskDesk", window.Title);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public void The_main_window_has_Mica_behind_the_content_and_the_standard_title_bar()
+    {
+        using var db = new TempDatabase();
+        var viewModel = new MainViewModel(
+            db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock, listService: db.Get<IListService>());
+
+        var window = new MainWindow(viewModel);
+        try
+        {
+            Assert.IsInstanceOfType<MicaBackdrop>(window.SystemBackdrop);
+            Assert.IsFalse(window.ExtendsContentIntoTitleBar, "The window keeps the standard title bar.");
+            Assert.IsNull(window.View.Background, "The view draws no background over the Mica.");
         }
         finally
         {

@@ -78,6 +78,8 @@ public partial class App : Application
         builder.Services.AddSingleton<IShellSettingsStore>(_ => new JsonShellSettingsStore(paths.SettingsFile));
         builder.Services.AddSingleton<ShellController>();
         builder.Services.AddSingleton<WindowLayoutService>();
+        builder.Services.AddSingleton<ThemeService>();
+        builder.Services.AddSingleton<IThemeService>(sp => sp.GetRequiredService<ThemeService>());
         _host = builder.Build();
 
         await _host.StartAsync();
@@ -100,6 +102,10 @@ public partial class App : Application
 
         var window = _host.Services.GetRequiredService<MainWindow>();
         window.AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "TaskDesk.ico"));
+        // The saved theme applies before the window first shows; later switches reach it live.
+        var themes = _host.Services.GetRequiredService<ThemeService>();
+        themes.Register(window);
+        themes.Apply(_host.Services.GetRequiredService<IShellSettingsStore>().Load().Theme);
         var layout = _host.Services.GetRequiredService<WindowLayoutService>();
         layout.Restore(window);
         window.AppWindow.Changed += (sender, change) =>
