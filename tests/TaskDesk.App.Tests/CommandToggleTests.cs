@@ -4,6 +4,7 @@ using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using TaskDesk.App.Views;
@@ -85,6 +86,25 @@ public sealed class CommandToggleTests(WpfAppFixture fixture)
         {
             var style = fixture.App.FindResource(typeof(ToggleButton));
             Assert.All(toggles, button => Assert.Same(style, button.Style));
+        });
+    });
+
+    [Fact]
+    public void Text_inside_a_command_driven_toggle_takes_the_colour_its_template_gives_the_content() => fixture.Run(() =>
+    {
+        // The Filter row is open, so the Filter button is pressed: its text must turn the pressed colour too.
+        WithLaidOut(nameof(TaskListArea), toggles =>
+        {
+            foreach (var button in toggles)
+            {
+                var presenter = Descendants(button).OfType<ContentPresenter>().First();
+                var expected = ((SolidColorBrush)TextElement.GetForeground(presenter)).Color;
+                foreach (var text in Descendants(presenter).OfType<TextBlock>())
+                {
+                    Assert.True(expected == ((SolidColorBrush)text.Foreground).Color,
+                        $"'{text.Text}' in '{Describe(button)}' is {((SolidColorBrush)text.Foreground).Color}, not {expected}.");
+                }
+            }
         });
     });
 

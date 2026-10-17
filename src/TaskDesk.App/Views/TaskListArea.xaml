@@ -146,6 +146,14 @@
                               IsChecked="{Binding IsFilterBarShown, Mode=OneWay}"
                               Command="{Binding ToggleFilterBarCommand}">
                     <StackPanel Orientation="Horizontal">
+                        <!-- Fluent's implicit TextBlock style would keep the resting text colour; take the
+                             colour the template gives the content, so the pressed state reads too. -->
+                        <StackPanel.Resources>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground"
+                                        Value="{Binding (TextElement.Foreground), RelativeSource={RelativeSource AncestorType=ContentPresenter}}" />
+                            </Style>
+                        </StackPanel.Resources>
                         <TextBlock FontFamily="{DynamicResource SymbolThemeFontFamily}" FontSize="16"
                                    VerticalAlignment="Center" Text="&#xE71C;" />
                         <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Filter" />
