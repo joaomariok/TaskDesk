@@ -47,12 +47,6 @@ public sealed record WindowLayout(
     /// Returns a layout that respects the minimum size and lies fully inside the given screen area,
     /// so a window saved on a monitor that is gone is still reachable.
     /// </summary>
-    public WindowLayout FitTo(double screenLeft, double screenTop, double screenWidth, double screenHeight)
-    {
-        var width = Math.Max(MinWidth, Math.Min(Width, screenWidth));
-        var height = Math.Max(MinHeight, Math.Min(Height, screenHeight));
-        var left = Math.Clamp(Left, screenLeft, Math.Max(screenLeft, screenLeft + screenWidth - width));
-        var top = Math.Clamp(Top, screenTop, Math.Max(screenTop, screenTop + screenHeight - height));
-        return this with { Left = left, Top = top, Width = width, Height = height };
-    }
+    public WindowLayout FitTo(double screenLeft, double screenTop, double screenWidth, double screenHeight) =>
+        WindowLayoutCalculator.Fit(this, screenLeft, screenTop, screenWidth, screenHeight);
 }

@@ -19,7 +19,8 @@ internal sealed class WindowLayoutService(IShellSettingsStore store)
             return;
         }
 
-        var fitted = saved.FitTo(
+        var fitted = WindowLayoutCalculator.Fit(
+            saved,
             SystemParameters.VirtualScreenLeft,
             SystemParameters.VirtualScreenTop,
             SystemParameters.VirtualScreenWidth,
