@@ -48,6 +48,8 @@ Settings has "Open data folder", Export, Import and "Back up now".
 
 To use another folder (for example to try the app without touching your real data), set the environment variable `TASKDESK_DATA_DIR` to that folder before launching. When it is unset or blank the default location is used.
 
+Setting `TASKDESK_DATA_DIR` to a non-blank value also turns on sandbox mode, so a trial run leaves the rest of the machine alone: the "Start with Windows" setting never writes or removes the Run key, and reminders use tray balloons instead of registering Windows app notifications (no AppUserModelId keys, COM class or icon file are left behind). The `Runtime mode` line in the startup log shows which mode is active. To keep the real behaviour while using another data folder, also set `TASKDESK_SANDBOX=0`.
+
 ## Windows App SDK
 
 Reminders use Windows app notifications from the Windows App SDK. The app references `Microsoft.WindowsAppSDK.Foundation` and `Microsoft.WindowsAppSDK.Runtime` with `WindowsAppSDKSelfContained=true` and an unpackaged app (`WindowsPackageType=None`), so the runtime DLLs ship inside the publish folder and nothing needs installing. See [ADR 0002](docs/adr/0002-notification-delivery.md); it is still a draft until the owner has run the notification checks on a clean machine.
@@ -63,7 +65,7 @@ dotnet run --project tools/TaskDesk.SampleData -- "C:\temp\taskdesk-perf" 5000
 $env:TASKDESK_DATA_DIR = "C:\temp\taskdesk-perf"
 ```
 
-Pre-create `settings.json` in that folder with `{"startWithWindows":false}` first, so the test run cannot touch your Run key. Measured results and method are in the ticket report for issue #20; targets are cold start to visible window under 1.5 s and `--minimized` working set under 150 MB.
+Sandbox mode keeps the test run away from your Run key. Measured results and method are in the ticket report for issue #20; targets are cold start to visible window under 1.5 s and `--minimized` working set under 150 MB.
 
 ## Known limits
 

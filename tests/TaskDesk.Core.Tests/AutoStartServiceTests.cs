@@ -1,3 +1,4 @@
+using TaskDesk.Core.Paths;
 using TaskDesk.Core.Shell;
 
 namespace TaskDesk.Core.Tests;
@@ -48,5 +49,33 @@ public sealed class AutoStartServiceTests
         new AutoStartService(key).Apply(false, @"C:\x.exe");
 
         Assert.Empty(key.Values);
+    }
+
+    [Fact]
+    public void Sandbox_enabled_never_writes_the_entry()
+    {
+        var key = new FakeRunKey();
+        new AutoStartService(key, new RuntimeMode(true)).Apply(true, @"C:\x.exe");
+
+        Assert.Empty(key.Values);
+    }
+
+    [Fact]
+    public void Sandbox_disabled_never_removes_the_entry()
+    {
+        var key = new FakeRunKey();
+        key.Values["TaskDesk"] = "x";
+        new AutoStartService(key, new RuntimeMode(true)).Apply(false, @"C:\x.exe");
+
+        Assert.Equal("x", key.Values["TaskDesk"]);
+    }
+
+    [Fact]
+    public void Normal_mode_still_writes_the_entry()
+    {
+        var key = new FakeRunKey();
+        new AutoStartService(key, RuntimeMode.Normal).Apply(true, @"C:\x.exe");
+
+        Assert.Equal("\"C:\\x.exe\" --minimized", key.Values["TaskDesk"]);
     }
 }

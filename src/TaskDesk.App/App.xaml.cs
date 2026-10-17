@@ -27,7 +27,7 @@ public partial class App : Application
     private SettingsWindow? _settingsWindow;
     private QuickAddWindow? _quickAddWindow;
     private HotkeyService? _hotkeys;
-    private NotificationDelivery? _notifications;
+    private INotificationService? _notifications;
     private ReminderScheduler? _reminders;
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF override with a void signature; start-up failures are not recoverable.")]
@@ -36,6 +36,8 @@ public partial class App : Application
         base.OnStartup(e);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+        var mode = RuntimeMode.FromEnvironment();
+
         // Claim single-instance ownership before any expensive start-up work.
         var singleInstance = new NamedPipeSingleInstance();
         if (!singleInstance.TryAcquire())
@@ -43,7 +45,7 @@ public partial class App : Application
             // Forward --minimized and a Reminder notification click to the running instance (SPEC 7.1).
             var forwarded = SecondLaunchArguments.Build(
                 e.Args.Contains(SecondLaunchArguments.MinimizedFlag, StringComparer.OrdinalIgnoreCase),
-                ReadLaunchActivation());
+                mode.IsSandbox ? null : ReadLaunchActivation());
             await singleInstance.SignalExistingAsync(forwarded, CancellationToken.None);
             singleInstance.Dispose();
             Shutdown();
@@ -55,6 +57,7 @@ public partial class App : Application
 
         var builder = Host.CreateApplicationBuilder();
         builder.Logging.AddTaskDeskFileLogging(paths);
+        builder.Services.AddSingleton(mode);
         builder.Services.AddTaskDeskData(paths);
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<IListDialogs, WpfListDialogs>();
@@ -69,13 +72,23 @@ public partial class App : Application
         builder.Services.AddSingleton<ISingleInstance>(singleInstance);
         builder.Services.AddSingleton<HNotifyTrayIcon>();
         builder.Services.AddSingleton<ITrayIcon>(sp => sp.GetRequiredService<HNotifyTrayIcon>());
-        builder.Services.AddSingleton<AppSdkNotificationService>();
         builder.Services.AddSingleton<TrayBalloonNotificationService>();
-        builder.Services.AddSingleton(sp => new NotificationDelivery(
-            sp.GetRequiredService<AppSdkNotificationService>(),
-            sp.GetRequiredService<TrayBalloonNotificationService>(),
-            sp.GetRequiredService<ILogger<NotificationDelivery>>()));
-        builder.Services.AddSingleton<INotificationService>(sp => sp.GetRequiredService<NotificationDelivery>());
+        if (mode.IsSandbox)
+        {
+            // No AppNotificationManager registration: balloons only, so nothing is left behind in the registry.
+            builder.Services.AddSingleton<INotificationService>(
+                sp => sp.GetRequiredService<TrayBalloonNotificationService>());
+        }
+        else
+        {
+            builder.Services.AddSingleton<AppSdkNotificationService>();
+            builder.Services.AddSingleton(sp => new NotificationDelivery(
+                sp.GetRequiredService<AppSdkNotificationService>(),
+                sp.GetRequiredService<TrayBalloonNotificationService>(),
+                sp.GetRequiredService<ILogger<NotificationDelivery>>()));
+            builder.Services.AddSingleton<INotificationService>(sp => sp.GetRequiredService<NotificationDelivery>());
+        }
+
         builder.Services.AddSingleton<ReminderScheduler>();
         builder.Services.AddSingleton<ReminderActivationHandler>();
         builder.Services.AddSingleton<IRunKey, RegistryRunKey>();
@@ -106,6 +119,8 @@ public partial class App : Application
         _host = builder.Build();
 
         await _host.StartAsync();
+        _host.Services.GetRequiredService<ILogger<App>>().LogInformation(
+            "Runtime mode: {Mode} (data folder {DataDirectory})", mode, paths.DataDirectory);
         try
         {
             await _host.Services.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
@@ -156,9 +171,13 @@ public partial class App : Application
         _hotkeys.Start();
 
         // Rich notifications, or the tray balloon fallback with a banner explaining why (SPEC 7.3).
-        _notifications = _host.Services.GetRequiredService<NotificationDelivery>();
-        _notifications.FellBack += reason =>
-            _ = Dispatcher.InvokeAsync(() => window.ViewModel.ShowNotificationBanner(reason));
+        _notifications = _host.Services.GetRequiredService<INotificationService>();
+        if (_notifications is NotificationDelivery delivery)
+        {
+            delivery.FellBack += reason =>
+                _ = Dispatcher.InvokeAsync(() => window.ViewModel.ShowNotificationBanner(reason));
+        }
+
         _notifications.Activated += activation => _ = Dispatcher.InvokeAsync(() => HandleActivationAsync(activation));
         _notifications.Register();
         var launch = _notifications.GetLaunchActivation();
