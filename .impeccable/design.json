@@ -1,0 +1,633 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-17T14:25:11+00:00",
+  "title": "Design System: TaskDesk",
+  "extensions": {
+    "colorMeta": {
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.0% 0.000 0.0)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Fluent value is translucent (written #RRGGBBAA here; the Fluent XAML writes #AARRGGBB) (alpha 89%); the canonical value and ramp use its opaque colour."
+      },
+      "text-primary-dark": {
+        "role": "neutral",
+        "displayName": "Ink (Dark)",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "oklch(0.0% 0.000 0.0)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Fluent value is translucent (written #RRGGBBAA here; the Fluent XAML writes #AARRGGBB) (alpha 62%); the canonical value and ramp use its opaque colour."
+      },
+      "text-secondary-dark": {
+        "role": "neutral",
+        "displayName": "Soft Ink (Dark)",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Fluent value is translucent (written #RRGGBBAA here; the Fluent XAML writes #AARRGGBB) (alpha 77%); the canonical value and ramp use its opaque colour."
+      },
+      "surface-base": {
+        "role": "neutral",
+        "displayName": "Window Base",
+        "canonical": "oklch(96.4% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ]
+      },
+      "surface-base-dark": {
+        "role": "neutral",
+        "displayName": "Window Base (Dark)",
+        "canonical": "oklch(24.4% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ]
+      },
+      "surface-pane": {
+        "role": "neutral",
+        "displayName": "Pane Grey",
+        "canonical": "oklch(94.9% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ]
+      },
+      "surface-pane-dark": {
+        "role": "neutral",
+        "displayName": "Pane Grey (Dark)",
+        "canonical": "oklch(22.6% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ]
+      },
+      "card-fill": {
+        "role": "neutral",
+        "displayName": "Card Veil",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Fluent value is translucent (written #RRGGBBAA here; the Fluent XAML writes #AARRGGBB) (alpha 70%); the canonical value and ramp use its opaque colour."
+      },
+      "card-fill-dark": {
+        "role": "neutral",
+        "displayName": "Card Veil (Dark)",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Fluent value is translucent (written #RRGGBBAA here; the Fluent XAML writes #AARRGGBB) (alpha 5%); the canonical value and ramp use its opaque colour."
+      },
+      "card-stroke": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(0.0% 0.000 0.0)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Fluent value is translucent (written #RRGGBBAA here; the Fluent XAML writes #AARRGGBB) (alpha 6%); the canonical value and ramp use its opaque colour."
+      },
+      "card-stroke-dark": {
+        "role": "neutral",
+        "displayName": "Hairline (Dark)",
+        "canonical": "oklch(0.0% 0.000 0.0)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Fluent value is translucent (written #RRGGBBAA here; the Fluent XAML writes #AARRGGBB) (alpha 10%); the canonical value and ramp use its opaque colour."
+      },
+      "control-stroke": {
+        "role": "neutral",
+        "displayName": "Control Hairline",
+        "canonical": "oklch(0.0% 0.000 0.0)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Fluent value is translucent (written #RRGGBBAA here; the Fluent XAML writes #AARRGGBB) (alpha 6%); the canonical value and ramp use its opaque colour."
+      },
+      "control-stroke-dark": {
+        "role": "neutral",
+        "displayName": "Control Hairline (Dark)",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Fluent value is translucent (written #RRGGBBAA here; the Fluent XAML writes #AARRGGBB) (alpha 7%); the canonical value and ramp use its opaque colour."
+      },
+      "strong-stroke": {
+        "role": "neutral",
+        "displayName": "Strong Stroke",
+        "canonical": "oklch(0.0% 0.000 0.0)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Fluent value is translucent (written #RRGGBBAA here; the Fluent XAML writes #AARRGGBB) (alpha 45%); the canonical value and ramp use its opaque colour."
+      },
+      "strong-stroke-dark": {
+        "role": "neutral",
+        "displayName": "Strong Stroke (Dark)",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Fluent value is translucent (written #RRGGBBAA here; the Fluent XAML writes #AARRGGBB) (alpha 55%); the canonical value and ramp use its opaque colour."
+      },
+      "overdue": {
+        "role": "secondary",
+        "displayName": "Overdue Red",
+        "canonical": "oklch(53.6% 0.191 30.1)",
+        "tonalRamp": [
+          "#3D0000",
+          "#630000",
+          "#8D0000",
+          "#B71A0C",
+          "#E24A38",
+          "#FF735D",
+          "#FF9780",
+          "#FFB89F"
+        ]
+      },
+      "overdue-dark": {
+        "role": "secondary",
+        "displayName": "Overdue Red (Dark)",
+        "canonical": "oklch(79.1% 0.123 13.3)",
+        "tonalRamp": [
+          "#2D0000",
+          "#4F0012",
+          "#751C2F",
+          "#9C414F",
+          "#C46471",
+          "#ED8994",
+          "#FFACB6",
+          "#FFCCD7"
+        ]
+      },
+      "caution": {
+        "role": "tertiary",
+        "displayName": "Caution Amber",
+        "canonical": "oklch(53.9% 0.121 65.2)",
+        "tonalRamp": [
+          "#280000",
+          "#480C00",
+          "#6C2F00",
+          "#915200",
+          "#B7752A",
+          "#DF9A52",
+          "#FFBD75",
+          "#FFDE96"
+        ]
+      },
+      "caution-dark": {
+        "role": "tertiary",
+        "displayName": "Caution Amber (Dark)",
+        "canonical": "oklch(90.4% 0.188 100.5)",
+        "tonalRamp": [
+          "#1E0200",
+          "#3A1C00",
+          "#5B3E00",
+          "#7D6100",
+          "#A18500",
+          "#C6AB00",
+          "#EACF00",
+          "#FFF130"
+        ]
+      },
+      "caution-bg": {
+        "role": "tertiary",
+        "displayName": "Caution Wash",
+        "canonical": "oklch(96.6% 0.051 93.7)",
+        "tonalRamp": [
+          "#120A00",
+          "#2C2302",
+          "#4B4221",
+          "#6D6341",
+          "#908663",
+          "#B5AB87",
+          "#D9CEA9",
+          "#FAEFC9"
+        ]
+      },
+      "caution-bg-dark": {
+        "role": "tertiary",
+        "displayName": "Caution Wash (Dark)",
+        "canonical": "oklch(33.7% 0.047 83.2)",
+        "tonalRamp": [
+          "#140800",
+          "#2F2205",
+          "#4F4024",
+          "#706144",
+          "#948466",
+          "#B9A989",
+          "#DDCCAB",
+          "#FEECCB"
+        ]
+      },
+      "neutral-badge": {
+        "role": "neutral",
+        "displayName": "Badge Grey",
+        "canonical": "oklch(63.3% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ]
+      },
+      "neutral-badge-dark": {
+        "role": "neutral",
+        "displayName": "Badge Grey (Dark)",
+        "canonical": "oklch(69.6% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ]
+      },
+      "list-red": {
+        "role": "data",
+        "displayName": "List Red",
+        "canonical": "oklch(57.0% 0.193 24.7)",
+        "tonalRamp": [
+          "#3E0000",
+          "#640000",
+          "#8E0000",
+          "#B81323",
+          "#E34747",
+          "#FF6F6B",
+          "#FF948C",
+          "#FFB5AC"
+        ]
+      },
+      "list-orange": {
+        "role": "data",
+        "displayName": "List Orange",
+        "canonical": "oklch(68.0% 0.198 43.0)",
+        "tonalRamp": [
+          "#3D0000",
+          "#640000",
+          "#8D0000",
+          "#B72100",
+          "#E14F00",
+          "#FF772E",
+          "#FF9B58",
+          "#FFBD7A"
+        ]
+      },
+      "list-yellow": {
+        "role": "data",
+        "displayName": "List Yellow",
+        "canonical": "oklch(82.9% 0.171 81.0)",
+        "tonalRamp": [
+          "#2A0000",
+          "#4A0800",
+          "#6E2F00",
+          "#935200",
+          "#B97700",
+          "#E19C00",
+          "#FFC01B",
+          "#FFE150"
+        ]
+      },
+      "list-green": {
+        "role": "data",
+        "displayName": "List Green",
+        "canonical": "oklch(51.0% 0.165 142.7)",
+        "tonalRamp": [
+          "#001600",
+          "#003300",
+          "#005500",
+          "#08790A",
+          "#3D9E3A",
+          "#65C460",
+          "#89E982",
+          "#A9FFA2"
+        ]
+      },
+      "list-blue": {
+        "role": "data",
+        "displayName": "List Blue",
+        "canonical": "oklch(56.8% 0.167 251.3)",
+        "tonalRamp": [
+          "#00004E",
+          "#001770",
+          "#003E96",
+          "#0063BD",
+          "#2288E6",
+          "#4FAFFF",
+          "#74D3FF",
+          "#95F5FF"
+        ]
+      },
+      "list-purple": {
+        "role": "data",
+        "displayName": "List Purple",
+        "canonical": "oklch(50.7% 0.144 301.0)",
+        "tonalRamp": [
+          "#19003C",
+          "#32005C",
+          "#512781",
+          "#724BA7",
+          "#956FCE",
+          "#BA94F7",
+          "#DEB7FF",
+          "#FFD8FF"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Settings page title only."
+      },
+      "subtitle": {
+        "displayName": "Subtitle",
+        "purpose": "Page heading, dialog heading, detail pane header."
+      },
+      "body-strong": {
+        "displayName": "Body Strong",
+        "purpose": "Settings group headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Task titles, labels, sidebar items, dialog text."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Counts, chips, row captions, hints."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "completion-hold",
+        "value": "400ms",
+        "purpose": "A completed Task stays dimmed in place before moving into Completed; 0 ms when Windows animations are off."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "rail",
+        "value": "900px"
+      },
+      {
+        "name": "docked-pane",
+        "value": "1100px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Task Row",
+      "kind": "custom",
+      "refersTo": "task-checkbox",
+      "description": "One-line Task row: List stripe, round checkbox, title, Tag chip, List caption, Due chip.",
+      "html": "<div class=\"ds-row\" tabindex=\"0\"><span class=\"ds-stripe\"></span><span class=\"ds-check\"></span><span class=\"ds-title\">Call the bank</span><span class=\"ds-tag\">health</span><span class=\"ds-caption\">Inbox</span><span class=\"ds-due ds-due-today\">Today 18:00</span></div>",
+      "css": ".ds-row{display:flex;align-items:center;gap:8px;padding:4px 8px;font-family:'Segoe UI',sans-serif;font-size:14px;color:#000000E4;border-radius:4px;max-width:520px}.ds-row:hover{background:#00000006}.ds-row:focus-visible{outline:2px solid #000000E4;outline-offset:1px}.ds-stripe{width:3px;height:20px;border-radius:1.5px;background:#0078D4}.ds-check{width:18px;height:18px;border:1px solid #00000072;border-radius:50%;flex:none}.ds-row:hover .ds-check{background:#0000000F}.ds-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ds-caption{font-size:12px;color:#0000009E}.ds-tag{font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid #0000000F;background:#FFFFFFB3}.ds-due{font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid #0000000F;color:#0000009E}.ds-due-today{border-color:AccentColor;color:AccentColor}"
+    },
+    {
+      "name": "Due Chip (Overdue)",
+      "kind": "chip",
+      "refersTo": "due-chip-overdue",
+      "description": "Relative Due wording; Overdue in the critical colour, no fill.",
+      "html": "<span class=\"ds-due-overdue\">Yesterday</span>",
+      "css": ".ds-due-overdue{display:inline-block;font-family:'Segoe UI',sans-serif;font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid #C42B1C;color:#C42B1C}"
+    },
+    {
+      "name": "Tag Chip",
+      "kind": "chip",
+      "refersTo": "tag-chip",
+      "description": "Pill for a Tag on a row, at most 96px of text.",
+      "html": "<span class=\"ds-tag-chip\">work</span>",
+      "css": ".ds-tag-chip{display:inline-block;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Segoe UI',sans-serif;font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid #0000000F;background:#FFFFFFB3;color:#000000E4}"
+    },
+    {
+      "name": "Sidebar Item",
+      "kind": "nav",
+      "refersTo": "sidebar-badge-overdue",
+      "description": "Smart View items with icon, name, count and the red Overdue badge.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item ds-nav-selected\" href=\"#\"><svg class=\"ds-icon\" viewBox=\"0 0 16 16\" width=\"16\" height=\"16\"><rect x=\"2\" y=\"3\" width=\"12\" height=\"11\" rx=\"2\" fill=\"none\" stroke=\"currentColor\"/><line x1=\"2\" y1=\"6\" x2=\"14\" y2=\"6\" stroke=\"currentColor\"/></svg>Today<span class=\"ds-count\">3</span></a><a class=\"ds-nav-item\" href=\"#\"><svg class=\"ds-icon\" viewBox=\"0 0 16 16\" width=\"16\" height=\"16\"><path d=\"M8 2 15 14H1Z\" fill=\"none\" stroke=\"currentColor\"/><line x1=\"8\" y1=\"6\" x2=\"8\" y2=\"10\" stroke=\"currentColor\"/></svg>Overdue<span class=\"ds-badge\">2</span></a></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:2px;width:180px;font-family:'Segoe UI',sans-serif;font-size:14px}.ds-nav-item{display:flex;align-items:center;gap:8px;padding:6px 8px;color:#000000E4;text-decoration:none;border-radius:4px}.ds-nav-item:hover{background:#00000006}.ds-nav-item:focus-visible{outline:2px solid #000000E4}.ds-nav-selected{background:color-mix(in srgb, AccentColor 18%, transparent)}.ds-icon{flex:none}.ds-count{margin-left:auto;font-size:12px;color:#0000009E}.ds-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#C42B1C;color:#FFFFFF;font-size:12px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}"
+    },
+    {
+      "name": "Warning InfoBar",
+      "kind": "custom",
+      "refersTo": "infobar-warning",
+      "description": "Closable warning bar, used for the notifications fallback and the hotkey conflict.",
+      "html": "<div class=\"ds-infobar\" role=\"status\"><svg class=\"ds-ib-icon\" viewBox=\"0 0 16 16\" width=\"16\" height=\"16\"><path d=\"M8 2 15 14H1Z\" fill=\"none\" stroke=\"currentColor\"/><line x1=\"8\" y1=\"6\" x2=\"8\" y2=\"10\" stroke=\"currentColor\"/></svg><span class=\"ds-ib-msg\">Windows notifications are unavailable, so Reminders use tray balloons.</span><button class=\"ds-ib-close\" aria-label=\"Close\">&#10005;</button></div>",
+      "css": ".ds-infobar{display:flex;align-items:center;min-height:48px;padding:4px 4px 4px 12px;border:1px solid #0000000F;border-radius:4px;background:#FFF4CE;color:#000000E4;font-family:'Segoe UI',sans-serif;font-size:14px;max-width:520px;box-sizing:border-box}.ds-ib-icon{color:#9D5D00;margin-right:12px;flex:none}.ds-ib-msg{flex:1}.ds-ib-close{width:32px;height:32px;border:0;background:transparent;border-radius:4px;color:#000000E4;cursor:pointer}.ds-ib-close:hover{background:#0000000F}.ds-ib-close:focus-visible{outline:2px solid #000000E4}"
+    },
+    {
+      "name": "Settings Card",
+      "kind": "card",
+      "refersTo": "settings-card",
+      "description": "Windows Settings-style card: title and description on the left, the control on the right.",
+      "html": "<div class=\"ds-card\"><div><div class=\"ds-card-title\">Start with Windows</div><div class=\"ds-card-desc\">Open TaskDesk in the tray when you sign in.</div></div><input type=\"checkbox\" class=\"ds-card-ctl\" aria-label=\"Start with Windows\" checked></div>",
+      "css": ".ds-card{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:60px;padding:8px 16px;border:1px solid #0000000F;border-radius:4px;background:#FFFFFFB3;font-family:'Segoe UI',sans-serif;color:#000000E4;max-width:560px;box-sizing:border-box}.ds-card-title{font-size:14px}.ds-card-desc{font-size:12px;color:#0000009E}.ds-card-ctl{accent-color:AccentColor;width:18px;height:18px}.ds-card-ctl:focus-visible{outline:2px solid #000000E4}"
+    },
+    {
+      "name": "Dialog Buttons",
+      "kind": "button",
+      "refersTo": "dialog",
+      "description": "Shared dialog: Cancel, then the accent primary on the right; for destructive actions Cancel is the default.",
+      "html": "<div class=\"ds-dlg\"><div class=\"ds-dlg-h\">Delete list</div><div class=\"ds-dlg-b\">Delete “Work” and its 4 Tasks? This cannot be undone.</div><div class=\"ds-dlg-f\"><button class=\"ds-btn\" autofocus>Cancel</button><button class=\"ds-btn ds-btn-primary\">Delete</button></div></div>",
+      "css": ".ds-dlg{width:440px;padding:24px;box-sizing:border-box;font-family:'Segoe UI',sans-serif;color:#000000E4;background:#F3F3F3;border-radius:8px;border:1px solid #0000000F}.ds-dlg-h{font-size:20px;font-weight:600;margin-bottom:12px}.ds-dlg-b{font-size:14px;margin-bottom:16px}.ds-dlg-f{display:flex;justify-content:flex-end;gap:8px}.ds-btn{min-width:96px;padding:5px 11px 6px;border-radius:4px;border:1px solid #0000000F;background:#FFFFFFB3;color:#000000E4;font-family:'Segoe UI',sans-serif;font-size:14px;cursor:pointer}.ds-btn:hover{background:#F9F9F980}.ds-btn:focus-visible{outline:2px solid #000000E4;outline-offset:1px}.ds-btn-primary{background:AccentColor;color:AccentColorText;border-color:transparent}.ds-btn-primary:hover{opacity:.9}.ds-btn-primary:active{opacity:.8}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Desk",
+    "overview": "TaskDesk is a tidy desk that is always there and never asks for attention. It is a native Windows 11 app on WPF's built-in Fluent theme (`Application.ThemeMode`), so the window, the controls, the type ramp and every colour come from Windows itself and follow Light, Dark and high contrast without a line of TaskDesk code. The design's job is restraint: calm Fluent surfaces, one list the eye can scan in a glance, and colour that appears only where it carries meaning (a Task that is Overdue, a Due that is today, a List's own colour).\n\nIts signature is soft and small, and it should be reused, not reinvented: a round Task checkbox, pill chips for Due and Tags, count badges in the sidebar and the rail, a List-colour stripe on each row. These pieces are built on Fluent's own brushes and radii, so they read as part of Windows, but together they make a TaskDesk screen recognisable. Density is that of a desktop tool used all day at mid-size: 14 px body text, rows that fit one line, panels that appear on demand rather than crowding the list.\n\nAll colour goes through theme resources. The colour tokens in this file are the Fluent theme's Light and Dark values, recorded so tools can render them (8-digit values are CSS `#RRGGBBAA`; Fluent's XAML writes the same colours as `#AARRGGBB`); the app itself never hard-codes them (the only literal colours are the six List presets, which are user data).",
+    "keyCharacteristics": [
+      "Native Fluent first: every control is Fluent's own, restyled only through styles `BasedOn` the Fluent style.",
+      "Meaning-only colour: Overdue, Today and List colour are the only hues beyond the system accent.",
+      "A soft signature: round checkbox, pill chips, count badges, the List stripe.",
+      "List first, details on demand: the detail pane opens when asked and stays closed when closed.",
+      "Every look works in Light, Dark and high contrast, with meaning carried by text as well as colour."
+    ],
+    "rules": [
+      {
+        "name": "The Meaning-Only Rule",
+        "body": "Colour beyond the neutrals and the system accent marks a fact: Overdue, today, caution, or which List a Task belongs to. Never use colour for decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Theme-Resource Rule",
+        "body": "Every colour in the app is a `DynamicResource` to a Fluent key or one of the meaning-named brushes (`OverdueBrush`, `TodayBrush`, `ListStripeBrush`); the only literal colours are the List presets. A new meaning gets a new named brush in `FoundationResources`, not a hex value in XAML.",
+        "section": "colors"
+      },
+      {
+        "name": "The Words-Too Rule",
+        "body": "In high contrast every signal colour becomes the system text colour, so meaning must also be in text: \"Overdue\" sits in the Overdue header and the badge shows a count.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ramp-Only Rule",
+        "body": "Text uses one of the app's ramp styles (`TitleText`, `SubtitleText`, `BodyStrongText`, `BodyText`, `CaptionText`, `SecondaryCaptionText`, `FieldLabel`), each `BasedOn` Fluent's. No ad-hoc font sizes or weights.",
+        "section": "typography"
+      },
+      {
+        "name": "The One-Line Row Rule",
+        "body": "Row text never wraps: titles and captions are single-line with a trailing ellipsis, and the full title is in a tooltip. Fluent's text styles wrap by default, so rows set `NoWrap` explicitly.",
+        "section": "typography"
+      },
+      {
+        "name": "The On-Demand Rule",
+        "body": "The list owns the window. The detail pane opens on a click, Enter, F2 or a notification; it stays closed when the user closes it, and arrow keys only move the selection.",
+        "section": "layout"
+      },
+      {
+        "name": "The Fluent-Lift Rule",
+        "body": "New work may add lift, but only Fluent's own elevation, and only where it helps a surface read as in front, for example a card that responds to hover. Never invent a shadow value.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** base every style on the Fluent style it replaces (`BasedOn=\"{StaticResource {x:Type X}}\"`) and merge it in `App.xaml` after `ThemeMode` is set.",
+      "**Do** take colour from Fluent keys or the meaning-named brushes through `DynamicResource`, and add any new meaning to `FoundationResources`.",
+      "**Do** reuse the signature pieces (round checkbox, pill chips, badges, List stripe) before designing a new one.",
+      "**Do** give every control a visible label and an `AutomationProperties.Name`, and check it in Light, Dark and high contrast.",
+      "**Do** keep rows to one line, with the full title in a tooltip.",
+      "**Do** let Windows' animation setting switch motion off; the 400 ms completion hold drops to zero."
+    ],
+    "donts": [
+      "**Don't** hard-code a colour in XAML; only the six List presets are literal.",
+      "**Don't** use spacing resources of type `Double` for `Margin` or `Padding`; write `Thickness` values.",
+      "**Don't** add a second typeface or sizes outside the Fluent ramp.",
+      "**Don't** invent shadow values; use Fluent's own elevation or none.",
+      "**Don't** put more than one accent button in a dialog, or make a destructive action the Enter default.",
+      "**Don't** reopen a pane, panel or overlay the user closed without an explicit request.",
+      "**Don't** follow web conventions where Windows has its own (window chrome, dialogs, file pickers, notifications)."
+    ]
+  }
+}
