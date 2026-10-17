@@ -8,16 +8,21 @@ namespace TaskDesk.UiTests;
 /// <c>TASKDESK_UI_SCREENSHOTS</c> set to a folder it also saves a PNG per state, for eyeballing
 /// (see the ui-check skill); without it, the tour is a smoke test.
 /// </summary>
-public sealed class ScreenshotTour
+public sealed class ScreenshotTour : IDisposable
 {
     public const string ScreenshotsVariable = "TASKDESK_UI_SCREENSHOTS";
+
+    // A field, not a using: disposed after the test, so a failure leaves a screenshot (AppSession.CaptureIfFailed).
+    private AppSession? _app;
+
+    public void Dispose() => _app?.Dispose();
 
     [Theory]
     [InlineData("Light")]
     [InlineData("Dark")]
     public void Main_window_states(string theme)
     {
-        using var app = AppSession.Start(theme);
+        var app = _app = AppSession.Start(theme);
         var shots = Environment.GetEnvironmentVariable(ScreenshotsVariable);
         void Shot(int step, string state)
         {

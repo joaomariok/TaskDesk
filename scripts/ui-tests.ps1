@@ -30,6 +30,10 @@ try {
         $env:TASKDESK_UI_SCREENSHOTS = (New-Item -ItemType Directory -Force $Screenshots).FullName
     }
 
+    # A failed test leaves a PNG of the window here; clear the last run's so none is stale.
+    $failures = Join-Path $repoRoot 'TestResults/ui-failures'
+    Remove-Item $failures -Recurse -Force -ErrorAction SilentlyContinue
+
     & dotnet build tests/TaskDesk.UiTests -warnaserror
     if ($LASTEXITCODE -ne 0) { Write-Host "UI TESTS FAILED: test build exit $LASTEXITCODE"; exit $LASTEXITCODE }
 
@@ -38,6 +42,7 @@ try {
     & dotnet @runArgs
     $code = $LASTEXITCODE
     if ($Screenshots) { Write-Host "Screenshots: $env:TASKDESK_UI_SCREENSHOTS" }
+    if (Test-Path $failures) { Write-Host "Failure screenshots: $failures" }
     Write-Host ($code -eq 0 ? 'UI TESTS PASSED' : "UI TESTS FAILED: exit $code")
     exit $code
 }

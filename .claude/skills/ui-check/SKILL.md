@@ -17,7 +17,7 @@ Two passes over the real window: the UI suite (does it behave) and a screenshot 
    pwsh scripts/ui-tests.ps1 -Screenshots <scratchpad>/ui-shots-<n>
    ```
 
-   Judge the result by the exit code. On failure, report each failing test with its message, then rerun only that class (`-Class <name>`) once: a pass on rerun is a **flake** to report as such, a second failure is a real failure. Continue to step 3 either way if screenshots were written.
+   Judge the result by the exit code. On failure, read the PNG each failed test left in the folder the script prints as "Failure screenshots" (the window at the moment of failure: look for a dialog in the way, focus elsewhere, text in the wrong box), report each failing test with its message and what its screenshot shows, then rerun only that class (`-Class <name>`) once: a pass on rerun is a **flake** to report as such, a second failure is a real failure. Continue to step 3 either way if screenshots were written.
 
 3. Read every PNG in the folder (10 when the tour passes: `light-` and `dark-`, steps 01 to 05 in the order empty, tasks, details, list-and-tag, completed). For each, check:
    - text clipped, cut off or overlapping another control;

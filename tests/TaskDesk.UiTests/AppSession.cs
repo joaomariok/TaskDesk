@@ -182,10 +182,14 @@ public sealed class AppSession : IDisposable
         }
     }
 
+    /// <summary>Folder (under the repository's TestResults) where a failed test leaves a PNG of the window.</summary>
+    public static string FailuresDirectory => Path.Combine(RepoRoot(), "TestResults", "ui-failures");
+
     public void Dispose()
     {
         if (_app is not null)
         {
+            CaptureIfFailed();
             if (!_app.HasExited)
             {
                 _app.Kill();
@@ -202,6 +206,33 @@ public sealed class AppSession : IDisposable
         catch (IOException)
         {
             // A just-killed process can hold the database for a moment; the folder is in %TEMP%.
+        }
+    }
+
+    /// <summary>
+    /// After a failed test, saves the window as it was, so a flaky failure can be seen and not just read about.
+    /// Needs the session to be disposed after the test body (a test class field), when xUnit has the result.
+    /// </summary>
+    private void CaptureIfFailed()
+    {
+        if (TestContext.Current.TestState?.Result != TestResult.Failed || _app!.HasExited)
+        {
+            return;
+        }
+
+        try
+        {
+            var name = TestContext.Current.Test?.TestDisplayName ?? "unknown";
+            name = string.Concat(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+            Directory.CreateDirectory(FailuresDirectory);
+            var path = Path.Combine(FailuresDirectory, name + ".png");
+            Capture(path);
+            Console.WriteLine($"UI failure screenshot: {path}");
+        }
+        catch (Exception ex)
+        {
+            // A missing screenshot must never hide the real failure.
+            Console.WriteLine($"UI failure screenshot not saved: {ex.Message}");
         }
     }
 
@@ -226,20 +257,24 @@ public sealed class AppSession : IDisposable
             return overridePath;
         }
 
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "TaskDesk.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
         // The Debug build of the app, wherever its target framework and runtime put it; the newest wins.
-        var bin = Path.Combine(directory?.FullName ?? throw new InvalidOperationException("Repository root not found."),
-            @"src\TaskDesk.App\bin\Debug");
+        var bin = Path.Combine(RepoRoot(), @"src\TaskDesk.App\bin\Debug");
         var newest = Directory.Exists(bin)
             ? new DirectoryInfo(bin).EnumerateFiles("TaskDesk.App.exe", SearchOption.AllDirectories)
                 .MaxBy(file => file.LastWriteTimeUtc)
             : null;
         return newest?.FullName
                ?? throw new FileNotFoundException($"Build the app first (dotnet build src/TaskDesk.App) or set {AppVariable}.", bin);
+    }
+
+    private static string RepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "TaskDesk.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        return directory?.FullName ?? throw new InvalidOperationException("Repository root not found.");
     }
 }
