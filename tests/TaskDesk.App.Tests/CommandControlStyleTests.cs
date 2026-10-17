@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Markup;
 using System.Windows.Media;
 using TaskDesk.App.Controls;
 using TaskDesk.App.Views;
@@ -12,7 +13,8 @@ namespace TaskDesk.App.Tests;
 
 /// <summary>
 /// The command-driven CheckBox and ToggleButton draw Fluent's own templates, and a Task row's checkbox is
-/// Fluent's box without the room Fluent reserves for a label, so the row stays one compact line.
+/// Fluent's box without the room Fluent reserves for a label, so the row stays one compact line. A style
+/// set on either control, also inside a template, wins over Fluent's.
 /// </summary>
 [Collection(WpfAppCollection.Name)]
 public sealed class CommandControlStyleTests(WpfAppFixture fixture)
@@ -36,6 +38,29 @@ public sealed class CommandControlStyleTests(WpfAppFixture fixture)
         // Fluent's 20 px box inside its 1 px root border; Fluent's CheckBox otherwise reserves 32 px of height
         // and 120 px of width for a label.
         Assert.Equal(new Size(22, 22), checkBox.RenderSize);
+    });
+
+    [Theory]
+    [InlineData(typeof(CommandCheckBox))]
+    [InlineData(typeof(CommandToggleButton))]
+    public void Style_set_in_a_template_wins(Type control) => fixture.Run(() =>
+    {
+        var style = new Style(control.BaseType!, (Style)fixture.App.FindResource(control.BaseType!));
+        var template = (DataTemplate)XamlReader.Parse(
+            $$"""
+            <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:c="clr-namespace:TaskDesk.App.Controls;assembly=TaskDesk.App">
+                <c:{{control.Name}} Style="{DynamicResource Marker}" />
+            </DataTemplate>
+            """);
+        var presenter = new ContentPresenter { Content = new object(), ContentTemplate = template };
+        presenter.Resources["Marker"] = style;
+        presenter.Measure(LayoutSize);
+        presenter.Arrange(new Rect(LayoutSize));
+
+        var button = Descendants(presenter).OfType<ToggleButton>().Single();
+
+        Assert.Same(style, button.Style);
     });
 
     [Theory]

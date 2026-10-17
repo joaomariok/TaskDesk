@@ -11,10 +11,16 @@ public sealed class CommandCheckBox : CheckBox
 {
     private bool _clicking;
 
-    public CommandCheckBox()
+    protected override void OnInitialized(EventArgs e)
     {
-        // The implicit style is looked up by the exact type; use Fluent's CheckBox style.
-        SetResourceReference(StyleProperty, typeof(CheckBox));
+        base.OnInitialized(e);
+        // The implicit style is looked up by the exact type, so there is none: use Fluent's CheckBox style.
+        // Only when no style is set: a style set inside a template has lower precedence than a value set
+        // here, so setting it unconditionally (as the constructor once did) would override the template's.
+        if (Style is null)
+        {
+            SetResourceReference(StyleProperty, typeof(CheckBox));
+        }
     }
 
     protected override void OnClick()
