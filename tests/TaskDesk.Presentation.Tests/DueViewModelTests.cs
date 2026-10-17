@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Time.Testing;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
@@ -14,6 +15,11 @@ public class DueViewModelTests
         TimeZoneInfo.CreateCustomTimeZone("Test-3", TimeSpan.FromHours(-3), "Test-3", "Test-3");
 
     private static DateOnly Day(int day) => new(2026, 10, day);
+
+    // Day names follow the current culture, as the row's text does.
+    private static string Weekday(int day) => Day(day).ToString("ddd", CultureInfo.CurrentCulture);
+
+    private static string Full(DateOnly date) => date.ToString("ddd d MMM", CultureInfo.CurrentCulture);
 
     // Mutates the Tasks held by the FakeTaskService; the Smart Views are computed with the Core predicates.
     private sealed class FakeDueService(FakeTaskService tasks, FakeTimeProvider clock) : IDueService
@@ -175,9 +181,9 @@ public class DueViewModelTests
 
         var rows = vm.Tasks.ToDictionary(r => r.Title);
         Assert.True(rows["late"].IsOverdue);
-        Assert.Equal(Day(19).ToString("d"), rows["late"].DueText);
+        Assert.Equal("Yesterday", rows["late"].DueText);
         Assert.False(rows["timed"].IsOverdue);
-        Assert.Equal($"{Day(20):d} {new TimeOnly(15, 30):t}", rows["timed"].DueText);
+        Assert.Equal("Today 15:30", rows["timed"].DueText);
         Assert.False(rows["none"].IsOverdue);
         Assert.Equal("", rows["none"].DueText);
     }
@@ -281,7 +287,7 @@ public class DueViewModelTests
 
         Assert.Equal(Day(25), row.Item.DueDate);
         Assert.Equal(new TimeOnly(9, 0), row.Item.DueTime);
-        Assert.Equal($"{Day(25):d} {new TimeOnly(9, 0):t}", row.DueText);
+        Assert.Equal($"{Weekday(25)} 09:00", row.DueText);
     }
 
     [Fact]
@@ -537,5 +543,148 @@ public class DueViewModelTests
         await vm.DueRefresh;
 
         Assert.True(row.IsOverdue);
+    }
+
+    // ---- Due chip: relative text and state (today is Tue 2026-10-20, 10:00 local) ----
+
+    private static async Task<TaskRowViewModel> RowForAsync(DateOnly? date, TimeOnly? time = null)
+    {
+        var (service, _, vm, _) = Start();
+        await AddAsync(service, "t", date, time);
+        await vm.ShowSmartViewAsync(SmartView.All, Ct);
+        return vm.Tasks.Single();
+    }
+
+    [Fact]
+    public async Task A_Task_without_Due_has_no_chip()
+    {
+        var row = await RowForAsync(null);
+
+        Assert.Equal("", row.DueText);
+        Assert.Equal(DueState.None, row.DueState);
+        Assert.False(row.HasDue);
+    }
+
+    [Theory]
+    [InlineData(19, "Yesterday", DueState.Overdue)]
+    [InlineData(20, "Today", DueState.Today)]
+    [InlineData(21, "Tomorrow", DueState.Later)]
+    public async Task Yesterday_today_and_tomorrow_read_as_words(int day, string text, DueState state)
+    {
+        var row = await RowForAsync(Day(day));
+
+        Assert.Equal(text, row.DueText);
+        Assert.Equal(state, row.DueState);
+        Assert.True(row.HasDue);
+    }
+
+    [Theory]
+    [InlineData(14)] // six days before
+    [InlineData(18)]
+    [InlineData(22)]
+    [InlineData(26)] // six days after
+    public async Task Within_six_days_either_side_the_Due_reads_as_a_weekday(int day)
+    {
+        var row = await RowForAsync(Day(day));
+
+        Assert.Equal(Weekday(day), row.DueText);
+    }
+
+    [Theory]
+    [InlineData(13)] // seven days before
+    [InlineData(27)] // seven days after
+    public async Task Seven_days_away_the_Due_reads_as_a_date_without_the_year(int day)
+    {
+        var row = await RowForAsync(Day(day));
+
+        Assert.Equal(Full(Day(day)), row.DueText);
+    }
+
+    [Fact]
+    public async Task A_Due_in_another_year_shows_the_year()
+    {
+        var next = new DateOnly(2027, 1, 5);
+        var previous = new DateOnly(2025, 12, 31);
+
+        Assert.Equal($"{Full(next)} 2027", (await RowForAsync(next)).DueText);
+        Assert.Equal($"{Full(previous)} 2025", (await RowForAsync(previous)).DueText);
+    }
+
+    [Fact]
+    public async Task A_timed_Due_appends_the_time()
+    {
+        Assert.Equal("Today 18:00", (await RowForAsync(Day(20), new TimeOnly(18, 0))).DueText);
+        Assert.Equal("Tomorrow 09:05", (await RowForAsync(Day(21), new TimeOnly(9, 5))).DueText);
+        Assert.Equal($"{Weekday(23)} 23:59", (await RowForAsync(Day(23), new TimeOnly(23, 59))).DueText);
+        Assert.Equal($"{Full(Day(30))} 07:30", (await RowForAsync(Day(30), new TimeOnly(7, 30))).DueText);
+    }
+
+    [Fact]
+    public async Task A_timed_Due_today_that_has_passed_is_Overdue_but_still_reads_Today()
+    {
+        var row = await RowForAsync(Day(20), new TimeOnly(9, 0));
+
+        Assert.Equal(DueState.Overdue, row.DueState);
+        Assert.Equal("Today 09:00", row.DueText);
+    }
+
+    [Fact]
+    public async Task A_past_date_only_Due_is_Overdue()
+    {
+        var row = await RowForAsync(Day(19));
+
+        Assert.Equal(DueState.Overdue, row.DueState);
+    }
+
+    [Fact]
+    public async Task A_completed_Task_with_a_past_Due_is_not_marked_Overdue()
+    {
+        var (service, _, vm, _) = Start();
+        var task = await AddAsync(service, "done", Day(19));
+        task.IsCompleted = true;
+        await vm.ShowSmartViewAsync(SmartView.Completed, Ct);
+
+        Assert.Equal(DueState.Later, vm.CompletedTasks.Single().DueState);
+    }
+
+    [Fact]
+    public async Task The_chip_text_and_state_follow_the_day_and_the_clock()
+    {
+        var (service, _, vm, clock) = Start();
+        await AddAsync(service, "call", Day(21), new TimeOnly(10, 0));
+        await vm.ShowSmartViewAsync(SmartView.All, Ct);
+        var row = vm.Tasks.Single();
+        Assert.Equal("Tomorrow 10:00", row.DueText);
+        Assert.Equal(DueState.Later, row.DueState);
+
+        clock.Advance(TimeSpan.FromHours(14)); // local midnight
+        await vm.DueRefresh;
+        Assert.Equal("Today 10:00", row.DueText);
+        Assert.Equal(DueState.Today, row.DueState);
+
+        clock.Advance(TimeSpan.FromHours(10) + TimeSpan.FromSeconds(1)); // just after 10:00
+        await vm.DueRefresh;
+        Assert.Equal(DueState.Overdue, row.DueState);
+
+        clock.Advance(TimeSpan.FromDays(1));
+        await vm.DueRefresh;
+        Assert.Equal("Yesterday 10:00", row.DueText);
+        Assert.Equal(DueState.Overdue, row.DueState);
+    }
+
+    [Fact]
+    public async Task Setting_a_Due_in_the_pane_updates_the_chip()
+    {
+        var (service, _, vm, _) = Start();
+        await AddAsync(service, "call", null);
+        await vm.LoadAsync(Ct);
+        var row = vm.Tasks.Single();
+        vm.SelectedTask = row;
+
+        vm.DetailDueDate = new DateTime(2026, 10, 21);
+        await vm.PendingSave;
+
+        Assert.Equal("Tomorrow", row.DueText);
+        Assert.Equal(DueState.Later, row.DueState);
     }
 }

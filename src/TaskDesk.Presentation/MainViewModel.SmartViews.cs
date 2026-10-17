@@ -121,7 +121,7 @@ public sealed partial class MainViewModel
         foreach (var row in _all)
         {
             var wasOverdueGroup = OverdueTasks.Contains(row);
-            row.RefreshOverdue();
+            row.RefreshDue();
             if (!row.IsCompleted && InOverdueGroup(row) != wasOverdueGroup)
             {
                 Place(row);

@@ -46,9 +46,17 @@ public sealed partial class TaskRowViewModel : ObservableObject
 
     public bool HasSubtasks => SubtaskProgress.Length > 0;
 
-    /// <summary>The Due as shown on the row ("20/10/2026" or "20/10/2026 14:30"), or empty.</summary>
+    /// <summary>The Due as shown on the chip ("Today 18:00", "Thu", "Thu 15 Oct"), or empty.</summary>
     [ObservableProperty]
     private string _dueText = "";
+
+    /// <summary>Whether the Due is Overdue, due today, later or absent; the chip's colour follows it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDue))]
+    private DueState _dueState;
+
+    /// <summary>True when the row has a Due, so its chip shows.</summary>
+    public bool HasDue => DueState != DueState.None;
 
     /// <summary>True when the Task is Overdue; the row shows its Due in red.</summary>
     [ObservableProperty]
@@ -72,15 +80,29 @@ public sealed partial class TaskRowViewModel : ObservableObject
         Subtasks.Clear();
         Subtasks.AddRange(item.Subtasks);
         RefreshSubtaskProgress();
-        DueText = item.DueDate is { } date
-            ? item.DueTime is { } time ? $"{date:d} {time:t}" : $"{date:d}"
-            : "";
-        RefreshOverdue();
+        RefreshDue();
     }
 
-    /// <summary>Re-evaluates <see cref="IsOverdue"/> at the current time (time passes; the Task did not change).</summary>
-    internal void RefreshOverdue() => IsOverdue = DueCalculator.IsOverdue(
-        Item.DueDate, Item.DueTime, Item.IsCompleted, _clock.GetUtcNow(), _clock.LocalTimeZone);
+    /// <summary>
+    /// Re-evaluates <see cref="IsOverdue"/>, <see cref="DueState"/> and <see cref="DueText"/> at the current
+    /// time (time passes; the Task did not change).
+    /// </summary>
+    internal void RefreshDue()
+    {
+        var now = _clock.GetUtcNow();
+        var zone = _clock.LocalTimeZone;
+        IsOverdue = DueCalculator.IsOverdue(Item.DueDate, Item.DueTime, Item.IsCompleted, now, zone);
+        if (Item.DueDate is not { } date)
+        {
+            DueText = "";
+            DueState = DueState.None;
+            return;
+        }
+
+        var today = DueCalculator.LocalToday(now, zone);
+        DueText = DueDisplay.Format(date, Item.DueTime, today);
+        DueState = IsOverdue ? DueState.Overdue : date == today ? DueState.Today : DueState.Later;
+    }
 
     internal void RefreshSubtaskProgress() => SubtaskProgress = Core.Tasks.SubtaskProgress.Format(Subtasks);
 }

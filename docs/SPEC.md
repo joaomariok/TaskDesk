@@ -278,7 +278,7 @@ Deleting a Task that has a Recurrence asks: **"Delete this occurrence"** (a Skip
 ```
 
 - **Left navigation:** smart views, user lists (with open-task counts, drag to reorder, right-click → Rename / Color / Delete), tags (click to filter).
-- **Middle:** quick-add box at the top (adds to the current list; in a smart view adds to the default list, and in "Today" sets DueDate = today). Task rows show checkbox, title, priority marker, recurrence icon, due date (red if overdue), tag chips, subtask progress "2/5". Completed tasks collapse into a "Completed (N)" group at the bottom of a list. Drag-and-drop reorder within a list (only in list views, not in smart views or while searching).
+- **Middle:** quick-add box at the top (adds to the current list; in a smart view adds to the default list, and in "Today" sets DueDate = today). Task rows show checkbox, title, priority marker, recurrence icon, Due as a chip with relative wording ("Today 18:00", "Tomorrow", "Thu", "Thu 15 Oct", plus the year when not the current one; Overdue in the critical colour, due-today in the accent colour), tag chips, subtask progress "2/5". Completed tasks collapse into a "Completed (N)" group at the bottom of a list. Drag-and-drop reorder within a list (only in list views, not in smart views or while searching).
 - **Right detail pane:** edits the selected task; changes save automatically (debounced ~500 ms for text, immediate for other controls). Pane can be closed.
 - Minimum window size 800×500; remember size/position/pane widths in settings.
 

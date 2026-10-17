@@ -21,20 +21,12 @@
                 <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Text="&#x21BB;" Foreground="Gray"
                            AutomationProperties.Name="Repeats" ToolTip="Repeats"
                            Visibility="{Binding IsRecurring, Converter={StaticResource BoolToVisibility}}" />
-                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Text="{Binding DueText}"
-                           AutomationProperties.Name="Due">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="Opacity" Value="0.7" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsOverdue}" Value="True">
-                                    <Setter Property="Foreground" Value="Red" />
-                                    <Setter Property="Opacity" Value="1" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
+                <Border DockPanel.Dock="Right" Margin="8,0,0,0" VerticalAlignment="Center"
+                        Style="{StaticResource DueChip}"
+                        Visibility="{Binding HasDue, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource DueChipText}" Text="{Binding DueText}"
+                               AutomationProperties.Name="Due" />
+                </Border>
                 <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Foreground="Gray"
                            AutomationProperties.Name="Subtask progress"
                            Text="{Binding SubtaskProgress}"
