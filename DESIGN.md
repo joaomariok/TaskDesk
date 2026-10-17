@@ -222,7 +222,7 @@ A 20 px circle on Fluent's CheckBox: the unchecked ring uses the strong stroke, 
 - **Style:** a pill with a card-veil fill, hairline border and ink caption text, at most 96 px of text before an ellipsis, 4 px apart.
 
 ### Sidebar
-- **Style:** Windows Settings–style navigation on one shared background. Each item is an icon (Segoe Fluent Icons, 16 px), its name in body text, and its count in soft ink at the right. Sections are Smart Views, then a divider, Lists and Tags (Tags hidden when there are none).
+- **Style:** Windows Settings–style navigation on one shared background. Each item is an icon (Segoe Fluent Icons, 16 px), its name in body text, and its count in soft ink at the right; a count of zero is hidden. Sections are Smart Views, which stay fixed at the top, then a divider and one scroll area holding Lists, "+ New List" directly under the last List, and Tags (hidden when there are none).
 - **States:** the selected item takes Fluent's selected ListBox item style. Overdue's count is a solid Overdue Red badge with on-accent text.
 - **Narrow:** the rail shows icons only, with grey pill badges for counts (red for Overdue), the List dot or ring with the name in a tooltip, and a "#" button opening a Tags flyout.
 

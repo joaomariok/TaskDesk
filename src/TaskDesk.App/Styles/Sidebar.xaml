@@ -41,10 +41,15 @@
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
     </Style>
 
-    <!-- The open-Task count at the end of a row. -->
+    <!-- The open-Task count at the end of a row; a count of zero is not shown. -->
     <Style x:Key="SidebarCount" TargetType="TextBlock" BasedOn="{StaticResource SecondaryCaptionText}">
         <Setter Property="Margin" Value="8,0,0,0" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Text, RelativeSource={RelativeSource Self}}" Value="0">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </DataTrigger>
+        </Style.Triggers>
     </Style>
 
     <!-- The red count badge of Overdue. -->

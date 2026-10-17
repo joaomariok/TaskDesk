@@ -48,8 +48,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="3*" />
-            <RowDefinition Height="2*" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <ListBox x:Name="SmartViewList" Grid.Row="0" Style="{StaticResource SidebarListBox}"
@@ -106,29 +105,19 @@
 
         <Border Grid.Row="1" Style="{StaticResource SidebarDivider}" />
 
-        <DockPanel x:Name="ListsPanel" Grid.Row="2" Margin="0,0,0,8">
-            <TextBlock DockPanel.Dock="Top" Style="{StaticResource SidebarSectionHeader}" Text="Lists" />
-            <StackPanel DockPanel.Dock="Bottom">
-                <TextBlock Foreground="{DynamicResource OverdueBrush}" TextWrapping="Wrap" Margin="8,4,8,0"
-                           Style="{StaticResource CaptionText}" Text="{Binding ErrorMessage}" />
-                <Button x:Name="NewListButton" Style="{StaticResource SidebarActionButton}"
-                        Content="+ New List" AutomationProperties.Name="New list"
-                        AutomationProperties.AutomationId="NewListButton" Click="OnNewListClick" />
-                <TextBox x:Name="NewListBox" Visibility="Collapsed" Margin="0,2,0,0"
-                         AutomationProperties.Name="New list name" AutomationProperties.AutomationId="NewListBox"
-                         Text="{Binding NewListName, UpdateSourceTrigger=PropertyChanged}"
-                         PreviewKeyDown="OnNewListKeyDown" LostKeyboardFocus="OnNewListLostFocus">
-                    <TextBox.InputBindings>
-                        <KeyBinding Key="Return" Command="{Binding CreateListCommand}" />
-                    </TextBox.InputBindings>
-                </TextBox>
-            </StackPanel>
+        <!-- Everything under the Smart Views scrolls together: Lists, "+ New List", then Tags. -->
+        <ScrollViewer x:Name="SidebarScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" Focusable="False">
+        <StackPanel>
+        <StackPanel x:Name="ListsPanel" Margin="0,0,0,8">
+            <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="Lists" />
             <ListBox x:Name="ListsBox" ItemsSource="{Binding Lists}" AllowDrop="True"
                      Style="{StaticResource SidebarListBox}" ItemContainerStyle="{StaticResource ListItemContainer}"
+                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
                      AutomationProperties.Name="Lists" AutomationProperties.AutomationId="ListsList"
                      PreviewMouseLeftButtonDown="OnListMouseDown" PreviewMouseMove="OnListMouseMove"
                      PreviewKeyDown="OnListKeyDown" SelectionChanged="OnListSelectionChanged"
-                     Drop="OnListDrop">
+                     PreviewMouseWheel="OnNestedListMouseWheel" Drop="OnListDrop">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <DockPanel LastChildFill="True" Background="Transparent">
@@ -158,30 +147,63 @@
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-        </DockPanel>
+            <StackPanel>
+                <!-- Takes no room until there is an error, so "+ New List" sits right under the last List. -->
+                <TextBlock Foreground="{DynamicResource OverdueBrush}" TextWrapping="Wrap" Margin="8,4,8,0"
+                           Text="{Binding ErrorMessage}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ErrorMessage}" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ErrorMessage}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <Button x:Name="NewListButton" Style="{StaticResource SidebarActionButton}"
+                        Content="+ New List" AutomationProperties.Name="New list"
+                        AutomationProperties.AutomationId="NewListButton" Click="OnNewListClick" />
+                <TextBox x:Name="NewListBox" Visibility="Collapsed" Margin="0,2,0,0"
+                         AutomationProperties.Name="New list name" AutomationProperties.AutomationId="NewListBox"
+                         Text="{Binding NewListName, UpdateSourceTrigger=PropertyChanged}"
+                         PreviewKeyDown="OnNewListKeyDown" LostKeyboardFocus="OnNewListLostFocus">
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Return" Command="{Binding CreateListCommand}" />
+                    </TextBox.InputBindings>
+                </TextBox>
+            </StackPanel>
+        </StackPanel>
 
-        <DockPanel Grid.Row="3">
-            <DockPanel.Style>
-                <Style TargetType="DockPanel">
+        <StackPanel>
+            <StackPanel.Style>
+                <Style TargetType="StackPanel">
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding Tags.Count}" Value="0">
                             <Setter Property="Visibility" Value="Collapsed" />
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>
-            </DockPanel.Style>
-            <TextBlock DockPanel.Dock="Top" Style="{StaticResource SidebarSectionHeader}" Text="Tags" />
+            </StackPanel.Style>
+            <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="Tags" />
             <ListBox x:Name="TagList" ItemsSource="{Binding Tags}" Style="{StaticResource SidebarListBox}"
                      ItemContainerStyle="{StaticResource TagItemContainer}"
+                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
                      AutomationProperties.Name="Tags" AutomationProperties.AutomationId="TagList"
-                     PreviewKeyDown="OnTagKeyDown" SelectionChanged="OnTagSelectionChanged">
+                     PreviewKeyDown="OnTagKeyDown" SelectionChanged="OnTagSelectionChanged"
+                     PreviewMouseWheel="OnNestedListMouseWheel">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <TextBlock Style="{StaticResource BodyText}" Text="{Binding Name, StringFormat=#{0}}" />
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-        </DockPanel>
+        </StackPanel>
+        </StackPanel>
+        </ScrollViewer>
     </Grid>
     </Grid>
 

@@ -411,6 +411,23 @@ public partial class NavigationPane : UserControl
         }
     }
 
+    // A ListBox that does not scroll still swallows the mouse wheel; hand it to the sidebar's scroll area.
+    private void OnNestedListMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (e.Handled)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var forwarded = new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
+        {
+            RoutedEvent = MouseWheelEvent,
+            Source = sender,
+        };
+        ((UIElement)((FrameworkElement)sender).Parent).RaiseEvent(forwarded);
+    }
+
     // ---- Drag to reorder Lists ----
 
     private void OnListMouseDown(object sender, MouseButtonEventArgs e) => _listDragStart = e.GetPosition(null);
