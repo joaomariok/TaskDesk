@@ -18,8 +18,8 @@ recurring trivial conflict is resolved automatically: in src/TaskDesk.App/App.xa
 both sides only add <ResourceDictionary Source="..."/> lines become ours then theirs, with no
 markers left (the index is not touched). Any other conflict exits 3.
 
-With -UiTests, after the gate passes it runs scripts/ui-tests.ps1 in the target (passing
--Screenshots through) and exits with that script's code. It needs an interactive desktop.
+With -UiTests, after the gate passes it runs scripts/ui-tests.ps1 in the target and exits with
+that script's code. It needs an interactive desktop.
 
 Exit codes:
   0   gate passed (and the UI tests too, with -UiTests)
@@ -39,16 +39,12 @@ Integration checkout. Defaults to the repo root, resolved from this script's loc
 
 .PARAMETER UiTests
 After a passing gate, run scripts/ui-tests.ps1 and exit with its code.
-
-.PARAMETER Screenshots
-Folder passed to ui-tests.ps1 -Screenshots. Only used with -UiTests.
 #>
 param(
     [Parameter(Mandatory)][string]$Worktree,
     [Parameter(Mandatory)][string]$Base,
     [string]$Target = (Split-Path -Parent $PSScriptRoot),
-    [switch]$UiTests,
-    [string]$Screenshots
+    [switch]$UiTests
 )
 $ErrorActionPreference = 'Stop'
 
@@ -190,7 +186,6 @@ Write-Host "Gate exit code: $gateExit. The caller stages the paths above by name
 if ($gateExit -ne 0 -or -not $UiTests) { exit $gateExit }
 
 $uiArgs = @('-NoProfile', '-File', (Join-Path $Target 'scripts/ui-tests.ps1'))
-if ($Screenshots) { $uiArgs += @('-Screenshots', $Screenshots) }
 & pwsh @uiArgs
 $uiExit = $LASTEXITCODE
 Write-Host "UI tests exit code: $uiExit."

@@ -20,4 +20,9 @@
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The repository root, for tests that read the sources; the build output may live outside the repo
+         (dotnet build with an artifacts path). -->
+    <AssemblyMetadata Include="RepoRoot" Value="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))" />
+  </ItemGroup>
 </Project>

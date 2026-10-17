@@ -4,13 +4,13 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
 
 ## Orchestrator steps
 
-1. Start from a clean checkout: commit pending work first, including untracked `.impeccable/critique/` snapshots, which are tracked. Create the integration branch from `main` and note its tip commit. Every brief names this tip as `<BASE>`. Take a baseline tour of that tip with `scripts/ui-tests.ps1 -Screenshots <scratch>/tour-base`, unless a tour of that same commit already exists.
+1. Start from a clean checkout: commit pending work first, including untracked `.impeccable/critique/` snapshots, which are tracked. Create the integration branch from `main` and note its tip commit. Every brief names this tip as `<BASE>`.
 2. Read the spec issue and its tickets (see `issue-tracker.md`). Split them into tickets that can run in parallel and tickets that must wait for an earlier one.
 3. Launch one implementer per ready ticket, each in its own worktree. Set `model` explicitly. Brief each with the **Implementer brief** below, plus its ticket number, `<BASE>`, and the scratchpad subfolder it owns.
    - If the launch fails with "core.worktree redirect", the session's working directory has become lowercase `d:`. Return to `D:\GIT\TaskDesk` and retry.
 4. When an implementer reports, read its diff and keep the diff uncommitted in its worktree. The report is a claim, not evidence.
 5. Land the tickets one at a time, in the order they finish. For each:
-   - Run `pwsh scripts/integrate-worktree.ps1 -Worktree <WT> -Base <BASE>` from the integration checkout, which must be clean. It applies the worktree's tracked diff with `git apply --3way`, copies its untracked files, runs the **Gate** and exits with the gate's code. It prints the changed and new files; stage those paths by name. It never commits. On conflicts it still copies the untracked files and auto-resolves the `App.xaml` merged-dictionary lines. Add `-UiTests` (and `-Screenshots <dir>`) to run `scripts/ui-tests.ps1` after a green gate.
+   - Run `pwsh scripts/integrate-worktree.ps1 -Worktree <WT> -Base <BASE>` from the integration checkout, which must be clean. It applies the worktree's tracked diff with `git apply --3way`, copies its untracked files, runs the **Gate** and exits with the gate's code. It prints the changed and new files; stage those paths by name. It never commits. On conflicts it still copies the untracked files and auto-resolves the `App.xaml` merged-dictionary lines. Add `-UiTests` to run `scripts/ui-tests.ps1` after a green gate.
    - Exit 3 means conflicts: it lists the conflicted files and stops. Launch a merger with the **Merger brief** below. Exit 2 means a pre-check failed (dirty target, or worktree HEAD is not `<BASE>`) and nothing was changed.
    - Commit once, as `<type>: <what changed>`, after the gate exits 0 (see "Git approvals" in `CLAUDE.md`).
 6. Advance `<BASE>` to the new integration tip before launching the next wave of implementers.
@@ -21,7 +21,7 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
 Done means the spec is on `main`, every ticket and the spec are closed, and no agent worktree or branch is left.
 
 1. Review the integration branch with the `code-review` skill. Name the spec issue and its tickets as context, so approvals recorded in a ticket (such as an approved test-expectation change) are not re-flagged.
-2. Fix every confirmed finding in one implementer, then land it like a ticket. Run `scripts/ui-tests.ps1 -Screenshots <dir> -Baseline <scratch>/tour-base`. Check every shot it lists as changed by eye, using the side-by-side images in `<dir>/changed`, not only the shots the tickets name. Then check the tickets' visual criteria.
+2. Fix every confirmed finding in one implementer, then land it like a ticket. If the spec changed the UI, run the `ui-check` skill on the integration tip, with `-Ref main` for the before shots, covering every state the spec's diff touches and the tickets' visual criteria.
 3. Ask the owner, then fast-forward `main` to the integration tip and push.
 4. Close each ticket, then the spec, with `gh issue close <n> --comment "<commits>, on main."`.
 5. Remove each agent worktree (`git worktree remove`) and delete its `worktree-agent-*` branch (`git branch -D`); every one is integrated by now.

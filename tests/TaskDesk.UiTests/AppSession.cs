@@ -172,7 +172,7 @@ public sealed class AppSession : IDisposable
     /// Saves a PNG of what a window draws on screen, without its invisible resize border. The mouse is moved
     /// off the window first, so no hover highlight from an earlier click lands in the shot.
     /// </summary>
-    public static void CaptureFrame(Window window, string path)
+    private static void CaptureFrame(Window window, string path)
     {
         var frame = VisibleFrame(window);
         Mouse.Position = frame.Left >= 40

@@ -2,13 +2,13 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
-using TaskDesk.App.Styles;
 using TaskDesk.App.Views;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
 using static TaskDesk.App.Tests.ElementTree;
+using static TaskDesk.App.Tests.FluentTheme;
 
 namespace TaskDesk.App.Tests;
 
@@ -46,10 +46,7 @@ public sealed class RailTests(WpfAppFixture fixture)
     public void Rail_badge_text_reads_at_body_text_contrast(string theme, string badgeStyle, string textStyle) =>
         fixture.Run(() =>
     {
-        var colours = new ResourceDictionary
-        {
-            Source = new Uri($"pack://application:,,,/PresentationFramework.Fluent;component/Resources/Theme/{theme}.xaml"),
-        };
+        var colours = Colours(theme);
         var badge = (Style)fixture.App.FindResource(badgeStyle);
         var text = (Style)fixture.App.FindResource(textStyle);
 
@@ -78,38 +75,4 @@ public sealed class RailTests(WpfAppFixture fixture)
 
     private static ListItemViewModel NewList(string name, string? colour) =>
         new(new ListSummary(new TaskList { Id = Guid.NewGuid(), Name = name, ColorHex = colour }, 0));
-
-    // The resource key of a {DynamicResource} setter, followed through BasedOn.
-    private static string KeyOf(Style style, DependencyProperty property) =>
-        style.Setters.OfType<Setter>().Where(s => s.Property == property)
-            .Select(s => (string)((DynamicResourceExtension)s.Value).ResourceKey).FirstOrDefault()
-        ?? KeyOf(style.BasedOn!, property);
-
-    // A Fluent brush key ("...Brush"), colour key or meaning-named brush, read from one theme's colour dictionary.
-    private static Color ColourOf(ResourceDictionary colours, string key) =>
-        colours[key = FoundationResources.FluentKeyOf(key)] switch
-        {
-            SolidColorBrush brush => brush.Color,
-            Color colour => colour,
-            _ => (Color)colours[key.EndsWith("Brush", StringComparison.Ordinal) ? key[..^5] : key],
-        };
-
-    private static Color Over(Color top, Color below)
-    {
-        var a = top.A / 255.0;
-        byte Mix(byte t, byte b) => (byte)Math.Round(t * a + b * (1 - a));
-        return Color.FromRgb(Mix(top.R, below.R), Mix(top.G, below.G), Mix(top.B, below.B));
-    }
-
-    private static double Contrast(Color x, Color y)
-    {
-        double Luminance(Color c)
-        {
-            double Channel(byte v) => v / 255.0 <= 0.04045 ? v / 255.0 / 12.92 : Math.Pow((v / 255.0 + 0.055) / 1.055, 2.4);
-            return 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
-        }
-
-        var (light, dark) = (Math.Max(Luminance(x), Luminance(y)), Math.Min(Luminance(x), Luminance(y)));
-        return (light + 0.05) / (dark + 0.05);
-    }
 }

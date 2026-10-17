@@ -1,4 +1,5 @@
 using System.IO;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace TaskDesk.App.Tests;
@@ -122,19 +123,9 @@ public sealed partial class XamlColourGuardrailTests
         return parts.Contains("obj") || parts.Contains("bin");
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (dir.EnumerateFiles("*.slnx").Any() || dir.EnumerateFiles("*.sln").Any())
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-
-        throw new InvalidOperationException("Repository root (.slnx/.sln) not found above " + AppContext.BaseDirectory);
-    }
+    // Recorded at build time (RepoRoot in the project file), so it holds wherever the build output goes.
+    private static string FindRepoRoot() =>
+        typeof(XamlColourGuardrailTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(a => a.Key == "RepoRoot").Value
+        ?? throw new InvalidOperationException("The RepoRoot assembly metadata has no value.");
 }

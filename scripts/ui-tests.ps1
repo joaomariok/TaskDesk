@@ -4,21 +4,15 @@
 # Each test uses a fresh temp data folder (sandbox mode: no Run key, no notification registration).
 #   -Publish <dir>  test TaskDesk.App.exe in a publish folder instead of the Debug build
 #   -Class <name>   run one test class, for example NavigationTests
-#   -Screenshots <dir>  save PNGs of the ScreenshotTour states (Light and Dark) into this folder
-#   -Baseline <dir>     with -Screenshots: list the shots that differ from an earlier tour (scripts/compare-tour.ps1)
 # Before the run it stops TaskDesk.App processes left over from earlier UI runs (identified by running from this
 # repo's bin folder, or from -Publish; the TASKDESK_DATA_DIR environment cannot be read from another process) and
 # warns about any other running TaskDesk.App without touching it.
 param(
     [string]$Publish,
-    [string]$Class,
-    [string]$Screenshots,
-    [string]$Baseline
+    [string]$Class
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-if ($Baseline -and -not $Screenshots) { throw '-Baseline needs -Screenshots.' }
-if ($Baseline) { $Baseline = (Resolve-Path $Baseline).Path }
 
 function Get-TaskDeskProcess {
     Get-Process -Name 'TaskDesk.App' -ErrorAction SilentlyContinue | Where-Object { $_.Path }
@@ -51,10 +45,6 @@ try {
         }
     }
 
-    if ($Screenshots) {
-        $env:TASKDESK_UI_SCREENSHOTS = (New-Item -ItemType Directory -Force $Screenshots).FullName
-    }
-
     # A failed test leaves a PNG of the window here; clear the last run's so none is stale.
     $failures = Join-Path $repoRoot 'TestResults/ui-failures'
     Remove-Item $failures -Recurse -Force -ErrorAction SilentlyContinue
@@ -71,18 +61,11 @@ try {
     if ($failed -gt 0 -and $lostFocus -gt $failed / 2) {
         Write-Host 'Many tests lost keyboard focus: another window took the foreground, or keys were pressed during the run.'
     }
-    if ($Screenshots) { Write-Host "Screenshots: $env:TASKDESK_UI_SCREENSHOTS" }
-    if ($Baseline) {
-        # A report only: a comparison that breaks never changes the run's result.
-        try { & (Join-Path $PSScriptRoot 'compare-tour.ps1') -Baseline $Baseline -Current $env:TASKDESK_UI_SCREENSHOTS }
-        catch { Write-Warning "Tour comparison failed: $_" }
-    }
     if (Test-Path $failures) { Write-Host "Failure screenshots: $failures" }
     Write-Host ($code -eq 0 ? 'UI TESTS PASSED' : "UI TESTS FAILED: exit $code")
     exit $code
 }
 finally {
     Remove-Item Env:TASKDESK_UI_APP -ErrorAction SilentlyContinue
-    Remove-Item Env:TASKDESK_UI_SCREENSHOTS -ErrorAction SilentlyContinue
     Pop-Location
 }
