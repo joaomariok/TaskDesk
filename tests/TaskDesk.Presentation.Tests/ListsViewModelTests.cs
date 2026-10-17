@@ -156,13 +156,13 @@ public class ListsViewModelTests
         public string? PromptResult { get; set; }
         public (string Name, int Count)? ConfirmedFor { get; private set; }
 
-        public bool ConfirmDelete(string listName, int taskCount)
+        public Task<bool> ConfirmDeleteAsync(string listName, int taskCount)
         {
             ConfirmedFor = (listName, taskCount);
-            return ConfirmResult;
+            return Task.FromResult(ConfirmResult);
         }
 
-        public string? PromptName(string currentName) => PromptResult;
+        public Task<string?> PromptNameAsync(string currentName) => Task.FromResult(PromptResult);
     }
 
     internal sealed class FakeListService : IListService

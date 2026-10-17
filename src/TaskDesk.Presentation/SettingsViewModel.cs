@@ -185,7 +185,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
 
         var name = ExportNaming.SuggestedFileName(_clock.GetLocalNow().DateTime, format);
-        var path = _exportDialogs.PickExportPath(format, name);
+        var path = await _exportDialogs.PickExportPathAsync(format, name);
         if (path is null)
         {
             return;
@@ -231,13 +231,13 @@ public sealed partial class SettingsViewModel : ObservableObject
             return;
         }
 
-        var path = _importDialogs.PickImportPath();
-        if (path is null || _importDialogs.ChooseImportMode(path) is not { } mode)
+        var path = await _importDialogs.PickImportPathAsync();
+        if (path is null || await _importDialogs.ChooseImportModeAsync(path) is not { } mode)
         {
             return;
         }
 
-        if (mode == ImportMode.Replace && !_importDialogs.ConfirmReplace())
+        if (mode == ImportMode.Replace && !await _importDialogs.ConfirmReplaceAsync())
         {
             return;
         }

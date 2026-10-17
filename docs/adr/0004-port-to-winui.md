@@ -38,3 +38,4 @@ ADR 0003 measured a WinUI 3 port and decided to stay on WPF. A WinUI build that 
 - Publish size and working set are expected to grow (0003: 226 to 281 MB self-contained against 137.7 MB framework-dependent; 176 to 194 MB against 168 MB). This is accepted.
 - The test suite gains a second framework, MSTest, limited to the WinUI test app, because `[UITestMethod]` exists only there.
 - README, DESIGN, PRODUCT, `docs/SPEC.md` and ADR 0002 describe WPF until the swap ticket updates them.
+- One view-model change (owner decision on #56): WinUI dialogs and file pickers are async-only, so the four Presentation dialog interfaces (`IListDialogs`, `IOccurrenceDialogs`, `IExportDialogs`, `IImportDialogs`) return `Task`. The WPF implementations return completed tasks, the commands that call them await, and the Presentation tests changed only in their fakes.

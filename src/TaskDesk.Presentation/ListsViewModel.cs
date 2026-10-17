@@ -6,14 +6,16 @@ using TaskDesk.Core.Lists;
 
 namespace TaskDesk.Presentation;
 
-/// <summary>Asks the owner things the Lists navigation needs; implemented by the UI.</summary>
+/// <summary>
+/// Asks the owner things the Lists navigation needs; implemented by the UI. Asynchronous because WinUI dialogs are.
+/// </summary>
 public interface IListDialogs
 {
     /// <summary>True when the owner confirms deleting the List and its Tasks.</summary>
-    bool ConfirmDelete(string listName, int taskCount);
+    Task<bool> ConfirmDeleteAsync(string listName, int taskCount);
 
     /// <summary>The new name typed by the owner, or null when cancelled.</summary>
-    string? PromptName(string currentName);
+    Task<string?> PromptNameAsync(string currentName);
 }
 
 public sealed partial class ListItemViewModel(ListSummary summary) : ObservableObject
@@ -81,7 +83,7 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
     private Task RenameAsync(ListItemViewModel? item, CancellationToken cancellationToken)
         => GuardedAsync(async () =>
         {
-            var name = item is null ? null : dialogs.PromptName(item.Name);
+            var name = item is null ? null : await dialogs.PromptNameAsync(item.Name);
             if (item is null || name is null)
             {
                 return;
@@ -108,7 +110,7 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
     private Task DeleteAsync(ListItemViewModel? item, CancellationToken cancellationToken)
         => GuardedAsync(async () =>
         {
-            if (item is null || item.IsDefault || !dialogs.ConfirmDelete(item.Name, item.OpenTaskCount))
+            if (item is null || item.IsDefault || !await dialogs.ConfirmDeleteAsync(item.Name, item.OpenTaskCount))
             {
                 return;
             }

@@ -21,7 +21,7 @@ public sealed partial class MainViewModel
         // Deleting an Occurrence asks whether to Skip it or stop repeating (SPEC 5.2).
         var choice = row.Item.Recurrence is null
             ? OccurrenceDeleteChoice.StopRepeating
-            : OccurrenceDialogs.AskDeleteOccurrence(row.Title);
+            : await OccurrenceDialogs.AskDeleteOccurrenceAsync(row.Title);
         if (choice == OccurrenceDeleteChoice.Cancel)
         {
             return;

@@ -27,10 +27,12 @@ public enum OccurrenceDeleteChoice
     StopRepeating,
 }
 
-/// <summary>Asks the owner what deleting an Occurrence means; implemented by the UI.</summary>
+/// <summary>
+/// Asks the owner what deleting an Occurrence means; implemented by the UI. Asynchronous because WinUI dialogs are.
+/// </summary>
 public interface IOccurrenceDialogs
 {
-    OccurrenceDeleteChoice AskDeleteOccurrence(string taskTitle);
+    Task<OccurrenceDeleteChoice> AskDeleteOccurrenceAsync(string taskTitle);
 }
 
 /// <summary>

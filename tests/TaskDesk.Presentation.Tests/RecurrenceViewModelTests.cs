@@ -18,10 +18,10 @@ public class RecurrenceViewModelTests
         public OccurrenceDeleteChoice Answer { get; set; } = OccurrenceDeleteChoice.Cancel;
         public List<string> Asked { get; } = [];
 
-        public OccurrenceDeleteChoice AskDeleteOccurrence(string taskTitle)
+        public Task<OccurrenceDeleteChoice> AskDeleteOccurrenceAsync(string taskTitle)
         {
             Asked.Add(taskTitle);
-            return Answer;
+            return Task.FromResult(Answer);
         }
     }
 

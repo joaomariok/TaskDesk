@@ -11,10 +11,10 @@ public sealed class SettingsExportTests
     {
         public List<(ExportFormat Format, string Name)> Asked { get; } = [];
 
-        public string? PickExportPath(ExportFormat format, string suggestedFileName)
+        public Task<string?> PickExportPathAsync(ExportFormat format, string suggestedFileName)
         {
             Asked.Add((format, suggestedFileName));
-            return answer;
+            return Task.FromResult(answer);
         }
     }
 

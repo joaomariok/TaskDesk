@@ -11,6 +11,7 @@ using TaskDesk.Data;
 using TaskDesk.Data.Logging;
 using TaskDesk.Presentation;
 using TaskDesk.Views;
+using TaskDesk.Views.Dialogs;
 
 namespace TaskDesk.App;
 
@@ -66,6 +67,13 @@ public partial class App : Application
         builder.Logging.AddTaskDeskFileLogging(paths);
         builder.Services.AddSingleton(mode);
         builder.Services.AddTaskDeskData(paths);
+        // Every confirmation and message is a content dialog on the main window; file pickers open on it too.
+        builder.Services.AddSingleton(sp => new DialogService(() => sp.GetRequiredService<MainWindow>()));
+        builder.Services.AddSingleton<WinUiDialogs>();
+        builder.Services.AddSingleton<IListDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
+        builder.Services.AddSingleton<IExportDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
+        builder.Services.AddSingleton<IImportDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
+        builder.Services.AddSingleton<IOccurrenceDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<MainWindow>();
         builder.Services.AddSingleton<WinUiMainWindow>();
@@ -91,8 +99,10 @@ public partial class App : Application
         }
         catch (DatabaseStartupException ex)
         {
-            // The explaining dialog comes with the WinUI dialogs (#56); until then the log says why.
             logger.LogCritical(ex, "The database could not be opened; exiting");
+            // No main window exists yet, so the explaining dialog gets a window of its own.
+            await new StartupFailureWindow().ShowAsync(
+                StartupFailureText.Describe(ex.Message, ex.LogsDirectory, ex.BackupsDirectory));
             await _host.StopAsync();
             singleInstance.Dispose();
             Environment.ExitCode = 1;

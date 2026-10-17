@@ -420,7 +420,7 @@ public sealed class AppSession : IDisposable
             () => $"Start-up focus never reached quick add; it is on '{FocusedAutomationId()}'.");
     }
 
-    private static string AppPath()
+    internal static string AppPath()
     {
         var overridePath = Environment.GetEnvironmentVariable(AppVariable);
         if (!string.IsNullOrWhiteSpace(overridePath))

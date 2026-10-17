@@ -11,22 +11,22 @@ public sealed class SettingsImportTests
     {
         public List<string> Calls { get; } = [];
 
-        public string? PickImportPath()
+        public Task<string?> PickImportPathAsync()
         {
             Calls.Add("pick");
-            return path;
+            return Task.FromResult(path);
         }
 
-        public ImportMode? ChooseImportMode(string chosenPath)
+        public Task<ImportMode?> ChooseImportModeAsync(string chosenPath)
         {
             Calls.Add($"mode:{chosenPath}");
-            return mode;
+            return Task.FromResult(mode);
         }
 
-        public bool ConfirmReplace()
+        public Task<bool> ConfirmReplaceAsync()
         {
             Calls.Add("confirm");
-            return confirmReplace;
+            return Task.FromResult(confirmReplace);
         }
     }
 
