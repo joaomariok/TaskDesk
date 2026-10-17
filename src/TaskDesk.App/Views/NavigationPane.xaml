@@ -259,8 +259,7 @@
                     <TextBlock Style="{StaticResource SidebarIcon}" Text="&#xE7BA;" HorizontalAlignment="Center" />
                     <Border Style="{StaticResource RailBadgeOverdue}"
                             Visibility="{Binding HasOverdueCount, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding OverdueCount}"
-                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                        <TextBlock Style="{StaticResource RailBadgeOverdueText}" Text="{Binding OverdueCount}" />
                     </Border>
                 </Grid>
             </ListBoxItem>
@@ -286,23 +285,24 @@
                  AutomationProperties.Name="Lists" AutomationProperties.AutomationId="RailListsList"
                  PreviewKeyDown="OnListKeyDown" SelectionChanged="OnListSelectionChanged">
             <ListBox.ItemTemplate>
+                <!-- The List's initial in a ring of its colour (Strong Stroke when it has none), so Lists tell
+                     apart without their tooltips. -->
                 <DataTemplate>
-                    <Grid Width="24" HorizontalAlignment="Center" Background="Transparent">
-                        <Ellipse Width="10" Height="10"
-                                 Fill="{Binding ColorHex, TargetNullValue=Transparent, FallbackValue=Transparent}" />
-                        <Ellipse Width="10" Height="10" StrokeThickness="1.5"
-                                 Stroke="{DynamicResource ListStripeBrush}">
+                    <Grid Width="24" Height="24" HorizontalAlignment="Center" Background="Transparent">
+                        <Ellipse StrokeThickness="1.5">
                             <Ellipse.Style>
                                 <Style TargetType="Ellipse">
-                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Setter Property="Stroke" Value="{Binding ColorHex}" />
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding ColorHex}" Value="{x:Null}">
-                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Setter Property="Stroke" Value="{DynamicResource ListStripeBrush}" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Ellipse.Style>
                         </Ellipse>
+                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding Initial}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>

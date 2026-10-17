@@ -32,5 +32,5 @@ List first, details on demand. The list owns the window; the detail pane appears
 
 ## Unresolved decisions
 - The Impeccable finish review against this contract has not run; the branch had a code review only. DESIGN.md is written; the build ships no rasters.
-- Not yet checked by eye: high contrast, checkbox hover and pressed states, a live theme switch, and rail badge contrast in Light.
+- Not yet checked by eye: high contrast, checkbox hover and pressed states, and a live theme switch.
 - Start-up cost of Fluent loading twice for a saved Light or Dark theme is not measured against the 1.5 s target.

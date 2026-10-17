@@ -345,36 +345,6 @@
           "#FEECCB"
         ]
       },
-      "neutral-badge": {
-        "role": "neutral",
-        "displayName": "Badge Grey",
-        "canonical": "oklch(63.3% 0.000 89.9)",
-        "tonalRamp": [
-          "#0B0B0B",
-          "#242424",
-          "#424242",
-          "#636363",
-          "#868686",
-          "#ABABAB",
-          "#CECECE",
-          "#EEEEEE"
-        ]
-      },
-      "neutral-badge-dark": {
-        "role": "neutral",
-        "displayName": "Badge Grey (Dark)",
-        "canonical": "oklch(69.6% 0.000 89.9)",
-        "tonalRamp": [
-          "#0B0B0B",
-          "#242424",
-          "#424242",
-          "#636363",
-          "#868686",
-          "#ABABAB",
-          "#CECECE",
-          "#EEEEEE"
-        ]
-      },
       "list-red": {
         "role": "data",
         "displayName": "List Red",

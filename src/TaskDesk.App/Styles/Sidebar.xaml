@@ -69,9 +69,10 @@
         <Setter Property="Padding" Value="0,8" />
     </Style>
 
-    <!-- A solid neutral pill, so the count reads as a badge and not as a stray digit; text in RailBadgeText. -->
+    <!-- A solid pill in soft ink, so the count reads as a badge and not as a stray digit, and not as a ring
+         like a rail List; text in RailBadgeText. Fluent's #8A8A8A neutral fill was too light for its text. -->
     <Style x:Key="RailBadge" TargetType="Border">
-        <Setter Property="Background" Value="{DynamicResource SystemFillColorSolidNeutralBrush}" />
+        <Setter Property="Background" Value="{DynamicResource TextFillColorSecondaryBrush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="MinWidth" Value="16" />
@@ -91,10 +92,15 @@
         <Setter Property="Background" Value="{DynamicResource OverdueBrush}" />
     </Style>
 
-    <!-- The count inside a neutral RailBadge: the inverse text colour contrasts with its solid fill. -->
+    <!-- The count inside a neutral RailBadge: the inverse text colour contrasts with its soft-ink fill. -->
     <Style x:Key="RailBadgeText" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
         <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <!-- The count inside the Overdue RailBadge. -->
+    <Style x:Key="RailBadgeOverdueText" TargetType="TextBlock" BasedOn="{StaticResource RailBadgeText}">
+        <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
     </Style>
 
     <!-- The box of the flyout and of the expanded sidebar overlay. -->

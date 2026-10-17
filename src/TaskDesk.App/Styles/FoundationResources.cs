@@ -40,6 +40,10 @@ internal static class FoundationResources
         (ListStripeBrush, "ControlStrongStrokeColorDefaultBrush"),
     ];
 
+    /// <summary>The Fluent theme key a meaning-named brush stands for, or <paramref name="key"/> itself.</summary>
+    public static string FluentKeyOf(string key) =>
+        Brushes.FirstOrDefault(b => b.Key == key).FluentKey ?? key;
+
     /// <summary>
     /// Sets the brushes from the current theme and sets them again whenever Fluent swaps its
     /// dictionary. Call once at start-up, after <c>App.xaml</c> has loaded its resources.

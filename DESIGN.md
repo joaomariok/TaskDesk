@@ -24,8 +24,6 @@ colors:
   caution-dark: "#FCE100"
   caution-bg: "#FFF4CE"
   caution-bg-dark: "#433519"
-  neutral-badge: "#8A8A8A"
-  neutral-badge-dark: "#9D9D9D"
   list-red: "#D13438"
   list-orange: "#F7630C"
   list-yellow: "#FFB900"
@@ -94,7 +92,7 @@ components:
     rounded: "9px"
     height: "18px"
   rail-badge:
-    backgroundColor: "{colors.neutral-badge}"
+    backgroundColor: "{colors.text-secondary}"
     typography: "{typography.caption}"
     rounded: "{rounded.overlay}"
     height: "16px"
@@ -142,13 +140,12 @@ A neutral Fluent palette lifted by the user's own Windows accent, with two signa
 
 ### Neutral
 - **Ink** (`text-primary`, `text-primary-dark`): titles, field labels, body text.
-- **Soft Ink** (`text-secondary`, `text-secondary-dark`): captions, counts, row captions, empty-state text, hints, the neutral Due chip.
+- **Soft Ink** (`text-secondary`, `text-secondary-dark`): captions, counts, row captions, empty-state text, hints, the neutral Due chip, and the fill of the rail's count badges (with inverse text, at least 4.5:1 in Light and Dark).
 - **Window Base** (`surface-base`, `surface-base-dark`): overlays such as the Tags flyout and the expanded sidebar.
 - **Pane Grey** (`surface-pane`, `surface-pane-dark`): the detail pane's background, a step off the list.
 - **Card Veil** (`card-fill`, `card-fill-dark`) with **Hairline** (`card-stroke`, `card-stroke-dark`): Settings cards, the quick-add card and InfoBar edges.
 - **Control Hairline** (`control-stroke`, `control-stroke-dark`): pill-chip borders.
 - **Strong Stroke** (`strong-stroke`, `strong-stroke-dark`): the hollow ring of a List with no colour (`ListStripeBrush`).
-- **Badge Grey** (`neutral-badge`, `neutral-badge-dark`): the rail's count badges.
 
 ### List colours (data)
 - **Red, Orange, Yellow, Green, Blue, Purple** (`list-red` … `list-purple`): the six presets a user can give a List, shown as the sidebar dot and the row stripe. A List with no colour shows a hollow ring and no stripe.
@@ -199,7 +196,7 @@ TaskDesk is flat at rest. Surfaces separate by tone and a 1 px hairline, never b
 
 ## Shapes
 
-Corners follow Fluent: 4 px (`rounded.control`) on buttons, inputs, Settings cards and InfoBars, and 8 px (`rounded.overlay`) on overlays and the quick-add card. TaskDesk's own forms are round, and the Task checkbox is Fluent's, with its 4 px corners. Due and Tag chips are pills (10 px radius). Badges are full pills (18 px tall in the sidebar, 16 px on the rail). The List stripe is a 3 px bar with rounded ends, and the List dot is a 10 px circle or, for a List with no colour, a 10 px ring.
+Corners follow Fluent: 4 px (`rounded.control`) on buttons, inputs, Settings cards and InfoBars, and 8 px (`rounded.overlay`) on overlays and the quick-add card. TaskDesk's own forms are round, and the Task checkbox is Fluent's, with its 4 px corners. Due and Tag chips are pills (10 px radius). Badges are full pills (18 px tall in the sidebar, 16 px on the rail). The List stripe is a 3 px bar with rounded ends, and the List dot is a 10 px circle or, for a List with no colour, a 10 px ring. On the rail a List is a 24 px ring in its colour (Strong Stroke without one) around its initial.
 
 ## Components
 
@@ -222,7 +219,7 @@ Fluent's own CheckBox, unstyled, with no label. In a row it drops the room Fluen
 ### Sidebar
 - **Style:** Windows Settings–style navigation on one shared background. Each item is an icon (Segoe Fluent Icons, 16 px), its name in body text, and its count in soft ink at the right; a count of zero is hidden. A List's icon is its dot or ring, and a Tag's is "#" in soft ink, so every name starts in the same column. Sections are Smart Views, which stay fixed at the top, then a divider and one scroll area holding Lists, "+ New List" directly under the last List, and Tags (hidden when there are none).
 - **States:** the selected item takes Fluent's selected ListBox item style. Overdue's count is a solid Overdue Red badge with on-accent text.
-- **Narrow:** the rail shows icons only, with grey pill badges for counts (red for Overdue), the List dot or ring with the name in a tooltip, and a "#" button opening a Tags flyout.
+- **Narrow:** the rail shows icons only, with soft-ink pill badges for counts (red for Overdue), each List as its initial in a 24 px ring of its colour with the name in a tooltip, and a "#" button opening a Tags flyout. Badges are solid and rings are hollow, so a count never reads as a List.
 
 ### Page Heading
 One heading row: on the left, the subtitle-size name of what is shown with a "⋯" button for List actions (on List pages only); a long name ends with an ellipsis instead of pushing the rest. On the right, a **Filter** toggle button (Segoe Fluent Icons Filter glyph, U+E71C, plus the word "Filter"; shown pressed while the Filter row is shown), then the search box, which names its scope ("Search in Work") and flexes between 160 and 280 px. The Filter row (priority drop-down, "Has due", "Has reminder", Tag toggles and "Clear filters") sits under the heading row only when the Filter button opens it or while a Filter is on; it starts closed at every launch. Quick add follows directly, with a visible label naming its target ("Add a task to Work"). The Completed Smart View has no quick add: its label and box are hidden.

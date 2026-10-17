@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TaskDesk.Core.Lists;
@@ -21,7 +22,11 @@ public sealed partial class ListItemViewModel(ListSummary summary) : ObservableO
     public bool IsDefault { get; } = summary.List.IsDefault;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Initial))]
     private string _name = summary.List.Name;
+
+    /// <summary>The first character of the name in capitals, which the narrow rail shows for the List.</summary>
+    public string Initial => Name.Length == 0 ? "" : StringInfo.GetNextTextElement(Name).ToUpperInvariant();
 
     [ObservableProperty]
     private string? _colorHex = summary.List.ColorHex;
