@@ -187,15 +187,18 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Button Margin="0,0,4,4" Padding="8,2"
-                                        Command="{Binding DataContext.RemoveTagCommand,
-                                                  RelativeSource={RelativeSource AncestorType=Window}}"
-                                        CommandParameter="{Binding}"
-                                        ToolTip="Remove tag">
-                                    <TextBlock>
-                                        <Run Text="#" /><Run Text="{Binding Name, Mode=OneWay}" /><Run Text=" x" />
-                                    </TextBlock>
-                                </Button>
+                                <!-- The row's Tag chip, with a quiet button that removes the Tag. -->
+                                <Border Style="{StaticResource TagChip}" Margin="0,0,4,4" Padding="8,1,2,1">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource TagChipText}" VerticalAlignment="Center"
+                                                   Text="{Binding Name, StringFormat=#{0}}" />
+                                        <Button Style="{StaticResource TagRemoveButton}" ToolTip="Remove tag"
+                                                AutomationProperties.Name="{Binding Name, StringFormat=Remove #{0}}"
+                                                Command="{Binding DataContext.RemoveTagCommand,
+                                                          RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+                                    </StackPanel>
+                                </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

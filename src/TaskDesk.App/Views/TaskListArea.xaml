@@ -57,7 +57,7 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Style="{StaticResource TagChip}">
-                                    <TextBlock Style="{StaticResource TagChipText}" Text="{Binding Name}" />
+                                    <TextBlock Style="{StaticResource TagChipText}" Text="{Binding Name, StringFormat=#{0}}" />
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -198,10 +198,14 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <controls:CommandToggleButton Content="{Binding Tag.Name}" ContentStringFormat="#{0}" Padding="8,2"
+                                <!-- Fluent's ToggleButton ignores ContentStringFormat, so the "#" is in the text. -->
+                                <controls:CommandToggleButton Padding="8,2"
                                               Margin="0,0,6,0" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                              AutomationProperties.Name="{Binding Tag.Name, StringFormat=#{0}}"
                                               Command="{Binding DataContext.ToggleFilterTagCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                              CommandParameter="{Binding Tag}" />
+                                              CommandParameter="{Binding Tag}">
+                                    <TextBlock Text="{Binding Tag.Name, StringFormat=#{0}}" />
+                                </controls:CommandToggleButton>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

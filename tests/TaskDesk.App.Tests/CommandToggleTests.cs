@@ -53,7 +53,7 @@ public sealed class CommandToggleTests(WpfAppFixture fixture)
     public void Main_window_command_driven_toggles_are_all_found() => fixture.Run(() =>
     {
         WithLaidOut(nameof(MainWindow), toggles =>
-            Assert.Equal(["Completed", "Filter", "Has due filter", "Has reminder filter", "work"], toggles.Select(Describe).Order()));
+            Assert.Equal(["#work", "Completed", "Filter", "Has due filter", "Has reminder filter"], toggles.Select(Describe).Order()));
     });
 
     [Fact]

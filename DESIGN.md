@@ -216,10 +216,11 @@ Fluent's own CheckBox, unstyled, with no label. In a row it drops the room Fluen
 - **States:** Overdue draws border and text in Overdue Red, Today in the accent text colour, and later dates in a hairline border with soft ink. Wording is relative: "Today 18:00", "Tomorrow", "Thu", "Thu 15 Oct", with the year only when it isn't the current one.
 
 ### Tag Chip
-- **Style:** a pill with a card-veil fill, hairline border and ink caption text, at most 96 px of text before an ellipsis, 4 px apart.
+- **Style:** a pill with a card-veil fill, hairline border and ink caption text reading "#" plus the name ("#health"), at most 96 px of text before an ellipsis, 4 px apart.
+- **Where:** the same chip on rows and in the detail pane. In the detail pane a quiet 16 px button with the Cancel glyph (U+E711) sits inside the chip and is the only way to remove the Tag; its accessible name is "Remove #health". In the Filter row a Tag is a Fluent toggle button reading "#health", like its neighbours "Has due" and "Has reminder".
 
 ### Sidebar
-- **Style:** Windows Settings–style navigation on one shared background. Each item is an icon (Segoe Fluent Icons, 16 px), its name in body text, and its count in soft ink at the right; a count of zero is hidden. Sections are Smart Views, which stay fixed at the top, then a divider and one scroll area holding Lists, "+ New List" directly under the last List, and Tags (hidden when there are none).
+- **Style:** Windows Settings–style navigation on one shared background. Each item is an icon (Segoe Fluent Icons, 16 px), its name in body text, and its count in soft ink at the right; a count of zero is hidden. A List's icon is its dot or ring, and a Tag's is "#" in soft ink, so every name starts in the same column. Sections are Smart Views, which stay fixed at the top, then a divider and one scroll area holding Lists, "+ New List" directly under the last List, and Tags (hidden when there are none).
 - **States:** the selected item takes Fluent's selected ListBox item style. Overdue's count is a solid Overdue Red badge with on-accent text.
 - **Narrow:** the rail shows icons only, with grey pill badges for counts (red for Overdue), the List dot or ring with the name in a tooltip, and a "#" button opening a Tags flyout.
 

@@ -197,7 +197,14 @@
                      PreviewMouseWheel="OnNestedListMouseWheel">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <TextBlock Style="{StaticResource BodyText}" Text="{Binding Name, StringFormat=#{0}}" />
+                        <!-- "#" sits in the icon column, as the dot does for a List, so the names line up. -->
+                        <DockPanel LastChildFill="True">
+                            <TextBlock DockPanel.Dock="Left" Width="24" TextAlignment="Center" VerticalAlignment="Center"
+                                       Style="{StaticResource BodyText}" Text="#"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Style="{StaticResource BodyText}" VerticalAlignment="Center"
+                                       Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

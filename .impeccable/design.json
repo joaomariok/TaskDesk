@@ -512,7 +512,7 @@
       "name": "Task Row",
       "kind": "custom",
       "description": "One-line Task row: List stripe, checkbox, title, Tag chip, List caption, Due chip.",
-      "html": "<div class=\"ds-row\" tabindex=\"0\"><span class=\"ds-stripe\"></span><span class=\"ds-check\"></span><span class=\"ds-title\">Call the bank</span><span class=\"ds-tag\">health</span><span class=\"ds-caption\">Inbox</span><span class=\"ds-due ds-due-today\">Today 18:00</span></div>",
+      "html": "<div class=\"ds-row\" tabindex=\"0\"><span class=\"ds-stripe\"></span><span class=\"ds-check\"></span><span class=\"ds-title\">Call the bank</span><span class=\"ds-tag\">#health</span><span class=\"ds-caption\">Inbox</span><span class=\"ds-due ds-due-today\">Today 18:00</span></div>",
       "css": ".ds-row{display:flex;align-items:center;gap:8px;padding:4px 8px;font-family:'Segoe UI',sans-serif;font-size:14px;color:#000000E4;border-radius:4px;max-width:520px}.ds-row:hover{background:#00000006}.ds-row:focus-visible{outline:2px solid #000000E4;outline-offset:1px}.ds-stripe{width:3px;height:20px;border-radius:1.5px;background:#0078D4}.ds-check{width:18px;height:18px;border:1px solid #00000072;border-radius:4px;flex:none}.ds-row:hover .ds-check{background:#0000000F}.ds-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ds-caption{font-size:12px;color:#0000009E}.ds-tag{font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid #0000000F;background:#FFFFFFB3}.ds-due{font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid #0000000F;color:#0000009E}.ds-due-today{border-color:AccentColor;color:AccentColor}"
     },
     {
@@ -527,8 +527,8 @@
       "name": "Tag Chip",
       "kind": "chip",
       "refersTo": "tag-chip",
-      "description": "Pill for a Tag on a row, at most 96px of text.",
-      "html": "<span class=\"ds-tag-chip\">work</span>",
+      "description": "Pill for a Tag on a row and in the detail pane, reading #name, at most 96px of text.",
+      "html": "<span class=\"ds-tag-chip\">#work</span>",
       "css": ".ds-tag-chip{display:inline-block;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Segoe UI',sans-serif;font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid #0000000F;background:#FFFFFFB3;color:#000000E4}"
     },
     {

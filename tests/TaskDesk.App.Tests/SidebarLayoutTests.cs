@@ -101,6 +101,27 @@ public sealed class SidebarLayoutTests(WpfAppFixture fixture)
     });
 
     [Fact]
+    public void Tag_names_line_up_with_List_names_behind_a_hash_icon() => fixture.Run(() =>
+    {
+        WithSidebar(
+            (main, lists) =>
+            {
+                lists.Lists.Add(NewList("Work", 2));
+                main.Tags.Add(new Tag { Id = Guid.NewGuid(), Name = "home" });
+            },
+            pane =>
+            {
+                var listName = TextIn(pane, "ListsBox", "Work");
+                var tagName = TextIn(pane, "TagList", "home");
+                var hash = TextIn(pane, "TagList", "#");
+
+                Assert.Equal(LeftOf(listName, pane), LeftOf(tagName, pane));
+                Assert.True(LeftOf(hash, pane) < LeftOf(tagName, pane), "The '#' must sit in the icon column, left of the name.");
+                Assert.Equal(TextFillColor(pane, "TextFillColorSecondaryBrush"), ((SolidColorBrush)hash.Foreground).Color);
+            });
+    });
+
+    [Fact]
     public void The_Tags_section_is_hidden_while_there_are_no_Tags() => fixture.Run(() =>
     {
         WithSidebar(
@@ -152,6 +173,15 @@ public sealed class SidebarLayoutTests(WpfAppFixture fixture)
 
         return false;
     }
+
+    private static TextBlock TextIn(FrameworkElement pane, string listName, string text) =>
+        Descendants((DependencyObject)pane.FindName(listName)).OfType<TextBlock>().Single(t => t.Text == text);
+
+    private static double LeftOf(UIElement element, UIElement relativeTo) =>
+        element.TranslatePoint(new Point(0, 0), relativeTo).X;
+
+    private static Color TextFillColor(FrameworkElement element, string key) =>
+        ((SolidColorBrush)element.FindResource(key)).Color;
 
     private static double TopOf(UIElement element, UIElement relativeTo) =>
         element.TranslatePoint(new Point(0, 0), relativeTo).Y;
