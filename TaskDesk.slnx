@@ -1,9 +1,11 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/TaskDesk.App/TaskDesk.App.csproj" />
+    <Project Path="src/TaskDesk.App.WinUI/TaskDesk.App.WinUI.csproj" />
     <Project Path="src/TaskDesk.Core/TaskDesk.Core.csproj" />
     <Project Path="src/TaskDesk.Data/TaskDesk.Data.csproj" />
     <Project Path="src/TaskDesk.Presentation/TaskDesk.Presentation.csproj" />
+    <Project Path="src/TaskDesk.Views/TaskDesk.Views.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/TaskDesk.SampleData/TaskDesk.SampleData.csproj" />
@@ -14,5 +16,6 @@
     <Project Path="tests/TaskDesk.Data.Tests/TaskDesk.Data.Tests.csproj" />
     <Project Path="tests/TaskDesk.Presentation.Tests/TaskDesk.Presentation.Tests.csproj" />
     <Project Path="tests/TaskDesk.UiTests/TaskDesk.UiTests.csproj" />
+    <Project Path="tests/TaskDesk.Views.Tests/TaskDesk.Views.Tests.csproj" />
   </Folder>
 </Solution>

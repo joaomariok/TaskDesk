@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The WinUI views library (ADR 0004): every WinUI view, window, style dictionary and dialog. It depends on
+       Presentation and Core, never on the shell exe. Keep <UseWinUI>true</UseWinUI> literal: the WinUI XAML
+       guardrail in TaskDesk.Core.Tests finds the projects to scan by it. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.22000.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.22000.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion>10.0.22000.0</TargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <RootNamespace>TaskDesk.Views</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TaskDesk.Core\TaskDesk.Core.csproj" />
+    <ProjectReference Include="..\TaskDesk.Presentation\TaskDesk.Presentation.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinUIAnalyzer" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

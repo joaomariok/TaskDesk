@@ -12,13 +12,18 @@
     <!-- Stage A: AI/ML, Widgets, Graphics.Imaging. -->
     <_TaskDeskUnusedAiPayload>onnxruntime[^\\]*|DirectML[^\\]*|NpuDetect\\.*|Microsoft\.Windows\.AI\.[^\\]*|Microsoft\.Windows\.(Private\.)?Workloads[^\\]*|workloads[^\\]*\.json|Microsoft\.Windows\.Widgets\.[^\\]*|Microsoft\.Graphics\.(Imaging|ImagingInternal|Internal\.Imaging)[^\\]*|Microsoft\.Windows\.(Vision|VisionInternal|Internal\.Vision|SemanticSearch)\.winmd</_TaskDeskUnusedAiPayload>
     <!-- Stage A: managed projections nothing in TaskDesk references (directly or through the kept projections). -->
-    <_TaskDeskUnusedProjections>Microsoft\.InteractiveExperiences\.Projection\.dll|Microsoft\.Security\.Authentication\.OAuth\.Projection\.dll|Microsoft\.Windows\.(ApplicationModel\.(Background|DynamicDependency|Resources|WindowsAppRuntime)|BadgeNotifications|Foundation|Management\.Deployment|Media\.Capture|PushNotifications|Security\.AccessControl|Storage\.Pickers|Storage|System\.Power|System)\.Projection\.dll|Microsoft\.WindowsAppRuntime\.Bootstrap\.Net\.dll</_TaskDeskUnusedProjections>
+    <_TaskDeskUnusedProjections>Microsoft\.Security\.Authentication\.OAuth\.Projection\.dll|Microsoft\.Windows\.(ApplicationModel\.(Background|DynamicDependency|Resources|WindowsAppRuntime)|BadgeNotifications|Foundation|Management\.Deployment|Media\.Capture|PushNotifications|Security\.AccessControl|Storage\.Pickers|Storage|System\.Power|System)\.Projection\.dll|Microsoft\.WindowsAppRuntime\.Bootstrap\.Net\.dll</_TaskDeskUnusedProjections>
+    <!-- Stage A for WPF only: this projection holds Microsoft.UI.Windowing (AppWindow), which the WinUI app uses. -->
+    <_TaskDeskUnusedProjections Condition="'$(UseWinUI)' != 'true'">Microsoft\.InteractiveExperiences\.Projection\.dll|$(_TaskDeskUnusedProjections)</_TaskDeskUnusedProjections>
     <!--
-      Stage B: WinUI, composition, input and DWriteCore, with their .mui language folders. TaskDesk's UI is WPF.
+      Stage B: WinUI, composition, input and DWriteCore, with their .mui language folders. The WPF app drops them;
+      the WinUI app keeps them (see TaskDeskUnusedPayloadPattern below).
       Microsoft.Internal.FrameworkUdk.dll stays: Microsoft.WindowsAppRuntime.dll delay-loads it.
     -->
     <_TaskDeskUnusedWinUiPayload>Microsoft\.UI\.Xaml[^\\]*|Microsoft\.UI\.Xaml\\.*|WinUIEdit[^\\]*|DWriteCore[^\\]*|dwm[^\\]*|dcomp[^\\]*|Microsoft\.UI\.(Input|Windowing|Composition)[^\\]*|Microsoft\.UI\.(dll|winmd|pri)|Microsoft\.UI\.(Text\.winmd|Designer\.dll)|Microsoft\.InputStateManager\.dll|Microsoft\.DirectManipulation\.dll|CoreMessagingXP\.dll|marshal\.dll|wuceffectsi\.dll|Microsoft\.Graphics\.(Display\.dll|winmd)|[^\\]+\\[^\\]+\.mui</_TaskDeskUnusedWinUiPayload>
     <TaskDeskUnusedPayloadPattern>^(?i)($(_TaskDeskUnusedAiPayload)|$(_TaskDeskUnusedProjections)|$(_TaskDeskUnusedWinUiPayload))$</TaskDeskUnusedPayloadPattern>
+    <!-- The WinUI app (UseWinUI) keeps stage A and needs everything stage B removes. -->
+    <TaskDeskUnusedPayloadPattern Condition="'$(UseWinUI)' == 'true'">^(?i)($(_TaskDeskUnusedAiPayload)|$(_TaskDeskUnusedProjections))$</TaskDeskUnusedPayloadPattern>
   </PropertyGroup>
 
   <!--

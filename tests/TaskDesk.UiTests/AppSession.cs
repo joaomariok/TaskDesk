@@ -18,7 +18,10 @@ namespace TaskDesk.UiTests;
 /// </summary>
 public sealed class AppSession : IDisposable
 {
-    /// <summary>Set to a TaskDesk.App.exe (for example a published build) to test it instead of the Debug build.</summary>
+    /// <summary>
+    /// Set to a TaskDesk.App.exe (for example a published build) or a TaskDesk.App.WinUI.exe to test it instead of the
+    /// WPF Debug build; scripts/ui-tests.ps1 -Publish and -WinUI set it.
+    /// </summary>
     public const string AppVariable = "TASKDESK_UI_APP";
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
@@ -36,13 +39,15 @@ public sealed class AppSession : IDisposable
 
     /// <param name="theme">The <c>themeMode</c> setting: System, Light or Dark.</param>
     /// <param name="globalHotkey">The <c>globalHotkey</c> setting; empty registers none.</param>
-    public static AppSession Start(string theme = "System", string globalHotkey = "")
+    /// <param name="closeBehavior">The <c>closeBehavior</c> setting: Exit (the default here) or HideToTray.</param>
+    public static AppSession Start(string theme = "System", string globalHotkey = "", string closeBehavior = "Exit")
     {
         var dataDirectory = Path.Combine(Path.GetTempPath(), "TaskDesk-uitest-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dataDirectory);
-        // Closing the window exits (so layout and pending edits are flushed), no first-close hint, and by default no global hotkey.
+        // By default closing the window exits (so layout and pending edits are flushed); no first-close hint, and by
+        // default no global hotkey.
         File.WriteAllText(Path.Combine(dataDirectory, "settings.json"), $$"""
-            { "closeBehavior": "Exit", "trayHintShown": true, "startWithWindows": false, "globalHotkey": "{{globalHotkey}}",
+            { "closeBehavior": "{{closeBehavior}}", "trayHintShown": true, "startWithWindows": false, "globalHotkey": "{{globalHotkey}}",
               "themeMode": "{{theme}}" }
             """);
         var session = new AppSession(dataDirectory);
@@ -62,13 +67,59 @@ public sealed class AppSession : IDisposable
     /// <summary>Closes the window (which exits the app), waits for the process to end, and starts it again.</summary>
     public void Restart()
     {
+        CloseAndWaitForExit();
+        Launch();
+    }
+
+    /// <summary>Closes the window (with the Exit close behaviour) and asserts the process ends.</summary>
+    public void CloseAndWaitForExit()
+    {
         var process = Process.GetProcessById(_app!.ProcessId);
         Window.Close();
         Assert.True(process.WaitForExit(Timeout), "TaskDesk did not exit after its window was closed.");
         _app.Dispose();
         _app = null;
-        Launch();
     }
+
+    /// <summary>
+    /// Starts the app a second time on the same data folder and asserts that this second process hands over to
+    /// the running one and exits.
+    /// </summary>
+    public void LaunchSecondInstance()
+    {
+        var start = new ProcessStartInfo(AppPath()) { UseShellExecute = false };
+        start.Environment["TASKDESK_DATA_DIR"] = _dataDirectory;
+        start.Environment.Remove("TASKDESK_SANDBOX");
+        using var second = Process.Start(start) ?? throw new InvalidOperationException("The second launch did not start.");
+        if (!second.WaitForExit(Timeout))
+        {
+            second.Kill(entireProcessTree: true);
+            Assert.Fail("The second launch did not exit; it should hand over to the running TaskDesk.");
+        }
+    }
+
+    /// <summary>Moves the main window's top-left corner to a screen point in physical pixels.</summary>
+    public void MoveTo(int left, int top)
+    {
+        Window.Patterns.Transform.Pattern.Move(left, top);
+        WaitUntil(() => Math.Abs(Window.BoundingRectangle.Left - left) < 4 && Math.Abs(Window.BoundingRectangle.Top - top) < 4,
+            () => $"The window did not move to ({left}, {top}) (is {Window.BoundingRectangle}).");
+    }
+
+    /// <summary>True while the app's process runs.</summary>
+    public bool IsRunning => _app is { HasExited: false };
+
+    /// <summary>True while a window is shown (not hidden; a minimized window counts as shown).</summary>
+    public static bool IsWindowShown(IntPtr handle) => IsWindowVisible(handle);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
+
+    /// <summary>The window handle that has the foreground (the active window of the desktop).</summary>
+    public static IntPtr ForegroundWindow() => GetForegroundWindow();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
 
     public AutomationElement Find(string automationId) =>
         Eventually(() => Window.FindFirstDescendant(cf => cf.ByAutomationId(automationId)),

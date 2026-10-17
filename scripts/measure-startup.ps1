@@ -8,23 +8,28 @@ Creates a fresh data folder under $env:TEMP\TaskDesk-measure, fills it with samp
 TASKDESK_DATA_DIR (sandbox mode stays on; TASKDESK_SANDBOX is never set). One discarded warm-up launch, then
 -Runs timed launches measured from just before start until the main window is visible (5 ms poll). Then 3
 launches with --minimized, reading WorkingSet64 after 12 s. Every started process is killed, also on Ctrl+C
-or error. Refuses to start while a TaskDesk.App process is running.
+or error. Refuses to start while a TaskDesk.App process is running. -WinUI measures TaskDesk.App.WinUI.exe (the WinUI
+build, which keeps its own name until the swap) instead of TaskDesk.App.exe.
 
 .EXAMPLE
 pwsh scripts/measure-startup.ps1 -Publish C:\pub\win-x64-fdd -Label fdd
+
+.EXAMPLE
+pwsh scripts/measure-startup.ps1 -Publish C:\pub\win-x64-winui -WinUI -Label winui
 #>
 param(
     [Parameter(Mandatory)][string]$Publish,
     [int]$Runs = 7,
     [int]$Tasks = 5000,
-    [string]$Label = 'run'
+    [string]$Label = 'run',
+    [switch]$WinUI
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$exe = Join-Path $Publish 'TaskDesk.App.exe'
-$processName = 'TaskDesk.App'
-if (-not (Test-Path -LiteralPath $exe)) { throw "No TaskDesk.App.exe in '$Publish'." }
+$processName = $WinUI ? 'TaskDesk.App.WinUI' : 'TaskDesk.App'
+$exe = Join-Path $Publish "$processName.exe"
+if (-not (Test-Path -LiteralPath $exe)) { throw "No $processName.exe in '$Publish'." }
 
 Add-Type -Namespace TaskDeskMeasure -Name Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);'
 

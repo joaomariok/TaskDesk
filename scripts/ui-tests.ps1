@@ -3,47 +3,60 @@
 # Needs an interactive desktop; it takes over the keyboard and mouse while it runs (about a minute).
 # Each test uses a fresh temp data folder (sandbox mode: no Run key, no notification registration).
 #   -Publish <dir>  test TaskDesk.App.exe in a publish folder instead of the Debug build
+#   -WinUI          test the WinUI build (TaskDesk.App.WinUI.exe, sandbox mode only) instead of the WPF one;
+#                   with -Publish, the publish folder holds TaskDesk.App.WinUI.exe
 #   -Class <name>   run one test class, for example NavigationTests
 #   -Method <name>  run the tests whose method name matches, with * as a wildcard, for example *Ctrl_comma*
-# Before the run it stops TaskDesk.App processes left over from earlier UI runs (identified by running from this
-# repo's bin folder, or from -Publish; the TASKDESK_DATA_DIR environment cannot be read from another process) and
-# warns about any other running TaskDesk.App without touching it.
+# Before the run it stops TaskDesk.App (with -WinUI, TaskDesk.App.WinUI) processes left over from earlier UI runs
+# (identified by running from this repo's bin folder, or from -Publish; the TASKDESK_DATA_DIR environment cannot be read
+# from another process) and warns about any other running one without touching it.
 param(
     [string]$Publish,
     [string]$Class,
-    [string]$Method
+    [string]$Method,
+    [switch]$WinUI
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+# The app under test: the WPF app by default; the WinUI shell keeps its own assembly name until the swap (#68).
+$appName = $WinUI ? 'TaskDesk.App.WinUI' : 'TaskDesk.App'
+$appProject = "src/$appName"
 
 function Get-TaskDeskProcess {
-    Get-Process -Name 'TaskDesk.App' -ErrorAction SilentlyContinue | Where-Object { $_.Path }
+    Get-Process -Name $appName -ErrorAction SilentlyContinue | Where-Object { $_.Path }
 }
 
 Push-Location $repoRoot
 try {
     if ($Publish) {
-        $exe = Join-Path (Resolve-Path $Publish) 'TaskDesk.App.exe'
-        if (-not (Test-Path $exe)) { throw "No TaskDesk.App.exe in $Publish" }
+        $exe = Join-Path (Resolve-Path $Publish) "$appName.exe"
+        if (-not (Test-Path $exe)) { throw "No $appName.exe in $Publish" }
         $env:TASKDESK_UI_APP = $exe
     }
     else {
         Remove-Item Env:TASKDESK_UI_APP -ErrorAction SilentlyContinue
-        & dotnet build src/TaskDesk.App -warnaserror
+        & dotnet build $appProject -warnaserror
         if ($LASTEXITCODE -ne 0) { Write-Host "UI TESTS FAILED: app build exit $LASTEXITCODE"; exit $LASTEXITCODE }
+        if ($WinUI) {
+            # AppSession finds the WPF Debug build by itself; point it at the WinUI one.
+            $built = Get-ChildItem (Join-Path $repoRoot "$appProject/bin/Debug") -Recurse -Filter "$appName.exe" |
+                Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+            if (-not $built) { throw "No $appName.exe under $appProject/bin/Debug" }
+            $env:TASKDESK_UI_APP = $built.FullName
+        }
     }
 
     # Leftovers from an earlier UI run would hold focus and the keyboard; the owner's own instance is left alone.
-    $ownRoots = @(Join-Path $repoRoot 'src\TaskDesk.App\bin')
+    $ownRoots = @(Join-Path $repoRoot "src\$appName\bin")
     if ($Publish) { $ownRoots += (Resolve-Path $Publish).Path }
     foreach ($process in Get-TaskDeskProcess) {
         $isLeftover = $ownRoots | Where-Object { $process.Path.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) }
         if ($isLeftover) {
-            Write-Host "Stopping leftover TaskDesk.App (pid $($process.Id)): $($process.Path)"
+            Write-Host "Stopping leftover $appName (pid $($process.Id)): $($process.Path)"
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
         }
         else {
-            Write-Warning "TaskDesk.App is running (pid $($process.Id), $($process.Path)); not stopped. It may take focus from the tests."
+            Write-Warning "$appName is running (pid $($process.Id), $($process.Path)); not stopped. It may take focus from the tests."
         }
     }
 
