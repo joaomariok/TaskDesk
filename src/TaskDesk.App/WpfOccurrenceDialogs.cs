@@ -1,5 +1,4 @@
-using System.Windows;
-using System.Windows.Controls;
+using TaskDesk.App.Dialogs;
 using TaskDesk.Presentation;
 
 namespace TaskDesk.App;
@@ -9,47 +8,15 @@ internal sealed class WpfOccurrenceDialogs : IOccurrenceDialogs
 {
     public OccurrenceDeleteChoice AskDeleteOccurrence(string taskTitle)
     {
-        var choice = OccurrenceDeleteChoice.Cancel;
-        var message = new TextBlock
+        var body = $"\"{taskTitle}\" repeats. Delete only this occurrence (the next one is still created), "
+            + "or stop repeating?";
+        var result = FluentDialogService.Show(
+            new FluentDialogRequest("Delete repeating task", body, ["Delete this occurrence", "Stop repeating"]));
+        return result.ChoiceIndex switch
         {
-            Text = $"\"{taskTitle}\" repeats. Delete only this occurrence (the next one is still created), "
-                + "or stop repeating?",
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 12),
+            0 => OccurrenceDeleteChoice.DeleteThisOccurrence,
+            1 => OccurrenceDeleteChoice.StopRepeating,
+            _ => OccurrenceDeleteChoice.Cancel,
         };
-        var skip = new Button { Content = "Delete this occurrence", IsDefault = true, Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(0, 0, 8, 0) };
-        var stop = new Button { Content = "Stop repeating", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(0, 0, 8, 0) };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, Padding = new Thickness(8, 2, 8, 2) };
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        buttons.Children.Add(skip);
-        buttons.Children.Add(stop);
-        buttons.Children.Add(cancel);
-        var panel = new StackPanel { Margin = new Thickness(12) };
-        panel.Children.Add(message);
-        panel.Children.Add(buttons);
-
-        var window = new Window
-        {
-            Title = "Delete repeating task",
-            Content = panel,
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = Application.Current.MainWindow,
-        };
-        skip.Click += (_, _) =>
-        {
-            choice = OccurrenceDeleteChoice.DeleteThisOccurrence;
-            window.DialogResult = true;
-        };
-        stop.Click += (_, _) =>
-        {
-            choice = OccurrenceDeleteChoice.StopRepeating;
-            window.DialogResult = true;
-        };
-        window.Loaded += (_, _) => skip.Focus();
-
-        return window.ShowDialog() == true ? choice : OccurrenceDeleteChoice.Cancel;
     }
 }

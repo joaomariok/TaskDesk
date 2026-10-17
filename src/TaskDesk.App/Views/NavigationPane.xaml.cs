@@ -1,3 +1,4 @@
+using TaskDesk.App.Dialogs;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -70,22 +71,17 @@ public partial class NavigationPane : UserControl
 
     private async void OnDeleteTagClick(object sender, RoutedEventArgs e)
     {
-        // The message boxes stay owned by the main window, as before the pane was split out.
-        var owner = Window.GetWindow(this);
+        // Nothing to delete until a tag is selected; the Fluent dialog is centred on the main window.
         if (ViewModel.TagFilter is not { } tag)
         {
-            MessageBox.Show(owner, "Select a tag in the list first.", "Delete tag");
             return;
         }
 
-        var answer = MessageBox.Show(
-            owner,
-            $"Delete the tag #{tag.Name}? It is removed from all tasks. This cannot be undone.",
+        if (FluentDialogService.Confirm(
             "Delete tag",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No);
-        if (answer == MessageBoxResult.Yes)
+            $"Delete the tag #{tag.Name}? It is removed from all tasks. This cannot be undone.",
+            "Delete",
+            Window.GetWindow(this)))
         {
             await ViewModel.DeleteTagAsync(tag);
         }
