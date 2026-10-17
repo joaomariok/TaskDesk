@@ -1,5 +1,8 @@
 root = true
 
+[*]
+end_of_line = lf
+
 [*.cs]
 # VSTHRD003: view-model flows await stored tasks (pending saves, queued refreshes) by design; the UI context is not a JoinableTaskFactory
 dotnet_diagnostic.VSTHRD003.severity = none
