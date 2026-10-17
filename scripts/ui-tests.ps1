@@ -5,6 +5,9 @@
 #   -Publish <dir>  test TaskDesk.App.exe in a publish folder instead of the Debug build
 #   -Class <name>   run one test class, for example NavigationTests
 #   -Screenshots <dir>  save PNGs of the ScreenshotTour states (Light and Dark) into this folder
+# Before the run it stops TaskDesk.App processes left over from earlier UI runs (identified by running from this
+# repo's bin folder, or from -Publish; the TASKDESK_DATA_DIR environment cannot be read from another process) and
+# warns about any other running TaskDesk.App without touching it.
 param(
     [string]$Publish,
     [string]$Class,
@@ -12,6 +15,10 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+
+function Get-TaskDeskProcess {
+    Get-Process -Name 'TaskDesk.App' -ErrorAction SilentlyContinue | Where-Object { $_.Path }
+}
 
 Push-Location $repoRoot
 try {
@@ -24,6 +31,20 @@ try {
         Remove-Item Env:TASKDESK_UI_APP -ErrorAction SilentlyContinue
         & dotnet build src/TaskDesk.App -warnaserror
         if ($LASTEXITCODE -ne 0) { Write-Host "UI TESTS FAILED: app build exit $LASTEXITCODE"; exit $LASTEXITCODE }
+    }
+
+    # Leftovers from an earlier UI run would hold focus and the keyboard; the owner's own instance is left alone.
+    $ownRoots = @(Join-Path $repoRoot 'src\TaskDesk.App\bin')
+    if ($Publish) { $ownRoots += (Resolve-Path $Publish).Path }
+    foreach ($process in Get-TaskDeskProcess) {
+        $isLeftover = $ownRoots | Where-Object { $process.Path.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) }
+        if ($isLeftover) {
+            Write-Host "Stopping leftover TaskDesk.App (pid $($process.Id)): $($process.Path)"
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
+        else {
+            Write-Warning "TaskDesk.App is running (pid $($process.Id), $($process.Path)); not stopped. It may take focus from the tests."
+        }
     }
 
     if ($Screenshots) {
@@ -39,8 +60,13 @@ try {
 
     $runArgs = @('run', '--project', 'tests/TaskDesk.UiTests', '--no-build', '--')
     if ($Class) { $runArgs += @('-class', "TaskDesk.UiTests.$Class") }
-    & dotnet @runArgs
+    & dotnet @runArgs | Tee-Object -Variable runOutput
     $code = $LASTEXITCODE
+    $failed = @($runOutput | Where-Object { "$_" -match '\[FAIL\]' }).Count
+    $lostFocus = @($runOutput | Where-Object { "$_" -match 'did not take focus' }).Count
+    if ($failed -gt 0 -and $lostFocus -gt $failed / 2) {
+        Write-Host 'Many tests lost keyboard focus: another window took the foreground, or keys were pressed during the run.'
+    }
     if ($Screenshots) { Write-Host "Screenshots: $env:TASKDESK_UI_SCREENSHOTS" }
     if (Test-Path $failures) { Write-Host "Failure screenshots: $failures" }
     Write-Host ($code -eq 0 ? 'UI TESTS PASSED' : "UI TESTS FAILED: exit $code")

@@ -229,25 +229,47 @@ public sealed class AppSession : IDisposable
 
     public void Dispose()
     {
-        if (_app is not null)
-        {
-            CaptureIfFailed();
-            if (!_app.HasExited)
-            {
-                _app.Kill();
-            }
-
-            _app.Dispose();
-        }
-
-        _automation.Dispose();
         try
         {
-            Directory.Delete(_dataDirectory, recursive: true);
+            if (_app is not null)
+            {
+                CaptureIfFailed();
+            }
         }
-        catch (IOException)
+        finally
         {
-            // A just-killed process can hold the database for a moment; the folder is in %TEMP%.
+            // Whatever happened above, the process and any child it started must not outlive the test.
+            KillProcessTree();
+            _app?.Dispose();
+            _automation.Dispose();
+            try
+            {
+                Directory.Delete(_dataDirectory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A just-killed process can hold the database for a moment; the folder is in %TEMP%.
+            }
+        }
+    }
+
+    private void KillProcessTree()
+    {
+        if (_app is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(_app.ProcessId);
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit(Timeout);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException
+                                       or System.ComponentModel.Win32Exception)
+        {
+            // Already gone.
         }
     }
 
