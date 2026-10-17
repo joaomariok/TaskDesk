@@ -19,13 +19,7 @@ Subagents never commit, create branches or touch another worktree. The orchestra
 
 ## Gate
 
-Run from the repo root, one command at a time:
-
-1. `dotnet build-server shutdown`
-2. `dotnet build -warnaserror`
-3. `dotnet test`
-
-Read each command's exit code. Exit 0 with zero warnings is green. Run the gate itself, not through a pipe such as `| grep`: a pipe replaces the gate's exit code with grep's.
+Run `pwsh scripts/gate.ps1`. It shuts down the build server, then runs `dotnet build -warnaserror` and `dotnet test`, and stops at the first failure. Exit 0 is green. Read the script's exit code directly; a pipe such as `| grep` replaces it with grep's.
 
 ## Implementer brief
 

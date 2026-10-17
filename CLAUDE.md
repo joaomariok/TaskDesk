@@ -17,3 +17,7 @@ Single-context: one root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/domain
 ### Implementing a spec
 
 Running `/implement-spec`, or fanning tickets out to worktree agents: follow `docs/agents/implement-spec.md`.
+
+## Verification
+
+Gate: `pwsh scripts/gate.ps1` (must exit 0).
