@@ -40,7 +40,7 @@ public sealed class ScreenshotTour : IDisposable
                 else
                 {
                     Thread.Sleep(300);
-                    FlaUI.Core.Capturing.Capture.Element(window).ToFile(path);
+                    AppSession.CaptureFrame(window, path);
                 }
             }
         }

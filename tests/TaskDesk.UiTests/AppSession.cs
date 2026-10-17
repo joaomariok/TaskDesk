@@ -167,8 +167,37 @@ public sealed class AppSession : IDisposable
         Window.SetForeground();
         // Let the window finish painting after it comes to the front.
         Thread.Sleep(300);
-        FlaUI.Core.Capturing.Capture.Element(Window).ToFile(path);
+        CaptureFrame(Window, path);
     }
+
+    /// <summary>Saves a PNG of what a window draws on screen, without its invisible resize border.</summary>
+    public static void CaptureFrame(Window window, string path) =>
+        FlaUI.Core.Capturing.Capture.Rectangle(VisibleFrame(window)).ToFile(path);
+
+    // The window's bounding rectangle includes the invisible resize border, which shows whatever is behind the
+    // window and differs from run to run; DWM's frame bounds are only what the window draws.
+    private static Rectangle VisibleFrame(Window window)
+    {
+        var result = DwmGetWindowAttribute(window.Properties.NativeWindowHandle.Value, DwmwaExtendedFrameBounds,
+            out var frame, System.Runtime.InteropServices.Marshal.SizeOf<NativeRect>());
+        return result == 0
+            ? Rectangle.FromLTRB(frame.Left, frame.Top, frame.Right, frame.Bottom)
+            : window.BoundingRectangle;
+    }
+
+    private const int DwmwaExtendedFrameBounds = 9;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out NativeRect value, int size);
 
     /// <summary>The quick-add window, once it is shown.</summary>
     public Window QuickAddWindow() =>

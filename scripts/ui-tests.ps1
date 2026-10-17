@@ -5,16 +5,20 @@
 #   -Publish <dir>  test TaskDesk.App.exe in a publish folder instead of the Debug build
 #   -Class <name>   run one test class, for example NavigationTests
 #   -Screenshots <dir>  save PNGs of the ScreenshotTour states (Light and Dark) into this folder
+#   -Baseline <dir>     with -Screenshots: list the shots that differ from an earlier tour (scripts/compare-tour.ps1)
 # Before the run it stops TaskDesk.App processes left over from earlier UI runs (identified by running from this
 # repo's bin folder, or from -Publish; the TASKDESK_DATA_DIR environment cannot be read from another process) and
 # warns about any other running TaskDesk.App without touching it.
 param(
     [string]$Publish,
     [string]$Class,
-    [string]$Screenshots
+    [string]$Screenshots,
+    [string]$Baseline
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+if ($Baseline -and -not $Screenshots) { throw '-Baseline needs -Screenshots.' }
+if ($Baseline) { $Baseline = (Resolve-Path $Baseline).Path }
 
 function Get-TaskDeskProcess {
     Get-Process -Name 'TaskDesk.App' -ErrorAction SilentlyContinue | Where-Object { $_.Path }
@@ -68,6 +72,11 @@ try {
         Write-Host 'Many tests lost keyboard focus: another window took the foreground, or keys were pressed during the run.'
     }
     if ($Screenshots) { Write-Host "Screenshots: $env:TASKDESK_UI_SCREENSHOTS" }
+    if ($Baseline) {
+        # A report only: a comparison that breaks never changes the run's result.
+        try { & (Join-Path $PSScriptRoot 'compare-tour.ps1') -Baseline $Baseline -Current $env:TASKDESK_UI_SCREENSHOTS }
+        catch { Write-Warning "Tour comparison failed: $_" }
+    }
     if (Test-Path $failures) { Write-Host "Failure screenshots: $failures" }
     Write-Host ($code -eq 0 ? 'UI TESTS PASSED' : "UI TESTS FAILED: exit $code")
     exit $code
