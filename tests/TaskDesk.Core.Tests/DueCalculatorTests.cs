@@ -170,4 +170,58 @@ public class DueCalculatorTests
             hasDate ? Day : null,
             hasTime ? new TimeOnly(9, 0) : null);
     }
+
+    // ---- When the Due state next changes (Today and Overdue refresh) ----
+
+    private static readonly TimeZoneInfo RefreshZone =
+        TimeZoneInfo.CreateCustomTimeZone("Refresh-3", TimeSpan.FromHours(-3), "Refresh-3", "Refresh-3");
+
+    // 2026-10-20 10:00 local (UTC-3).
+    private static readonly DateTimeOffset RefreshNow = new(2026, 10, 20, 13, 0, 0, TimeSpan.Zero);
+
+    private static readonly DateTimeOffset NextLocalMidnight = new(2026, 10, 21, 3, 0, 0, TimeSpan.Zero);
+
+    private static TaskItem Due(int day, int? hour = null, bool completed = false) => new()
+    {
+        DueDate = new DateOnly(2026, 10, day),
+        DueTime = hour is { } h ? new TimeOnly(h, 0) : null,
+        IsCompleted = completed,
+    };
+
+    public static TheoryData<string, TaskItem[]> TasksThatChangeNothingBeforeMidnight => new()
+    {
+        { "no Tasks", [] },
+        { "date-only Due today", [Due(20)] },
+        { "timed Due already passed", [Due(20, 9)] },
+        { "timed Due tomorrow", [Due(21, 8)] },
+        { "completed timed Due later today", [Due(20, 15, completed: true)] },
+        { "no Due", [new TaskItem()] },
+    };
+
+    [Theory]
+    [MemberData(nameof(TasksThatChangeNothingBeforeMidnight))]
+    public void The_next_change_is_local_midnight_when_no_timed_Due_passes_before_it(string because, TaskItem[] tasks)
+    {
+        Assert.True(
+            NextLocalMidnight == DueCalculator.NextChange(tasks, RefreshNow, RefreshZone), because);
+    }
+
+    [Fact]
+    public void The_next_change_is_just_after_the_first_open_timed_Due_left_today()
+    {
+        var next = DueCalculator.NextChange([Due(20, 15), Due(20, 11), Due(20, 9)], RefreshNow, RefreshZone);
+
+        Assert.Equal(new DateTimeOffset(2026, 10, 20, 14, 0, 0, TimeSpan.Zero).AddTicks(1), next);
+    }
+
+    [Fact]
+    public void The_next_change_is_the_first_instant_the_Task_is_Overdue()
+    {
+        var task = Due(20, 11);
+
+        var next = DueCalculator.NextChange([task], RefreshNow, RefreshZone);
+
+        Assert.False(DueCalculator.IsOverdue(task.DueDate, task.DueTime, false, next.AddTicks(-1), RefreshZone));
+        Assert.True(DueCalculator.IsOverdue(task.DueDate, task.DueTime, false, next, RefreshZone));
+    }
 }

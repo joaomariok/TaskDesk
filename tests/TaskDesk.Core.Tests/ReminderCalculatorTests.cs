@@ -124,6 +124,23 @@ public class ReminderCalculatorTests
     }
 
     [Fact]
+    public void A_date_only_Reminder_fires_at_the_given_default_time()
+    {
+        var utc = ReminderCalculator.ToUtc(new DateOnly(2026, 10, 20), null, Zone, defaultTime: new TimeOnly(7, 45));
+
+        Assert.Equal(new DateTime(2026, 10, 20, 10, 45, 0, DateTimeKind.Utc), utc);
+    }
+
+    [Fact]
+    public void An_explicit_Reminder_time_wins_over_the_default_time()
+    {
+        var utc = ReminderCalculator.ToUtc(
+            new DateOnly(2026, 10, 20), new TimeOnly(14, 30), Zone, defaultTime: new TimeOnly(7, 45));
+
+        Assert.Equal(new DateTime(2026, 10, 20, 17, 30, 0, DateTimeKind.Utc), utc);
+    }
+
+    [Fact]
     public void A_Reminder_instant_shows_as_its_local_date_and_time()
     {
         var (date, time) = ReminderCalculator.ToLocal(new DateTime(2026, 10, 21, 1, 15, 0, DateTimeKind.Utc), Zone);

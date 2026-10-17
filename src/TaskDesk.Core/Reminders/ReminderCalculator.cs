@@ -8,7 +8,10 @@ namespace TaskDesk.Core.Reminders;
 /// </summary>
 public static class ReminderCalculator
 {
-    /// <summary>The local time of a Reminder set with a date only.</summary>
+    /// <summary>
+    /// The local time of a Reminder set with a date only, when no default time is given (the "Default
+    /// reminder time" setting starts at this value).
+    /// </summary>
     public static readonly TimeOnly DefaultReminderTime = new(9, 0);
 
     /// <summary>The "Snooze 10 min" duration.</summary>
@@ -42,12 +45,12 @@ public static class ReminderCalculator
 
     /// <summary>
     /// The Reminder instant (UTC) for a local date and time in <paramref name="zone"/>; a date-only Reminder
-    /// uses <see cref="DefaultReminderTime"/>. A local time skipped by a daylight-saving jump moves forward by
+    /// uses <paramref name="defaultTime"/>, or <see cref="DefaultReminderTime"/> when none is given. A local time skipped by a daylight-saving jump moves forward by
     /// the gap; a local time that happens twice takes its first occurrence.
     /// </summary>
-    public static DateTime ToUtc(DateOnly date, TimeOnly? time, TimeZoneInfo zone)
+    public static DateTime ToUtc(DateOnly date, TimeOnly? time, TimeZoneInfo zone, TimeOnly? defaultTime = null)
     {
-        var local = date.ToDateTime(time ?? DefaultReminderTime, DateTimeKind.Unspecified);
+        var local = date.ToDateTime(time ?? defaultTime ?? DefaultReminderTime, DateTimeKind.Unspecified);
         TimeSpan offset;
         if (zone.IsInvalidTime(local))
         {

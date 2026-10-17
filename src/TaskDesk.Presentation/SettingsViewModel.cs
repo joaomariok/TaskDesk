@@ -204,6 +204,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>Raised after an import changed the data, so open views can reload.</summary>
     public event Action? Imported;
 
+    /// <summary>
+    /// Runs after the owner confirmed an import and before it starts: the main window saves its pending
+    /// detail edit and closes the detail pane, so no edit of the old data lands on the imported data.
+    /// </summary>
+    public Func<Task>? BeforeImport { get; set; }
+
     /// <summary>Outcome of the last import; empty until one runs.</summary>
     [ObservableProperty]
     private string _importStatus = "";
@@ -225,6 +231,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (mode == ImportMode.Replace && !_importDialogs.ConfirmReplace())
         {
             return;
+        }
+
+        if (BeforeImport is { } prepare)
+        {
+            await prepare();
         }
 
         try

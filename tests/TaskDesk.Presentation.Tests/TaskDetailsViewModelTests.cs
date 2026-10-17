@@ -192,6 +192,25 @@ public class TaskDetailsViewModelTests
     }
 
     [Fact]
+    public async Task Preparing_for_an_import_saves_the_pending_edit_and_closes_the_pane()
+    {
+        var (service, vm, clock) = await StartAsync("a");
+        var a = vm.Tasks[0];
+        vm.SelectedTask = a;
+        vm.DetailTitle = "edited";
+
+        await vm.PrepareForImportAsync();
+
+        Assert.Equal([(a.Id, "edited", "", Priority.None)], service.Updates);
+        Assert.False(vm.IsDetailPaneOpen);
+        Assert.Null(vm.SelectedTask);
+
+        clock.Advance(TimeSpan.FromSeconds(5));
+        await vm.PendingSave;
+        Assert.Single(service.Updates);
+    }
+
+    [Fact]
     public async Task Text_edits_are_saved_once_after_500_ms_of_quiet()
     {
         var (service, vm, clock) = await StartAsync("a");

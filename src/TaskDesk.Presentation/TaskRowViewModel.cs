@@ -75,9 +75,12 @@ public sealed partial class TaskRowViewModel : ObservableObject
         DueText = item.DueDate is { } date
             ? item.DueTime is { } time ? $"{date:d} {time:t}" : $"{date:d}"
             : "";
-        IsOverdue = DueCalculator.IsOverdue(
-            item.DueDate, item.DueTime, item.IsCompleted, _clock.GetUtcNow(), _clock.LocalTimeZone);
+        RefreshOverdue();
     }
+
+    /// <summary>Re-evaluates <see cref="IsOverdue"/> at the current time (time passes; the Task did not change).</summary>
+    internal void RefreshOverdue() => IsOverdue = DueCalculator.IsOverdue(
+        Item.DueDate, Item.DueTime, Item.IsCompleted, _clock.GetUtcNow(), _clock.LocalTimeZone);
 
     internal void RefreshSubtaskProgress() => SubtaskProgress = Core.Tasks.SubtaskProgress.Format(Subtasks);
 }

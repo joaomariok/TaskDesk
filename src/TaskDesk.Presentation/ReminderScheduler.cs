@@ -9,7 +9,8 @@ namespace TaskDesk.Presentation;
 /// Shows due Reminders (SPEC 7.4). Checks on start, every <see cref="Interval"/>, after every Task change,
 /// and whenever <see cref="RequestCheck"/> is called (the App calls it on resume from sleep). A polling loop
 /// survives sleep, clock and time-zone changes. Which Reminders are due is the Core rule; each one is
-/// claimed (marked fired) before it is shown, so it fires once. When more than
+/// claimed (marked fired) before it is shown, so it fires once. A claim whose notification cannot be shown
+/// is released, so a later check retries it. When more than
 /// <see cref="ReminderCalculator.MissedSummaryThreshold"/> are claimed in one check (the PC was off or asleep),
 /// one summary is shown instead of a notification each. Delivery is whatever
 /// <see cref="INotificationService"/> is given.
@@ -110,24 +111,61 @@ public sealed class ReminderScheduler(
     private async Task CheckOnceAsync()
     {
         // Claim first: a Reminder edited, completed or claimed since it was listed is not shown.
-        var claimed = new List<DueReminder>();
+        var claimed = new List<(DueReminder Due, DateTime FiredUtc)>();
         foreach (var due in await reminders.ListDueAsync())
         {
-            if (await reminders.TryMarkFiredAsync(due.TaskId, due.DueAtUtc))
+            if (await reminders.TryClaimAsync(due.TaskId, due.DueAtUtc) is { } firedUtc)
             {
-                claimed.Add(due);
+                claimed.Add((due, firedUtc));
             }
         }
 
         if (ReminderCalculator.ShouldSummarize(claimed.Count))
         {
-            notifications.ShowSummary(new MissedRemindersSummary(claimed.Count));
+            if (!TryShow(() => notifications.ShowSummary(new MissedRemindersSummary(claimed.Count))))
+            {
+                foreach (var claim in claimed)
+                {
+                    await ReleaseAsync(claim.Due, claim.FiredUtc);
+                }
+            }
+
             return;
         }
 
-        foreach (var due in claimed)
+        foreach (var (due, firedUtc) in claimed)
         {
-            notifications.Show(ReminderNotification.For(due, CultureInfo.CurrentCulture));
+            if (!TryShow(() => notifications.Show(ReminderNotification.For(due, CultureInfo.CurrentCulture))))
+            {
+                await ReleaseAsync(due, firedUtc);
+            }
+        }
+    }
+
+    private bool TryShow(Action show)
+    {
+        try
+        {
+            show();
+            return true;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogError(ex, "Showing a Reminder notification failed");
+            return false;
+        }
+    }
+
+    // Nothing was shown, so un-claim it: the next check retries it. Only this claim's marker is cleared.
+    private async Task ReleaseAsync(DueReminder due, DateTime firedUtc)
+    {
+        try
+        {
+            await reminders.ReleaseClaimAsync(due.TaskId, firedUtc);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogError(ex, "Releasing the Reminder of Task {TaskId} failed", due.TaskId);
         }
     }
 }

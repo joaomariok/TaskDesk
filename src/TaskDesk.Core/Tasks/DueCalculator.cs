@@ -1,3 +1,5 @@
+using TaskDesk.Core.Reminders;
+
 namespace TaskDesk.Core.Tasks;
 
 /// <summary>
@@ -50,6 +52,33 @@ public static class DueCalculator
 
         var today = LocalToday(now, zone);
         return date > today && date <= today.AddDays(UpcomingDays);
+    }
+
+    /// <summary>
+    /// The next instant after <paramref name="now"/> at which <see cref="IsOverdue"/>, <see cref="IsInToday"/>
+    /// or <see cref="IsUpcoming"/> can change for <paramref name="tasks"/>: the first instant an open Task
+    /// with a timed Due later today is Overdue (just after its Due time), or else the next local midnight.
+    /// </summary>
+    public static DateTimeOffset NextChange(IEnumerable<TaskItem> tasks, DateTimeOffset now, TimeZoneInfo zone)
+    {
+        var today = LocalToday(now, zone);
+        var next = new DateTimeOffset(ReminderCalculator.ToUtc(today.AddDays(1), TimeOnly.MinValue, zone));
+        foreach (var task in tasks)
+        {
+            if (task.IsCompleted || task.DueDate != today || task.DueTime is not { } time)
+            {
+                continue;
+            }
+
+            // Overdue strictly after the Due time, so the change is one tick later.
+            var overdueFrom = new DateTimeOffset(ReminderCalculator.ToUtc(today, time, zone)).AddTicks(1);
+            if (overdueFrom > now && overdueFrom < next)
+            {
+                next = overdueFrom;
+            }
+        }
+
+        return next;
     }
 
     /// <summary>A Due time is only allowed together with a Due date.</summary>

@@ -68,8 +68,17 @@
             </DockPanel>
         </DataTemplate>
     </Window.Resources>
-    <DockPanel Margin="12">
-        <Grid DockPanel.Dock="Left" Width="180" Margin="0,0,12,0">
+    <Grid Margin="12">
+        <!-- Sidebar | splitter | Task list | splitter | detail pane. Pane widths and limits come from
+             PaneLayout and are saved in settings.json (MainWindow.xaml.cs, WindowLayoutService). -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="NavigationColumn" Width="180" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" MinWidth="240" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition x:Name="DetailColumn" Width="260" />
+        </Grid.ColumnDefinitions>
+        <Grid Grid.Column="0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="3*" />
@@ -147,8 +156,15 @@
                 </ListBox>
             </DockPanel>
         </Grid>
+        <GridSplitter Grid.Column="1" Width="12" HorizontalAlignment="Stretch" Background="Transparent"
+                      ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Focusable="False"
+                      AutomationProperties.Name="Resize sidebar" />
+        <GridSplitter x:Name="DetailSplitter" Grid.Column="3" Width="12" HorizontalAlignment="Stretch"
+                      Background="Transparent" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                      Focusable="False" AutomationProperties.Name="Resize detail pane"
+                      Visibility="{Binding IsDetailPaneVisible, Converter={StaticResource BoolToVisibility}}" />
         <!-- Detail pane -->
-        <ScrollViewer DockPanel.Dock="Right" Width="260" Margin="12,0,0,0"
+        <ScrollViewer Grid.Column="4"
                       VerticalScrollBarVisibility="Auto"
                       Visibility="{Binding IsDetailPaneVisible, Converter={StaticResource BoolToVisibility}}">
         <StackPanel Margin="0,0,8,0">
@@ -274,6 +290,7 @@
             <TextBlock Foreground="Firebrick" TextWrapping="Wrap" Margin="0,8,0,0" Text="{Binding ErrorMessage}" />
         </StackPanel>
         </ScrollViewer>
+        <DockPanel Grid.Column="2">
         <!-- Shown when Reminders fall back to tray balloons -->
         <Border DockPanel.Dock="Top" Margin="0,0,0,8" Padding="10,6" BorderThickness="1" BorderBrush="Goldenrod"
                 AutomationProperties.Name="Notifications unavailable"
@@ -416,5 +433,6 @@
                 <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
             </ListBox.InputBindings>
         </ListBox>
-    </DockPanel>
+        </DockPanel>
+    </Grid>
 </Window>

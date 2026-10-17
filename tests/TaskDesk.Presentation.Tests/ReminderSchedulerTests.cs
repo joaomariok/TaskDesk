@@ -40,6 +40,64 @@ public class ReminderSchedulerTests
     }
 
     [Fact]
+    public async Task A_Reminder_that_failed_to_show_is_released_and_shown_by_a_later_check()
+    {
+        var s = Create();
+        var task = s.Reminders.Add("Pay rent", Start.AddMinutes(-5));
+        s.Notifications.ShowFailure = new InvalidOperationException("toast and balloon both failed");
+
+        await s.Scheduler.StartAsync();
+
+        Assert.Empty(s.Notifications.Shown);
+        Assert.Null(task.ReminderFiredUtc);
+        Assert.Equal([task.Id], s.Reminders.Released);
+
+        s.Notifications.ShowFailure = null;
+        s.Clock.Advance(ReminderScheduler.Interval);
+        await s.Scheduler.CurrentCheck;
+        s.Clock.Advance(ReminderScheduler.Interval);
+        await s.Scheduler.CurrentCheck;
+
+        Assert.Equal(task.Id, Assert.Single(s.Notifications.Shown).TaskId);
+        Assert.NotNull(task.ReminderFiredUtc);
+    }
+
+    [Fact]
+    public async Task Only_the_Reminder_that_failed_to_show_is_released()
+    {
+        var s = Create();
+        var shown = s.Reminders.Add("a", Start.AddMinutes(-2));
+        var failing = s.Reminders.Add("b", Start.AddMinutes(-1));
+        s.Notifications.FailFor.Add(failing.Id);
+
+        await s.Scheduler.StartAsync();
+
+        Assert.Equal(shown.Id, Assert.Single(s.Notifications.Shown).TaskId);
+        Assert.NotNull(shown.ReminderFiredUtc);
+        Assert.Null(failing.ReminderFiredUtc);
+        Assert.Equal([failing.Id], s.Reminders.Released);
+    }
+
+    [Fact]
+    public async Task A_missed_summary_that_failed_to_show_releases_every_claim()
+    {
+        var s = Create();
+        var tasks = Enumerable.Range(0, 4).Select(i => s.Reminders.Add($"t{i}", Start.AddMinutes(-i - 1))).ToList();
+        s.Notifications.ShowFailure = new InvalidOperationException("no delivery");
+
+        await s.Scheduler.StartAsync();
+
+        Assert.Empty(s.Notifications.Summaries);
+        Assert.All(tasks, t => Assert.Null(t.ReminderFiredUtc));
+
+        s.Notifications.ShowFailure = null;
+        s.Clock.Advance(ReminderScheduler.Interval);
+        await s.Scheduler.CurrentCheck;
+
+        Assert.Equal(4, Assert.Single(s.Notifications.Summaries).Count);
+    }
+
+    [Fact]
     public async Task A_Reminder_that_becomes_due_is_shown_by_the_next_30_second_check()
     {
         var s = Create();

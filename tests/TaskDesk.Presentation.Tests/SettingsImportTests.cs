@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using TaskDesk.Core.Import;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Shell;
@@ -29,13 +30,14 @@ public sealed class SettingsImportTests
         }
     }
 
-    private sealed class FakeImports(Exception? failure = null) : IImportService
+    private sealed class FakeImports(Exception? failure = null, Action? onImport = null) : IImportService
     {
         public List<(string Path, ImportMode Mode)> Imports { get; } = [];
 
         public Task<ImportResult> ImportJsonAsync(string path, ImportMode mode, CancellationToken cancellationToken = default)
         {
             Imports.Add((path, mode));
+            onImport?.Invoke();
             return failure is not null
                 ? Task.FromException<ImportResult>(failure)
                 : Task.FromResult(new ImportResult(
@@ -102,6 +104,69 @@ public sealed class SettingsImportTests
         Assert.Equal([(@"C:\in\a.json", ImportMode.Merge)], imports.Imports);
         Assert.Equal("Merged: 5 tasks added, 6 skipped; 1 lists added, 2 skipped; 3 tags added, 4 skipped.", vm.ImportStatus);
         Assert.Equal(1, imported);
+    }
+
+    [Fact]
+    public async Task The_before_import_step_runs_after_the_dialogs_and_before_the_import()
+    {
+        var log = new List<string>();
+        var imports = new FakeImports(onImport: () => log.Add("import"));
+        var vm = Create(imports, new FakeDialogs(@"C:\in.json", ImportMode.Replace, confirmReplace: true));
+        vm.BeforeImport = async () =>
+        {
+            await Task.Yield();
+            log.Add("prepare");
+        };
+        vm.Imported += () => log.Add("reload");
+
+        await vm.ImportCommand.ExecuteAsync(null);
+
+        Assert.Equal(["prepare", "import", "reload"], log);
+    }
+
+    [Fact]
+    public async Task The_before_import_step_does_not_run_when_the_owner_cancels()
+    {
+        var prepared = 0;
+        var vm = Create(new FakeImports(), new FakeDialogs(@"C:\in.json", ImportMode.Replace, confirmReplace: false));
+        vm.BeforeImport = () =>
+        {
+            prepared++;
+            return Task.CompletedTask;
+        };
+
+        await vm.ImportCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, prepared);
+    }
+
+    [Fact]
+    public async Task A_pending_detail_edit_is_saved_before_a_replace_import_and_never_after_it()
+    {
+        var tasks = new MainViewModelTests.FakeTaskService();
+        await tasks.CreateTaskAsync("a", TestContext.Current.CancellationToken);
+        var clock = new FakeTimeProvider();
+        var main = new MainViewModel(tasks, new MainViewModelTests.FakeTagService(tasks), clock);
+        await main.LoadAsync(TestContext.Current.CancellationToken);
+        main.SelectedTask = main.Tasks[0];
+        main.DetailTitle = "edited before the import"; // debounced, not saved yet
+
+        var updatesAtImport = -1;
+        var imports = new FakeImports(onImport: () => updatesAtImport = tasks.Updates.Count);
+        var settings = Create(imports, new FakeDialogs(@"C:\in.json", ImportMode.Replace, confirmReplace: true));
+        settings.BeforeImport = main.PrepareForImportAsync;
+        Task? reload = null;
+        settings.Imported += () => reload = main.LoadAsync(TestContext.Current.CancellationToken);
+
+        await settings.ImportCommand.ExecuteAsync(null);
+        await reload!;
+        clock.Advance(TimeSpan.FromSeconds(5));
+        await main.PendingSave;
+
+        Assert.Equal(1, updatesAtImport);
+        Assert.Single(tasks.Updates);
+        Assert.False(main.IsDetailPaneOpen);
+        Assert.Null(main.SelectedTask);
     }
 
     [Fact]

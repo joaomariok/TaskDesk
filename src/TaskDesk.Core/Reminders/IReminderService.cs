@@ -36,6 +36,19 @@ public interface IReminderService
     /// snoozed since it was listed.
     /// </summary>
     Task<bool> TryMarkFiredAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Claims a due Reminder like <see cref="TryMarkFiredAsync"/> and returns the fired marker it wrote, which
+    /// identifies this claim for <see cref="ReleaseClaimAsync"/>; null when it was not claimed.
+    /// </summary>
+    Task<DateTime?> TryClaimAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Undoes a claim whose notification could not be shown, so a later check retries it: clears the fired
+    /// marker only while it is still <paramref name="firedUtc"/>. Returns false, changing nothing, when the
+    /// Reminder was re-armed or claimed again since.
+    /// </summary>
+    Task<bool> ReleaseClaimAsync(Guid taskId, DateTime firedUtc, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Tells listeners that Tasks were saved (added, edited, completed, deleted or restored).</summary>

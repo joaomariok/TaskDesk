@@ -1,3 +1,4 @@
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Shell;
 
 namespace TaskDesk.Presentation.Tests;
@@ -45,17 +46,19 @@ public sealed class ShellControllerTests
     {
         public bool IsFirst { get; set; } = true;
         public int SignalCount { get; private set; }
+        public List<IReadOnlyList<string>> Signals { get; } = [];
         public int DisposeCount { get; private set; }
-        public Action? OnSecondLaunch { get; private set; }
+        public Action<IReadOnlyList<string>>? OnSecondLaunch { get; private set; }
 
         public bool TryAcquire() => IsFirst;
-        public Task SignalExistingAsync(CancellationToken cancellationToken)
+        public Task SignalExistingAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
         {
             SignalCount++;
+            Signals.Add(arguments);
             return Task.CompletedTask;
         }
 
-        public void Listen(Action onSecondLaunch) => OnSecondLaunch = onSecondLaunch;
+        public void Listen(Action<IReadOnlyList<string>> onSecondLaunch) => OnSecondLaunch = onSecondLaunch;
         public void Dispose() => DisposeCount++;
     }
 
@@ -135,10 +138,64 @@ public sealed class ShellControllerTests
     {
         await StartedAsync(minimized: true);
 
-        _single.OnSecondLaunch!();
+        _single.OnSecondLaunch!([]);
 
         Assert.True(_window.IsVisible);
         Assert.Equal(1, _window.FocusCount);
+    }
+
+    [Fact]
+    public async Task A_later_launch_from_a_Reminder_notification_raises_the_activation_without_showing_the_window()
+    {
+        var controller = await StartedAsync(minimized: true);
+        var activations = new List<NotificationActivation>();
+        controller.ActivationRequested += activations.Add;
+        var markDone = new NotificationActivation(Guid.NewGuid(), ReminderAction.MarkDone);
+
+        _single.OnSecondLaunch!(SecondLaunchArguments.Build(minimized: true, markDone));
+
+        Assert.Equal([markDone], activations);
+        Assert.False(_window.IsVisible);
+    }
+
+    [Fact]
+    public async Task A_later_minimized_launch_leaves_the_window_hidden()
+    {
+        await StartedAsync(minimized: true);
+
+        _single.OnSecondLaunch!([SecondLaunchArguments.MinimizedFlag]);
+
+        Assert.False(_window.IsVisible);
+        Assert.Equal(0, _window.FocusCount);
+    }
+
+    [Fact]
+    public async Task A_later_launch_while_exiting_is_ignored()
+    {
+        var controller = await StartedAsync(minimized: true);
+        var flush = new TaskCompletionSource();
+        controller.AddExitStep(() => flush.Task);
+        var activations = 0;
+        controller.ActivationRequested += _ => activations++;
+        var exit = controller.ExitAsync();
+
+        _single.OnSecondLaunch!([]);
+        _single.OnSecondLaunch!(SecondLaunchArguments.Build(false, NotificationActivation.OpenToday));
+        flush.SetResult();
+        await exit;
+
+        Assert.Equal(0, _window.FocusCount);
+        Assert.Equal(0, activations);
+    }
+
+    [Fact]
+    public async Task A_second_instance_forwards_its_minimized_flag()
+    {
+        _single.IsFirst = false;
+
+        await Create().StartAsync(minimized: true, Exe, TestContext.Current.CancellationToken);
+
+        Assert.Equal([SecondLaunchArguments.MinimizedFlag], Assert.Single(_single.Signals));
     }
 
     [Fact]
@@ -295,6 +352,108 @@ public sealed class ShellControllerTests
         _tray.ClickQuickAdd();
 
         Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public async Task Exit_runs_exit_steps_in_order_and_shuts_down_only_after_they_finish()
+    {
+        var controller = await StartedAsync();
+        var log = new List<string>();
+        var flush = new TaskCompletionSource();
+        controller.AddExitStep(async () =>
+        {
+            log.Add("flush started");
+            await flush.Task;
+            log.Add("flush done");
+        });
+        controller.AddExitStep(() =>
+        {
+            log.Add("stop host");
+            return Task.CompletedTask;
+        });
+
+        var exit = controller.ExitAsync();
+
+        Assert.Equal(["flush started"], log);
+        Assert.Equal(0, _lifetime.ShutdownCount);
+        Assert.Equal(0, _tray.DisposeCount);
+
+        flush.SetResult();
+        await exit;
+
+        Assert.Equal(["flush started", "flush done", "stop host"], log);
+        Assert.Equal(1, _tray.DisposeCount);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task Tray_exit_waits_for_the_exit_steps()
+    {
+        var controller = await StartedAsync();
+        var flush = new TaskCompletionSource();
+        controller.AddExitStep(() => flush.Task);
+
+        _tray.ClickExit();
+        Assert.Equal(0, _lifetime.ShutdownCount);
+
+        flush.SetResult();
+        await controller.ExitAsync();
+
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task Close_with_exit_behavior_waits_for_the_exit_steps()
+    {
+        _settings.Current = new ShellSettings(CloseBehavior: CloseBehavior.Exit);
+        var controller = await StartedAsync();
+        var flush = new TaskCompletionSource();
+        controller.AddExitStep(() => flush.Task);
+
+        controller.OnWindowClosing();
+        Assert.Equal(0, _lifetime.ShutdownCount);
+
+        flush.SetResult();
+        await controller.ExitAsync();
+
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task A_failing_exit_step_does_not_stop_later_steps_or_the_shutdown()
+    {
+        var controller = await StartedAsync();
+        var ran = false;
+        controller.AddExitStep(() => throw new InvalidOperationException("boom"));
+        controller.AddExitStep(() =>
+        {
+            ran = true;
+            return Task.CompletedTask;
+        });
+
+        await controller.ExitAsync();
+
+        Assert.True(ran);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task Exit_requested_twice_runs_the_steps_once()
+    {
+        var controller = await StartedAsync();
+        var runs = 0;
+        controller.AddExitStep(() =>
+        {
+            runs++;
+            return Task.CompletedTask;
+        });
+
+        var first = controller.ExitAsync();
+        var second = controller.ExitAsync();
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(1, runs);
+        Assert.Equal(1, _lifetime.ShutdownCount);
     }
 
     [Fact]

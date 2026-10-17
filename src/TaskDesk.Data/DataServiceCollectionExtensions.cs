@@ -24,8 +24,12 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<ITaskChangeNotifier>(sp => sp.GetRequiredService<TaskChangeInterceptor>());
         services.AddDbContextFactory<TaskDeskDbContext>((sp, options) => options
             // Pooling=False so the file is released as soon as a context is disposed.
-            .UseSqlite($"Data Source={paths.DatabaseFile};Pooling=False")
-            .AddInterceptors(sp.GetRequiredService<TaskChangeInterceptor>()));
+            // Split queries: several collection Includes (Tags, Subtasks) would otherwise multiply rows in one
+            // JOIN. Paged queries keep a total order (Completed: CompletedUtc, then Id) so pages stay stable.
+            .UseSqlite(
+                $"Data Source={paths.DatabaseFile};Pooling=False",
+                sqlite => sqlite.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
+            .AddInterceptors(sp.GetRequiredService<TaskChangeInterceptor>(), new SqliteFunctionsInterceptor()));
         services.AddSingleton<IReminderService, ReminderService>();
         services.AddSingleton<IBackupService, BackupService>();
         services.AddSingleton<IExportService, ExportService>();

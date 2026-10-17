@@ -3,12 +3,18 @@ using TaskDesk.Core.Shell;
 
 namespace TaskDesk.App.Shell;
 
-/// <summary>Restores and saves the main window's size, position and state through the settings store.</summary>
+/// <summary>
+/// Restores and saves the main window's size, position, state and pane widths (<see cref="PaneLayout"/>)
+/// through the settings store.
+/// </summary>
 internal sealed class WindowLayoutService(IShellSettingsStore store)
 {
-    public void Restore(Window window)
+    public void Restore(MainWindow window)
     {
-        if (store.Load().Layout is not { } saved)
+        var layout = store.Load().Layout;
+        window.SetPaneWidths(
+            PaneLayout.WidthOf(layout, PaneLayout.Navigation), PaneLayout.WidthOf(layout, PaneLayout.Detail));
+        if (layout is not { } saved)
         {
             return;
         }
@@ -30,7 +36,7 @@ internal sealed class WindowLayoutService(IShellSettingsStore store)
         }
     }
 
-    public void Save(Window window)
+    public void Save(MainWindow window)
     {
         // RestoreBounds is the normal-state rectangle even when minimized or maximized.
         var bounds = window.WindowState == WindowState.Normal
@@ -47,7 +53,7 @@ internal sealed class WindowLayoutService(IShellSettingsStore store)
             Layout = new WindowLayout(
                 bounds.Left, bounds.Top, bounds.Width, bounds.Height,
                 window.WindowState == WindowState.Maximized,
-                settings.Layout?.PaneWidths),
+                PaneLayout.Update(settings.Layout?.PaneWidths, window.MeasurePaneWidths())),
         });
     }
 }

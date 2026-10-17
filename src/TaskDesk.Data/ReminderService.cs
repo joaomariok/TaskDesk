@@ -70,13 +70,17 @@ internal sealed class ReminderService(
     }
 
     public async Task<bool> TryMarkFiredAsync(
+        Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default) =>
+        await TryClaimAsync(taskId, dueAtUtc, cancellationToken) is not null;
+
+    public async Task<DateTime?> TryClaimAsync(
         Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default)
     {
         var nowUtc = clock.GetUtcNow().UtcDateTime;
         DateTime? fired = nowUtc;
         if (dueAtUtc > nowUtc)
         {
-            return false; // not due yet
+            return null; // not due yet
         }
 
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
@@ -88,6 +92,23 @@ internal sealed class ReminderService(
         if (updated > 0)
         {
             logger.LogInformation("Task {TaskId} Reminder fired", taskId);
+        }
+
+        return updated > 0 ? fired : null;
+    }
+
+    public async Task<bool> ReleaseClaimAsync(
+        Guid taskId, DateTime firedUtc, CancellationToken cancellationToken = default)
+    {
+        DateTime? claim = DateTime.SpecifyKind(firedUtc, DateTimeKind.Utc);
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // Conditional on this claim's marker, so a re-armed or re-claimed Reminder is left alone.
+        var updated = await context.Tasks
+            .Where(t => t.Id == taskId && t.ReminderFiredUtc == claim)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.ReminderFiredUtc, (DateTime?)null), cancellationToken);
+        if (updated > 0)
+        {
+            logger.LogWarning("Task {TaskId} Reminder could not be shown; released for a later check", taskId);
         }
 
         return updated > 0;

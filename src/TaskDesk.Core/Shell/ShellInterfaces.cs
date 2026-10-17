@@ -32,11 +32,17 @@ public interface ISingleInstance : IDisposable
     /// <summary>True when this process is the first instance.</summary>
     bool TryAcquire();
 
-    /// <summary>Asks the first instance to show and focus its window.</summary>
-    Task SignalExistingAsync(CancellationToken cancellationToken);
+    /// <summary>
+    /// Wakes the first instance and forwards this launch's arguments to it (see
+    /// <see cref="SecondLaunchArguments"/>).
+    /// </summary>
+    Task SignalExistingAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken);
 
-    /// <summary>Starts listening for later launches; the callback may run on any thread.</summary>
-    void Listen(Action onSecondLaunch);
+    /// <summary>
+    /// Starts listening for later launches; the callback gets the arguments they forwarded and may run on
+    /// any thread.
+    /// </summary>
+    void Listen(Action<IReadOnlyList<string>> onSecondLaunch);
 }
 
 public interface IAppShutdown

@@ -129,6 +129,54 @@ public class ReminderServiceTests
     }
 
     [Fact]
+    public async Task Releasing_a_claim_persists_and_the_Reminder_is_due_again()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddMinutes(-1));
+        var reminders = db.Get<IReminderService>();
+
+        var claim = await reminders.TryClaimAsync(task.Id, Now.AddMinutes(-1), Ct);
+        Assert.Equal(Now, claim);
+        Assert.Empty(await DueTitlesAsync(db));
+
+        Assert.True(await reminders.ReleaseClaimAsync(task.Id, claim!.Value, Ct));
+
+        var stored = Assert.Single(await db.QueryAsync(c => c.Tasks.Where(t => t.Id == task.Id)));
+        Assert.Null(stored.ReminderFiredUtc);
+        Assert.Equal(["a"], await DueTitlesAsync(db));
+        Assert.Equal(Now, await reminders.TryClaimAsync(task.Id, Now.AddMinutes(-1), Ct));
+    }
+
+    [Fact]
+    public async Task Releasing_releases_only_that_claim()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddMinutes(-1));
+        var reminders = db.Get<IReminderService>();
+        var first = await reminders.TryClaimAsync(task.Id, Now.AddMinutes(-1), Ct);
+        await reminders.SetReminderAsync(task.Id, Now.AddMinutes(-2), Ct); // re-armed since
+        db.Clock.Advance(TimeSpan.FromSeconds(30));
+        var second = await reminders.TryClaimAsync(task.Id, Now.AddMinutes(-2), Ct);
+
+        Assert.False(await reminders.ReleaseClaimAsync(task.Id, first!.Value, Ct));
+
+        var stored = Assert.Single(await db.QueryAsync(c => c.Tasks.Where(t => t.Id == task.Id)));
+        Assert.Equal(second, stored.ReminderFiredUtc);
+        Assert.Empty(await DueTitlesAsync(db));
+    }
+
+    [Fact]
+    public async Task A_refused_claim_returns_no_marker()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddMinutes(-1));
+        var reminders = db.Get<IReminderService>();
+        await reminders.TryClaimAsync(task.Id, Now.AddMinutes(-1), Ct);
+
+        Assert.Null(await reminders.TryClaimAsync(task.Id, Now.AddMinutes(-1), Ct));
+    }
+
+    [Fact]
     public async Task A_Reminder_edited_after_it_was_listed_is_not_marked_fired()
     {
         using var db = await StartAsync();

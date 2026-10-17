@@ -52,6 +52,12 @@ public class ReminderViewModelTests
 
         public Task<bool> TryMarkFiredAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<DateTime?> TryClaimAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> ReleaseClaimAsync(Guid taskId, DateTime firedUtc, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     // The All and Completed views, which showing a Task from a notification falls back to, and Today.
@@ -158,6 +164,45 @@ public class ReminderViewModelTests
         Assert.Equal("09:00", s.Vm.DetailReminderTime);
         Assert.Null(s.Tasks.All[0].DueDate);
         Assert.Null(s.Vm.ErrorMessage);
+    }
+
+    private sealed class FakeSettingsStore : IShellSettingsStore
+    {
+        public ShellSettings Current { get; set; } = new();
+        public ShellSettings Load() => Current;
+        public void Save(ShellSettings settings) => Current = settings;
+    }
+
+    [Fact]
+    public async Task A_date_only_Reminder_uses_the_default_Reminder_time_setting_and_follows_changes_to_it()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 20, 13, 0, 0, TimeSpan.Zero));
+        clock.SetLocalTimeZone(Zone);
+        var tasks = new FakeTaskService();
+        await tasks.CreateTaskAsync("a", Ct);
+        await tasks.CreateTaskAsync("b", Ct);
+        var reminders = new FakeTaskReminders(tasks, clock);
+        var settings = new FakeSettingsStore { Current = new ShellSettings(DefaultReminderTime: new TimeOnly(7, 30)) };
+        var vm = new MainViewModel(
+            tasks, new FakeTagService(tasks), clock, new FakeViews(tasks), new FakeSearch(tasks),
+            reminderService: reminders, settingsStore: settings);
+        await vm.LoadAsync(Ct);
+
+        vm.SelectedTask = vm.Tasks[0];
+        vm.DetailReminderDate = new DateTime(2026, 10, 22);
+        await vm.PendingSave;
+
+        Assert.Equal(Utc(22, 10, 30), reminders.SetCalls[^1].ReminderUtc);
+        Assert.Equal("07:30", vm.DetailReminderTime);
+
+        // Changed in Settings while the app runs: the next date-only Reminder uses it, no restart needed.
+        settings.Current = settings.Current with { DefaultReminderTime = new TimeOnly(18, 15) };
+        vm.SelectedTask = vm.Tasks[1];
+        vm.DetailReminderDate = new DateTime(2026, 10, 23);
+        await vm.PendingSave;
+
+        Assert.Equal(Utc(23, 21, 15), reminders.SetCalls[^1].ReminderUtc);
+        Assert.Equal("18:15", vm.DetailReminderTime);
     }
 
     [Fact]

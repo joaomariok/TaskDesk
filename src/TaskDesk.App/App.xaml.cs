@@ -1,8 +1,10 @@
 using System.Reflection;
 using System.Windows;
+using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Win32;
 using TaskDesk.App.Notifications;
 using TaskDesk.App.Shell;
@@ -37,7 +39,11 @@ public partial class App : Application
         var singleInstance = new NamedPipeSingleInstance();
         if (!singleInstance.TryAcquire())
         {
-            await singleInstance.SignalExistingAsync(CancellationToken.None);
+            // Forward --minimized and a Reminder notification click to the running instance (SPEC 7.1).
+            var forwarded = SecondLaunchArguments.Build(
+                e.Args.Contains(SecondLaunchArguments.MinimizedFlag, StringComparer.OrdinalIgnoreCase),
+                ReadLaunchActivation());
+            await singleInstance.SignalExistingAsync(forwarded, CancellationToken.None);
             singleInstance.Dispose();
             Shutdown();
             return;
@@ -108,6 +114,7 @@ public partial class App : Application
             MessageBox.Show(
                 $"{ex.Message}\n\nNothing was deleted.\n\nLog folder: {ex.LogsDirectory}\nBackups folder: {ex.BackupsDirectory}",
                 "TaskDesk", MessageBoxButton.OK, MessageBoxImage.Error);
+            await _host.StopAsync();
             Shutdown(1);
             return;
         }
@@ -129,12 +136,17 @@ public partial class App : Application
         await window.Lists.LoadAsync();
 
         _shell = _host.Services.GetRequiredService<ShellController>();
+        // Exit waits for these, in order, before it calls Shutdown: WPF ends the process soon after.
+        _shell.AddExitStep(() => window.ViewModel.FlushPendingSaveAsync());
+        var host = _host;
+        _shell.AddExitStep(() => host.StopAsync());
         window.Closing += (_, args) =>
         {
             layout.Save(window);
             args.Cancel = _shell.OnWindowClosing();
         };
         _shell.SettingsRequested += () => Dispatcher.Invoke(ShowSettings);
+        _shell.ActivationRequested += activation => Dispatcher.InvokeAsync(() => HandleActivationAsync(activation));
         _shell.QuickAddRequested += () => Dispatcher.InvokeAsync(ShowQuickAddAsync);
 
         // A conflict is logged and shown in Settings; it never blocks start-up.
@@ -164,6 +176,19 @@ public partial class App : Application
         _reminders = _host.Services.GetRequiredService<ReminderScheduler>();
         _ = _reminders.StartAsync();
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
+    }
+
+    // The Reminder notification click that launched this (second) process, read before any registration.
+    private static NotificationActivation? ReadLaunchActivation()
+    {
+        try
+        {
+            return new AppSdkNotificationService(NullLogger<AppSdkNotificationService>.Instance).GetLaunchActivation();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return null; // no Windows App SDK runtime: there was no toast to forward
+        }
     }
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
@@ -220,10 +245,12 @@ public partial class App : Application
         }
 
         var settings = _host!.Services.GetRequiredService<SettingsViewModel>();
+        var main = _host.Services.GetRequiredService<MainWindow>();
+        // Save the pending detail edit and close the pane first, so no stale edit lands on imported data.
+        settings.BeforeImport = main.ViewModel.PrepareForImportAsync;
         settings.Imported += async () =>
         {
             // The import changed Lists, Tags and Tasks underneath the main window: reload both panes.
-            var main = _host.Services.GetRequiredService<MainWindow>();
             await main.ViewModel.LoadAsync();
             await main.Lists.LoadAsync();
         };
@@ -239,12 +266,32 @@ public partial class App : Application
 
     protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
     {
-        // Let Windows log off or shut down instead of hiding the window to the tray.
-        _shell?.Exit();
+        // Let Windows log off or shut down instead of hiding the window to the tray, but only after the
+        // pending save has landed: keep the dispatcher pumping while the exit steps run.
+        if (_shell is not null)
+        {
+            WaitPumping(_shell.ExitAsync());
+        }
+
         base.OnSessionEnding(e);
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    // Waits on the UI thread without blocking it, so continuations that need the dispatcher still run.
+    private static void WaitPumping(Task task)
+    {
+        if (task.IsCompleted)
+        {
+            return;
+        }
+
+        var frame = new DispatcherFrame();
+        task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
+        Dispatcher.PushFrame(frame);
+    }
+
+    // Runs after the exit steps (ShellController.ExitAsync) have flushed the pending save and stopped the
+    // host, so nothing here awaits: WPF would end the process at the first await.
+    protected override void OnExit(ExitEventArgs e)
     {
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _reminders?.Dispose();
@@ -260,12 +307,7 @@ public partial class App : Application
         _hotkeys?.Dispose();
         _shell?.Dispose();
 
-        if (_host is not null)
-        {
-            await _host.Services.GetRequiredService<MainViewModel>().FlushPendingSaveAsync();
-            await _host.StopAsync();
-            _host.Dispose();
-        }
+        _host?.Dispose();
 
         base.OnExit(e);
     }

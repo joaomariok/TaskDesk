@@ -15,7 +15,8 @@ public sealed partial class MainViewModel
 
     /// <summary>
     /// The local time of the selected Task's Reminder as "H:mm" text. Left empty with a date, the Reminder
-    /// fires at <see cref="ReminderCalculator.DefaultReminderTime"/>.
+    /// fires at the "Default reminder time" setting (<see cref="ReminderCalculator.DefaultReminderTime"/> when
+    /// no settings are available).
     /// </summary>
     [ObservableProperty]
     private string _detailReminderTime = "";
@@ -168,12 +169,15 @@ public sealed partial class MainViewModel
         DateTime? reminderUtc = null;
         if (DetailReminderDate is { } picked)
         {
-            reminderUtc = ReminderCalculator.ToUtc(DateOnly.FromDateTime(picked), time, _clock.LocalTimeZone);
+            // Read on every save, so a change in Settings applies without a restart.
+            var defaultTime = DefaultReminderTime();
+            reminderUtc = ReminderCalculator.ToUtc(
+                DateOnly.FromDateTime(picked), time, _clock.LocalTimeZone, defaultTime);
             if (time is null)
             {
                 // Show the time a date-only Reminder fires at.
                 _loadingDetail = true;
-                DetailReminderTime = FormatTime(ReminderCalculator.DefaultReminderTime);
+                DetailReminderTime = FormatTime(defaultTime);
                 _loadingDetail = false;
             }
         }
@@ -200,6 +204,9 @@ public sealed partial class MainViewModel
             ErrorMessage = "Could not save the changes: " + ex.Message;
         }
     }
+
+    private TimeOnly DefaultReminderTime() =>
+        settingsStore?.Load().DefaultReminderTime ?? ReminderCalculator.DefaultReminderTime;
 
     private static string FormatTime(TimeOnly time) => time.ToString("HH:mm", CultureInfo.InvariantCulture);
 

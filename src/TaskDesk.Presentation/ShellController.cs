@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Shell;
 
 namespace TaskDesk.Presentation;
@@ -9,10 +12,14 @@ public sealed class ShellController(
     ISingleInstance singleInstance,
     IShellSettingsStore settingsStore,
     AutoStartService autoStart,
-    IAppShutdown lifetime) : IDisposable
+    IAppShutdown lifetime,
+    ILogger<ShellController>? logger = null) : IDisposable
 {
     public const string TrayHint = "TaskDesk is still running in the tray";
 
+    private readonly ILogger _logger = logger ?? NullLogger<ShellController>.Instance;
+    private readonly List<Func<Task>> _exitSteps = [];
+    private Task? _exit;
     private bool _exiting;
     private bool _disposed;
 
@@ -23,6 +30,12 @@ public sealed class ShellController(
     public event Action? SettingsRequested;
 
     /// <summary>
+    /// Raised when a later launch was started by a click on a Reminder notification; the App hands it to
+    /// <see cref="ReminderActivationHandler"/>. May be raised on any thread.
+    /// </summary>
+    public event Action<NotificationActivation>? ActivationRequested;
+
+    /// <summary>
     /// Returns false when another instance already runs (it has been signalled and this
     /// process should exit); otherwise sets everything up.
     /// </summary>
@@ -30,11 +43,11 @@ public sealed class ShellController(
     {
         if (!singleInstance.TryAcquire())
         {
-            await singleInstance.SignalExistingAsync(cancellationToken);
+            await singleInstance.SignalExistingAsync(SecondLaunchArguments.Build(minimized, null), cancellationToken);
             return false;
         }
 
-        singleInstance.Listen(window.ShowAndFocus);
+        singleInstance.Listen(OnSecondLaunch);
         autoStart.Apply(settingsStore.Load().StartWithWindows, exePath);
 
         tray.LeftClicked += OnLeftClicked;
@@ -77,14 +90,37 @@ public sealed class ShellController(
         return true;
     }
 
-    public void Exit()
+    /// <summary>
+    /// Adds work that must finish before the app shuts down (for example flushing a pending save, then
+    /// stopping the host). Steps run in the order they were added.
+    /// </summary>
+    public void AddExitStep(Func<Task> step) => _exitSteps.Add(step);
+
+    /// <summary>Starts the exit without waiting for it; see <see cref="ExitAsync"/>.</summary>
+    public void Exit() => _ = ExitAsync();
+
+    /// <summary>
+    /// Runs every exit step in order, waiting for each, then disposes the tray and the single-instance
+    /// guard and shuts the app down. A failing step is logged and the exit carries on. Calling it again
+    /// returns the exit already under way.
+    /// </summary>
+    public Task ExitAsync() => _exit ??= RunExitAsync();
+
+    private async Task RunExitAsync()
     {
-        if (_exiting)
+        _exiting = true;
+        foreach (var step in _exitSteps)
         {
-            return;
+            try
+            {
+                await step();
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                _logger.LogError(ex, "An exit step failed; exiting anyway");
+            }
         }
 
-        _exiting = true;
         Dispose();
         lifetime.Shutdown();
     }
@@ -104,6 +140,26 @@ public sealed class ShellController(
         tray.ExitRequested -= Exit;
         tray.Dispose();
         singleInstance.Dispose();
+    }
+
+    // A later launch: act on its Reminder notification click, or show the window unless it asked to stay
+    // minimized (a second auto-start, say).
+    private void OnSecondLaunch(IReadOnlyList<string> arguments)
+    {
+        if (_exiting)
+        {
+            return;
+        }
+
+        var launch = SecondLaunchArguments.Parse(arguments);
+        if (launch.Activation is { } activation)
+        {
+            ActivationRequested?.Invoke(activation);
+        }
+        else if (!launch.Minimized)
+        {
+            window.ShowAndFocus();
+        }
     }
 
     private void OnLeftClicked()

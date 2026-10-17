@@ -11,7 +11,9 @@ internal static class TaskSearchFilter
     public static Func<IQueryable<TaskItem>, IQueryable<TaskItem>> Create(TaskSearchQuery query)
     {
         var text = query.Text?.Trim();
-        var pattern = string.IsNullOrEmpty(text) ? null : $"%{EscapeLike(text)}%";
+        // Both sides are folded (TextFold), so case is ignored for non-ASCII letters too; the escaping keeps
+        // % _ and \ literal.
+        var pattern = string.IsNullOrEmpty(text) ? null : $"%{EscapeLike(TextFold.Apply(text)!)}%";
         var minPriority = query.MinPriority;
         var tagIds = query.TagIds?.Distinct().ToList() ?? [];
         var hasDue = query.HasDue;
@@ -22,9 +24,9 @@ internal static class TaskSearchFilter
             if (pattern is not null)
             {
                 tasks = tasks.Where(t =>
-                    EF.Functions.Like(t.Title, pattern, Escape)
-                    || (t.Notes != null && EF.Functions.Like(t.Notes, pattern, Escape))
-                    || t.Subtasks.Any(s => EF.Functions.Like(s.Title, pattern, Escape)));
+                    EF.Functions.Like(TextFold.Fold(t.Title), pattern, Escape)
+                    || (t.Notes != null && EF.Functions.Like(TextFold.Fold(t.Notes), pattern, Escape))
+                    || t.Subtasks.Any(s => EF.Functions.Like(TextFold.Fold(s.Title), pattern, Escape)));
             }
 
             if (minPriority is { } min)

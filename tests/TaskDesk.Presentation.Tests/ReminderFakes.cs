@@ -66,16 +66,35 @@ internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>
         return Task.FromResult(due);
     }
 
-    public Task<bool> TryMarkFiredAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default)
+    public async Task<bool> TryMarkFiredAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default) =>
+        await TryClaimAsync(taskId, dueAtUtc, cancellationToken) is not null;
+
+    public Task<DateTime?> TryClaimAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default)
     {
         var task = Tasks.Single(t => t.Id == taskId);
         if (RefuseClaims.Contains(taskId)
             || !ReminderCalculator.IsDue(task, clock.GetUtcNow()) || ReminderCalculator.EffectiveUtc(task) != dueAtUtc)
         {
-            return Task.FromResult(false);
+            return Task.FromResult<DateTime?>(null);
         }
 
         task.ReminderFiredUtc = clock.GetUtcNow().UtcDateTime;
+        return Task.FromResult(task.ReminderFiredUtc);
+    }
+
+    /// <summary>The Tasks whose claim was released, in order.</summary>
+    public List<Guid> Released { get; } = [];
+
+    public Task<bool> ReleaseClaimAsync(Guid taskId, DateTime firedUtc, CancellationToken cancellationToken = default)
+    {
+        var task = Tasks.Single(t => t.Id == taskId);
+        if (task.ReminderFiredUtc != firedUtc)
+        {
+            return Task.FromResult(false);
+        }
+
+        task.ReminderFiredUtc = null;
+        Released.Add(taskId);
         return Task.FromResult(true);
     }
 }
@@ -93,6 +112,9 @@ internal sealed class FakeNotificationService : INotificationService
 
     /// <summary>When set, Show throws it.</summary>
     public Exception? ShowFailure { get; set; }
+
+    /// <summary>Show throws for the Reminders of these Tasks.</summary>
+    public HashSet<Guid> FailFor { get; } = [];
 
     public NotificationActivation? LaunchActivation { get; set; }
 
@@ -114,6 +136,11 @@ internal sealed class FakeNotificationService : INotificationService
         if (ShowFailure is { } failure)
         {
             throw failure;
+        }
+
+        if (FailFor.Contains(notification.TaskId))
+        {
+            throw new InvalidOperationException($"Showing {notification.TaskId} failed.");
         }
 
         Shown.Add(notification);

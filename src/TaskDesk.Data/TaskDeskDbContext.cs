@@ -20,6 +20,9 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Registered on each connection by SqliteFunctionsInterceptor.
+        modelBuilder.HasDbFunction(typeof(TextFold).GetMethod(nameof(TextFold.Fold))!).HasName(TextFold.SqlName);
+
         modelBuilder.Entity<TaskList>(list =>
         {
             list.ToTable("Lists");

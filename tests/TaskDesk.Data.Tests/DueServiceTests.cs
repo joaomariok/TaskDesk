@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
@@ -311,6 +313,49 @@ public class DueServiceTests
         Assert.Equal("t100", first[0]);
         Assert.Equal("t001", first[^1]);
         Assert.Equal(["t000"], second);
+    }
+
+    [Fact]
+    public async Task Collection_includes_load_with_split_queries()
+    {
+        using var db = await StartAsync();
+        await using var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(Ct);
+
+        var options = RelationalOptionsExtension.Extract(context.GetService<IDbContextOptions>());
+
+        Assert.Equal(QuerySplittingBehavior.SplitQuery, options.QuerySplittingBehavior);
+    }
+
+    [Fact]
+    public async Task Completed_pages_stay_in_a_stable_order_with_their_Tags_and_Subtasks_when_completed_at_once()
+    {
+        using var db = await StartAsync();
+        var service = db.Get<ITaskService>();
+        var expected = new List<Guid>();
+        for (var i = 0; i < 150; i++)
+        {
+            var task = await AddAsync(db, $"t{i:000}", null);
+            await db.Get<ITagService>().AddTagToTaskAsync(task.Id, "x", Ct);
+            await db.Get<ITagService>().AddTagToTaskAsync(task.Id, "y", Ct);
+            await service.AddSubtaskAsync(task.Id, "one", Ct);
+            await service.AddSubtaskAsync(task.Id, "two", Ct);
+            await service.SetCompletedAsync(task.Id, true, Ct); // same clock: every CompletedUtc ties
+            expected.Add(task.Id);
+        }
+
+        var first = await db.Get<IDueService>().ListSmartViewAsync(SmartView.Completed, 0, Ct);
+        var second = await db.Get<IDueService>().ListSmartViewAsync(SmartView.Completed, 100, Ct);
+        var again = await db.Get<IDueService>().ListSmartViewAsync(SmartView.Completed, 0, Ct);
+
+        Assert.Equal(100, first.Count);
+        Assert.Equal(50, second.Count);
+        Assert.Equal(first.Select(t => t.Id), again.Select(t => t.Id));
+        Assert.Equal(expected.Order(), first.Concat(second).Select(t => t.Id).Order());
+        Assert.All(first.Concat(second), t =>
+        {
+            Assert.Equal(["x", "y"], t.Tags.Select(g => g.Name));
+            Assert.Equal(["one", "two"], t.Subtasks.Select(s => s.Title));
+        });
     }
 
     [Fact]

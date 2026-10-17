@@ -439,4 +439,103 @@ public class DueViewModelTests
         Assert.Equal(["a"], vm.OverdueTasks.Select(t => t.Title));
         Assert.Empty(vm.Tasks);
     }
+
+    // ---- Refresh at local midnight and when a timed Due passes ----
+
+    [Fact]
+    public async Task A_timed_Due_turns_Overdue_once_its_time_passes()
+    {
+        var (service, _, vm, clock) = Start();
+        await AddAsync(service, "call", Day(20), new TimeOnly(11, 0));
+        await vm.LoadAsync(Ct);
+        var row = vm.Tasks.Single();
+        Assert.False(row.IsOverdue);
+
+        clock.Advance(TimeSpan.FromMinutes(59));
+        await vm.DueRefresh;
+        Assert.False(row.IsOverdue);
+
+        clock.Advance(TimeSpan.FromMinutes(1)); // exactly 11:00: Overdue only strictly after the Due time
+        await vm.DueRefresh;
+        Assert.False(row.IsOverdue);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await vm.DueRefresh;
+        Assert.True(row.IsOverdue);
+    }
+
+    [Fact]
+    public async Task At_local_midnight_a_date_only_Due_of_today_turns_Overdue()
+    {
+        var (service, _, vm, clock) = Start();
+        await AddAsync(service, "pay", Day(20));
+        await vm.LoadAsync(Ct);
+
+        clock.Advance(TimeSpan.FromHours(14) - TimeSpan.FromSeconds(1)); // 23:59:59 local
+        await vm.DueRefresh;
+        Assert.False(vm.Tasks.Single().IsOverdue);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await vm.DueRefresh;
+        Assert.True(vm.Tasks.Single().IsOverdue);
+    }
+
+    [Fact]
+    public async Task At_local_midnight_the_Today_view_takes_in_the_new_day_and_keeps_doing_so()
+    {
+        var (service, _, vm, clock) = Start();
+        await AddAsync(service, "today", Day(20));
+        await AddAsync(service, "tomorrow", Day(21));
+        await AddAsync(service, "after", Day(22));
+        await vm.ShowSmartViewAsync(SmartView.Today, Ct);
+        Assert.Equal(["today"], vm.Tasks.Select(t => t.Title));
+
+        clock.Advance(TimeSpan.FromHours(14));
+        await vm.DueRefresh;
+
+        Assert.Equal(["today"], vm.OverdueTasks.Select(t => t.Title));
+        Assert.Equal(["tomorrow"], vm.Tasks.Select(t => t.Title));
+
+        clock.Advance(TimeSpan.FromDays(1));
+        await vm.DueRefresh;
+
+        Assert.Equal(["today", "tomorrow"], vm.OverdueTasks.Select(t => t.Title));
+        Assert.Equal(["after"], vm.Tasks.Select(t => t.Title));
+    }
+
+    [Fact]
+    public async Task In_the_Today_view_a_timed_Due_moves_to_the_Overdue_group_when_it_passes()
+    {
+        var (service, _, vm, clock) = Start();
+        await AddAsync(service, "call", Day(20), new TimeOnly(10, 30));
+        await vm.ShowSmartViewAsync(SmartView.Today, Ct);
+        Assert.Empty(vm.OverdueTasks);
+
+        clock.Advance(TimeSpan.FromMinutes(31));
+        await vm.DueRefresh;
+
+        Assert.Equal(["call"], vm.OverdueTasks.Select(t => t.Title));
+        Assert.Empty(vm.Tasks);
+        Assert.Equal("Overdue (1)", vm.OverdueHeader);
+    }
+
+    [Fact]
+    public async Task A_Due_set_in_the_pane_schedules_its_own_refresh()
+    {
+        var (service, _, vm, clock) = Start();
+        await AddAsync(service, "call", null);
+        await vm.LoadAsync(Ct);
+        var row = vm.Tasks.Single();
+        vm.SelectedTask = row;
+
+        vm.DetailDueDate = new DateTime(2026, 10, 20);
+        vm.DetailDueTime = "10:15";
+        await vm.PendingSave;
+        Assert.False(row.IsOverdue);
+
+        clock.Advance(TimeSpan.FromMinutes(16));
+        await vm.DueRefresh;
+
+        Assert.True(row.IsOverdue);
+    }
 }

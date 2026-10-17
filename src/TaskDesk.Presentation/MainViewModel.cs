@@ -3,6 +3,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TaskDesk.Core.Reminders;
+using TaskDesk.Core.Shell;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
@@ -16,7 +17,8 @@ public sealed partial class MainViewModel(
     ITaskSearchService? searchService = null,
     IRecurrenceService? recurrenceService = null,
     IOccurrenceDialogs? occurrenceDialogs = null,
-    IReminderService? reminderService = null) : ObservableObject
+    IReminderService? reminderService = null,
+    IShellSettingsStore? settingsStore = null) : ObservableObject
 {
     /// <summary>How long text edits wait for further typing before they are saved.</summary>
     public static readonly TimeSpan SaveDebounce = TimeSpan.FromMilliseconds(500);
@@ -119,15 +121,47 @@ public sealed partial class MainViewModel(
     [NotifyCanExecuteChangedFor(nameof(AddTagCommand))]
     private string _newTagName = "";
 
+    // Loads may overlap (a reload after a Task change while a search reload runs). Each load takes a
+    // version; only the latest one applies its results, so Tags are never added twice and an older query
+    // that answers last never replaces the newer one's results.
+    private int _loadVersion;
+    private int _loadsInFlight;
+    private Guid? _reselectId;
+    private bool _reselectPaneOpen;
+
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
-        var selectedId = SelectedTask?.Id;
-        var paneOpen = IsDetailPaneOpen;
+        var version = ++_loadVersion;
+        if (_loadsInFlight++ == 0)
+        {
+            // Remember the selection once: a load that overlaps another sees it already cleared.
+            _reselectId = SelectedTask?.Id;
+            _reselectPaneOpen = IsDetailPaneOpen;
+        }
+
+        try
+        {
+            await LoadLatestAsync(version, cancellationToken);
+        }
+        finally
+        {
+            _loadsInFlight--;
+        }
+    }
+
+    private async Task LoadLatestAsync(int version, CancellationToken cancellationToken)
+    {
         SelectedTask = null; // flushes a pending detail edit of the old row
         await _pendingSave;
 
+        var tags = await tagService.ListTagsAsync(cancellationToken);
+        if (version != _loadVersion)
+        {
+            return; // a later load applies its own results
+        }
+
         Tags.Clear();
-        foreach (var tag in await tagService.ListTagsAsync(cancellationToken))
+        foreach (var tag in tags)
         {
             Tags.Add(tag);
         }
@@ -149,6 +183,11 @@ public sealed partial class MainViewModel(
             : TagFilter is null
                 ? await taskService.ListDefaultListTasksAsync(cancellationToken)
                 : await tagService.ListTasksByTagAsync(TagFilter.Id, cancellationToken);
+        if (version != _loadVersion)
+        {
+            return;
+        }
+
         _all.Clear();
         Tasks.Clear();
         OverdueTasks.Clear();
@@ -166,8 +205,10 @@ public sealed partial class MainViewModel(
         NotifyCompletedChanged();
 
         // Reselect the same Task without reopening a detail pane the owner closed.
-        SelectedTask = _all.Find(r => r.Id == selectedId);
-        IsDetailPaneOpen = paneOpen;
+        SelectedTask = _all.Find(r => r.Id == _reselectId);
+        IsDetailPaneOpen = _reselectPaneOpen;
+        _loadedToday = DueCalculator.LocalToday(_clock.GetUtcNow(), _clock.LocalTimeZone);
+        ScheduleDueRefresh();
     }
 
     /// <summary>Filters Tasks by the Tag, or shows the Default List again when null.</summary>
@@ -661,6 +702,7 @@ public sealed partial class MainViewModel(
                 Place(row);
             }
 
+            ScheduleDueRefresh();
             ErrorMessage = null;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -681,6 +723,19 @@ public sealed partial class MainViewModel(
     {
         FlushPendingEdit();
         return _pendingSave;
+    }
+
+    /// <summary>
+    /// Call before an import: saves any pending detail edit, waits for every save in flight, and closes the
+    /// detail pane, so no edit of the old data can land on the imported data. Reload after the import.
+    /// </summary>
+    public async Task PrepareForImportAsync()
+    {
+        FlushPendingEdit();
+        await _pendingSave;
+        SelectedTask = null;
+        IsDetailPaneOpen = false;
+        await _pendingSave;
     }
 
     private void FlushPendingEdit()
@@ -965,6 +1020,83 @@ public sealed partial class MainViewModel(
         {
             ErrorMessage = "Could not save the changes: " + ex.Message;
         }
+    }
+
+    // ---- Refresh as time passes (Today, Overdue) ----
+
+    private ITimer? _dueRefreshTimer;
+    private SynchronizationContext? _uiContext;
+    private DateOnly _loadedToday;
+    private Task _dueRefresh = Task.CompletedTask;
+
+    /// <summary>Completes when the refresh started by the last local midnight or passed Due time has finished.</summary>
+    public Task DueRefresh => _dueRefresh;
+
+    // Arms a one-shot timer for the next instant the Due state of the loaded Tasks can change: local midnight
+    // or the next timed Due of today (DueCalculator.NextChange). Every refresh arms the next one.
+    private void ScheduleDueRefresh()
+    {
+        _uiContext ??= SynchronizationContext.Current; // the UI thread in the app; none in tests
+        var now = _clock.GetUtcNow();
+        var due = DueCalculator.NextChange(_all.Select(r => r.Item), now, _clock.LocalTimeZone) - now;
+        _dueRefreshTimer?.Dispose();
+        _dueRefreshTimer = _clock.CreateTimer(
+            _ => OnDueRefreshTimer(), null, due < TimeSpan.Zero ? TimeSpan.Zero : due, Timeout.InfiniteTimeSpan);
+    }
+
+    private void OnDueRefreshTimer()
+    {
+        var done = new TaskCompletionSource();
+        _dueRefresh = done.Task;
+        SendOrPostCallback run = async _ =>
+        {
+            try
+            {
+                await RefreshDueStateAsync();
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                ErrorMessage = "Could not refresh the view: " + ex.Message;
+            }
+            finally
+            {
+                done.TrySetResult();
+            }
+        };
+
+        if (_uiContext is { } context)
+        {
+            context.Post(run, null);
+        }
+        else
+        {
+            run(null);
+        }
+    }
+
+    private async Task RefreshDueStateAsync()
+    {
+        var today = DueCalculator.LocalToday(_clock.GetUtcNow(), _clock.LocalTimeZone);
+        // Which Tasks a Smart View holds depends on the date (and, for Overdue, on the time): reload it.
+        if (CurrentView == SmartView.Overdue
+            || (today != _loadedToday && CurrentView is SmartView.Today or SmartView.Upcoming))
+        {
+            await LoadAsync();
+            return;
+        }
+
+        foreach (var row in _all)
+        {
+            var wasOverdueGroup = OverdueTasks.Contains(row);
+            row.RefreshOverdue();
+            if (!row.IsCompleted && InOverdueGroup(row) != wasOverdueGroup)
+            {
+                Place(row);
+            }
+        }
+
+        _loadedToday = today;
+        ScheduleDueRefresh();
     }
 
     // ---- Grouping helpers ----

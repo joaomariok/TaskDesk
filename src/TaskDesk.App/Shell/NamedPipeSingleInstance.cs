@@ -4,7 +4,10 @@ using TaskDesk.Core.Shell;
 
 namespace TaskDesk.App.Shell;
 
-/// <summary>Named mutex for ownership plus a named pipe for "wake the first instance". Covered by manual checks.</summary>
+/// <summary>
+/// Named mutex for ownership plus a named pipe that wakes the first instance and forwards a later launch's
+/// arguments (wire format: <see cref="SecondLaunchMessage"/>). Covered by manual checks.
+/// </summary>
 internal sealed class NamedPipeSingleInstance : ISingleInstance
 {
     private const string MutexName = @"Local\TaskDesk.SingleInstance";
@@ -33,13 +36,13 @@ internal sealed class NamedPipeSingleInstance : ISingleInstance
         return createdNew;
     }
 
-    public async Task SignalExistingAsync(CancellationToken cancellationToken)
+    public async Task SignalExistingAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
         try
         {
             await using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
             await client.ConnectAsync(5000, cancellationToken);
-            await client.WriteAsync(new byte[] { 1 }, cancellationToken);
+            await SecondLaunchMessage.WriteAsync(client, arguments, cancellationToken);
         }
         catch (Exception ex) when (ex is TimeoutException or IOException)
         {
@@ -47,7 +50,7 @@ internal sealed class NamedPipeSingleInstance : ISingleInstance
         }
     }
 
-    public void Listen(Action onSecondLaunch)
+    public void Listen(Action<IReadOnlyList<string>> onSecondLaunch)
     {
         _ = Task.Run(async () =>
         {
@@ -58,8 +61,8 @@ internal sealed class NamedPipeSingleInstance : ISingleInstance
                     await using var server = new NamedPipeServerStream(
                         PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
                     await server.WaitForConnectionAsync(_stop.Token);
-                    await server.ReadExactlyAsync(new byte[1], _stop.Token);
-                    onSecondLaunch();
+                    var arguments = await SecondLaunchMessage.ReadAsync(server, _stop.Token);
+                    onSecondLaunch(arguments);
                 }
                 catch (OperationCanceledException)
                 {

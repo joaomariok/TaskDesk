@@ -44,6 +44,35 @@ public class TaskSearchServiceTests
     }
 
     [Fact]
+    public async Task Text_ignores_the_case_of_non_ASCII_letters_in_title_notes_and_subtask_titles()
+    {
+        using var db = await StartAsync();
+        await AddAsync(db, "Ligar para Ângela");
+        await AddAsync(db, "Agenda", notes: "Preparar a Reunião de sexta");
+        var third = await AddAsync(db, "Viagem");
+        await db.Get<ITaskService>().AddSubtaskAsync(third.Id, "Comprar PÃO e AÇÚCAR", Ct);
+        await AddAsync(db, "Angela sem acento");
+
+        Assert.Equal(["Ligar para Ângela"], await SearchAsync(db, new(Text: "ângela")));
+        Assert.Equal(["Ligar para Ângela"], await SearchAsync(db, new(Text: "ÂNGELA")));
+        Assert.Equal(["Agenda"], await SearchAsync(db, new(Text: "REUNIÃO")));
+        Assert.Equal(["Viagem"], await SearchAsync(db, new(Text: "pão e açúcar")));
+    }
+
+    [Fact]
+    public async Task Wildcards_stay_literal_next_to_non_ASCII_letters()
+    {
+        using var db = await StartAsync();
+        await AddAsync(db, "Ação 100% feita");
+        await AddAsync(db, "Ação 1000 feita");
+        await AddAsync(db, "ÉPICO_X");
+        await AddAsync(db, "ÉPICOYX");
+
+        Assert.Equal(["Ação 100% feita"], await SearchAsync(db, new(Text: "AÇÃO 100%")));
+        Assert.Equal(["ÉPICO_X"], await SearchAsync(db, new(Text: "épico_")));
+    }
+
+    [Fact]
     public async Task Percent_and_underscore_and_backslash_are_matched_literally()
     {
         using var db = await StartAsync();
