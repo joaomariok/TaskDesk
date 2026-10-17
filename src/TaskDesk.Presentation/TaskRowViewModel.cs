@@ -49,7 +49,7 @@ public sealed partial class TaskRowViewModel : ObservableObject
     private string _title = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PriorityMarker), nameof(HasPriorityFlag), nameof(PriorityLabel))]
+    [NotifyPropertyChangedFor(nameof(HasPriorityFlag), nameof(PriorityLabel))]
     private Priority _priority;
 
     [ObservableProperty]
@@ -109,7 +109,6 @@ public sealed partial class TaskRowViewModel : ObservableObject
     private bool _isRecurring;
 
     /// <summary>The marker on the row: nothing, "!", "!!" or "!!!".</summary>
-    public string PriorityMarker => new('!', (int)Priority);
 
     internal void Apply(TaskItem item)
     {

@@ -18,9 +18,6 @@ public sealed partial class SubtaskRowViewModel : ObservableObject
 
     public Guid Id { get; }
 
-    /// <summary>The last saved title; a rejected rename goes back to it.</summary>
-    public string SavedTitle { get; private set; } = "";
-
     [ObservableProperty]
     private string _title = "";
 
@@ -46,7 +43,6 @@ public sealed partial class SubtaskRowViewModel : ObservableObject
     internal void Apply(Subtask subtask)
     {
         _applying = true;
-        SavedTitle = subtask.Title;
         Title = subtask.Title;
         IsCompleted = subtask.IsCompleted;
         _applying = false;

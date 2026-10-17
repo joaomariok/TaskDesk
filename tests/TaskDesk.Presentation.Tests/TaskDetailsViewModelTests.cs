@@ -111,7 +111,7 @@ public class TaskDetailsViewModelTests
         Assert.Equal(["b"], vm.Tasks.Select(t => t.Title));
         Assert.Equal([a.Id], service.Deleted);
         Assert.True(vm.IsUndoBarVisible);
-        Assert.Equal("Task deleted — Undo", MainViewModel.UndoBarMessage);
+        Assert.Equal("Task deleted", vm.UndoBarText);
 
         clock.Advance(TimeSpan.FromSeconds(9));
         Assert.True(vm.IsUndoBarVisible);
@@ -384,30 +384,19 @@ public class TaskDetailsViewModelTests
     }
 
     [Fact]
-    public async Task Priority_changes_are_saved_immediately_and_show_a_marker_on_the_row()
+    public async Task Priority_changes_are_saved_immediately_and_show_a_flag_on_the_row()
     {
         var (service, vm, _) = await StartAsync("a");
         var a = vm.Tasks[0];
         vm.SelectedTask = a;
-        Assert.Equal("", a.PriorityMarker);
+        Assert.False(a.HasPriorityFlag);
 
         vm.DetailPriority = Priority.High;
         await vm.PendingSave;
 
         Assert.Equal([(a.Id, "a", "", Priority.High)], service.Updates);
-        Assert.Equal("!!!", a.PriorityMarker);
-    }
-
-    [Theory]
-    [InlineData(Priority.None, "")]
-    [InlineData(Priority.Low, "!")]
-    [InlineData(Priority.Medium, "!!")]
-    [InlineData(Priority.High, "!!!")]
-    public void Priority_marker_has_one_exclamation_mark_per_level(Priority priority, string marker)
-    {
-        var row = new TaskRowViewModel(new TaskItem { Id = Guid.NewGuid(), Title = "t", Priority = priority });
-
-        Assert.Equal(marker, row.PriorityMarker);
+        Assert.True(a.HasPriorityFlag);
+        Assert.Equal("High priority", a.PriorityLabel);
     }
 
     [Fact]

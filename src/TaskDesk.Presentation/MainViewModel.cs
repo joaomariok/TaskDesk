@@ -27,9 +27,6 @@ public sealed partial class MainViewModel(
     /// <summary>How long the "Task deleted" bar stays visible.</summary>
     public static readonly TimeSpan UndoBarDuration = TimeSpan.FromSeconds(10);
 
-    public const string UndoBarMessage = "Task deleted — Undo";
-    public const string SubtaskUndoBarMessage = "Subtask deleted — Undo";
-
     private readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
 
     // Needed for Due edits and Smart Views only.

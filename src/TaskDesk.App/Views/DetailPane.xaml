@@ -123,7 +123,7 @@
                     <Border Height="8" />
 
                     <!-- Repeat: only once Due is set -->
-                    <StackPanel x:Name="RepeatField"
+                    <StackPanel
                                 Visibility="{Binding HasDetailDue, Converter={StaticResource BoolToVisibility}}">
                         <TextBlock Text="Repeat" Style="{StaticResource FieldLabel}" />
                         <StackPanel Margin="{StaticResource FieldMargin}" DataContext="{Binding Repeat}">
