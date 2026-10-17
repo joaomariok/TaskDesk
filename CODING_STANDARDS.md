@@ -17,3 +17,7 @@ Delete, import and replace each either restore everything on undo (Tags, Subtask
 ## External side effects
 
 Registry writes, files outside the data folder and OS registration sit behind an interface, and tests use a fake. A direct call to the real thing from app logic is a finding.
+
+## Visual changes
+
+XAML and visual changes are checked against the named rules and Do's and Don'ts in `DESIGN.md`. Name the rule the change follows, or report a finding.
