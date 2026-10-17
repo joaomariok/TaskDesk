@@ -132,6 +132,7 @@ public sealed partial class MainViewModel(
     /// <summary>The Smart View being shown, or null for the Default List / Tag filter.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMoreCompleted))]
+    [NotifyPropertyChangedFor(nameof(ShowsQuickAdd))]
     private SmartView? _currentView;
 
     // Positions in a Tag-filtered view or a Smart View are not List positions, so reordering is off there.

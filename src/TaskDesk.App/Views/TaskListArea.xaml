@@ -207,9 +207,11 @@
         </StackPanel>
         <TextBlock DockPanel.Dock="Top" Style="{StaticResource FieldLabel}"
                    AutomationProperties.AutomationId="QuickAddLabel"
+                   Visibility="{Binding ShowsQuickAdd, Converter={StaticResource BoolToVisibility}}"
                    Text="{Binding QuickAddTarget}" />
         <TextBox x:Name="QuickAddBox" DockPanel.Dock="Top" Margin="0,0,0,8" Padding="6"
                  AutomationProperties.Name="Quick add" AutomationProperties.AutomationId="QuickAddBox"
+                 Visibility="{Binding ShowsQuickAdd, Converter={StaticResource BoolToVisibility}}"
                  Text="{Binding QuickAddTitle, UpdateSourceTrigger=PropertyChanged}">
             <TextBox.InputBindings>
                 <KeyBinding Key="Return" Command="{Binding AddTaskCommand}" />

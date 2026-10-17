@@ -311,7 +311,7 @@ Ctrl+F focuses search. Search applies within the current view. The Filter button
 
 | Key | Action |
 |---|---|
-| Ctrl+N | Focus quick-add box |
+| Ctrl+N | Focus quick-add box; on the Completed Smart View, which has none, first open the Default List |
 | Enter (in quick-add) | Create task, keep focus for the next one |
 | Space (task focused in list) | Toggle complete |
 | F2 | Edit title of selected task |

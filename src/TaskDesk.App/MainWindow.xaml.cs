@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using TaskDesk.Core.Shell;
 using TaskDesk.Presentation;
 
@@ -25,6 +26,9 @@ public partial class MainWindow : Window
         Details.Initialize();
         TaskArea.Initialize(viewModel, lists);
         TaskArea.EnterRequested += (_, _) => Details.FocusTitle();
+        // Loaded priority: quick add must be visible and laid out again before it can take focus.
+        viewModel.FocusQuickAddRequested += (_, _) =>
+            _ = Dispatcher.BeginInvoke(DispatcherPriority.Loaded, TaskArea.FocusQuickAdd);
         viewModel.IsDetailDocked = Width > DockedAboveWidth;
         Navigation.Initialize(viewModel, lists);
         ApplyPaneLimits();
@@ -182,10 +186,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Ctrl+N only moves focus to quick add; it changes no selection, search, view or pane.
+        // Ctrl+N moves focus to quick add and changes no selection, search or pane. Only on the Completed
+        // Smart View, which has no quick add, it first shows the Default List.
         if (e.Key == Key.N && Keyboard.Modifiers == ModifierKeys.Control)
         {
-            TaskArea.FocusQuickAdd();
+            ViewModel.FocusQuickAddCommand.Execute(null);
             e.Handled = true;
             return;
         }

@@ -229,4 +229,83 @@ public class PageHeadingViewModelTests
         Assert.False(vm.IsPageEmpty);
         Assert.Equal("", vm.EmptyMessage);
     }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(SmartView.Today, true)]
+    [InlineData(SmartView.Overdue, true)]
+    [InlineData(SmartView.Upcoming, true)]
+    [InlineData(SmartView.All, true)]
+    [InlineData(SmartView.Completed, false)]
+    public async Task Quick_add_is_shown_on_every_page_except_the_Completed_Smart_View(SmartView? view, bool shown)
+    {
+        var (_, _, vm) = Start();
+
+        await vm.ShowSmartViewAsync(view, Ct);
+
+        Assert.Equal(shown, vm.ShowsQuickAdd);
+    }
+
+    [Fact]
+    public async Task Switching_to_and_from_the_Completed_Smart_View_notifies_that_quick_add_changed()
+    {
+        var (_, _, vm) = Start();
+        var changed = 0;
+        vm.PropertyChanged += (_, e) => changed += e.PropertyName == nameof(MainViewModel.ShowsQuickAdd) ? 1 : 0;
+
+        await vm.ShowSmartViewAsync(SmartView.Completed, Ct);
+        await vm.ShowSmartViewAsync(null, Ct);
+
+        Assert.Equal(2, changed);
+    }
+
+    [Fact]
+    public async Task Quick_add_is_shown_on_a_Tag_page()
+    {
+        var (_, tags, vm) = Start();
+        await vm.ShowSmartViewAsync(SmartView.Completed, Ct);
+        var tag = await tags.CreateTagAsync("work", Ct);
+
+        await vm.FilterByTagAsync(tag, Ct);
+
+        Assert.True(vm.ShowsQuickAdd);
+    }
+
+    [Fact]
+    public async Task Focusing_quick_add_on_the_Completed_Smart_View_shows_the_Default_List_then_asks_the_view()
+    {
+        var (_, _, vm) = Start();
+        await vm.ShowSmartViewAsync(SmartView.Completed, Ct);
+        SmartView? viewWhenAsked = SmartView.Completed;
+        var asked = 0;
+        vm.FocusQuickAddRequested += (_, _) =>
+        {
+            asked++;
+            viewWhenAsked = vm.CurrentView;
+        };
+
+        await vm.FocusQuickAddCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.CurrentView);
+        Assert.True(vm.ShowsQuickAdd);
+        Assert.Equal(1, asked);
+        Assert.Null(viewWhenAsked);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(SmartView.Today)]
+    [InlineData(SmartView.All)]
+    public async Task Focusing_quick_add_elsewhere_only_asks_the_view_and_keeps_the_page(SmartView? view)
+    {
+        var (_, _, vm) = Start();
+        await vm.ShowSmartViewAsync(view, Ct);
+        var asked = 0;
+        vm.FocusQuickAddRequested += (_, _) => asked++;
+
+        await vm.FocusQuickAddCommand.ExecuteAsync(null);
+
+        Assert.Equal(view, vm.CurrentView);
+        Assert.Equal(1, asked);
+    }
 }

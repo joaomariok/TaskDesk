@@ -54,6 +54,22 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
+    public void Ctrl_N_on_the_Completed_Smart_View_shows_the_Default_List_with_focus_in_quick_add()
+    {
+        AppSession.Ctrl(VirtualKeyShort.KEY_5);
+        AppSession.WaitUntil(() => _app.Find(Ids.PageHeading).Name == "Completed",
+            () => $"The page heading was '{_app.Find(Ids.PageHeading).Name}'.");
+        Assert.Null(_app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.QuickAddBox)));
+
+        AppSession.Ctrl(VirtualKeyShort.KEY_N);
+
+        AppSession.WaitUntil(() => _app.Find(Ids.PageHeading).Name == "Inbox",
+            () => $"The page heading was '{_app.Find(Ids.PageHeading).Name}'.");
+        AppSession.WaitUntil(() => _app.FocusedAutomationId() == Ids.QuickAddBox,
+            () => $"Ctrl+N left focus on '{_app.FocusedAutomationId()}'.");
+    }
+
+    [Fact]
     public void Clicking_Filter_shows_the_priority_Filter_and_clicking_again_hides_it()
     {
         AutomationElement? PriorityFilter() =>

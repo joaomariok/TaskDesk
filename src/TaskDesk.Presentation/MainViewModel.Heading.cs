@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Presentation;
@@ -25,6 +26,27 @@ public sealed partial class MainViewModel
 
     /// <summary>The label of the quick-add box; Tasks always go to the Default List, also from a Smart View.</summary>
     public string QuickAddTarget => "Add a task to " + DefaultListName;
+
+    /// <summary>True when quick add is offered: on every page except the Completed Smart View.</summary>
+    public bool ShowsQuickAdd => CurrentView != SmartView.Completed;
+
+    /// <summary>Raised when the view should put keyboard focus in quick add (Ctrl+N).</summary>
+    public event EventHandler? FocusQuickAddRequested;
+
+    /// <summary>
+    /// Ctrl+N. On the Completed Smart View, where Tasks cannot be added, it first shows the Default List;
+    /// everywhere else it only asks the view to focus quick add.
+    /// </summary>
+    [RelayCommand]
+    private async Task FocusQuickAddAsync(CancellationToken cancellationToken)
+    {
+        if (CurrentView == SmartView.Completed)
+        {
+            await ShowSmartViewAsync(null, cancellationToken);
+        }
+
+        FocusQuickAddRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>The hint of the search box: search applies within the current view.</summary>
     public string SearchScope => "Search in " + PageHeading;
