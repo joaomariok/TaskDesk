@@ -64,5 +64,14 @@
         <Button Content="Back up now" Margin="0,8,0,0" Padding="12,4" HorizontalAlignment="Left"
                 Command="{Binding BackUpNowCommand}" />
         <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Opacity="0.7" Text="{Binding BackupStatus}" />
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button Content="Export to JSON…" Padding="12,4"
+                    AutomationProperties.Name="Export everything to JSON"
+                    Command="{Binding ExportJsonCommand}" />
+            <Button Content="Export to CSV…" Margin="8,0,0,0" Padding="12,4"
+                    AutomationProperties.Name="Export tasks to CSV"
+                    Command="{Binding ExportCsvCommand}" />
+        </StackPanel>
+        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Opacity="0.7" Text="{Binding ExportStatus}" />
     </StackPanel>
 </Window>

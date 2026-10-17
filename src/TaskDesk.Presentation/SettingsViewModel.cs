@@ -2,6 +2,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TaskDesk.Core.Backups;
+using TaskDesk.Core.Export;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Shell;
 
@@ -17,6 +18,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly string _exePath;
     private readonly HotkeyService _hotkeys;
     private readonly IBackupService? _backups;
+    private readonly IExportService? _exports;
+    private readonly IExportDialogs? _exportDialogs;
+    private readonly TimeProvider _clock;
     private readonly bool _loading = true;
 
     public SettingsViewModel(
@@ -28,8 +32,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         string exePath,
         string version,
         HotkeyService hotkeys,
-        IBackupService? backups = null)
+        IBackupService? backups = null,
+        IExportService? exports = null,
+        IExportDialogs? exportDialogs = null,
+        TimeProvider? clock = null)
     {
+        _exports = exports;
+        _exportDialogs = exportDialogs;
+        _clock = clock ?? TimeProvider.System;
         _backups = backups;
         _hotkeys = hotkeys;
         _store = store;
@@ -138,6 +148,49 @@ public sealed partial class SettingsViewModel : ObservableObject
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             BackupStatus = $"Backup failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>Outcome of the last export; empty until one runs.</summary>
+    [ObservableProperty]
+    private string _exportStatus = "";
+
+    [RelayCommand]
+    private Task ExportJsonAsync() => ExportAsync(ExportFormat.Json);
+
+    [RelayCommand]
+    private Task ExportCsvAsync() => ExportAsync(ExportFormat.Csv);
+
+    private async Task ExportAsync(ExportFormat format)
+    {
+        if (_exports is null || _exportDialogs is null)
+        {
+            return;
+        }
+
+        var name = ExportNaming.SuggestedFileName(_clock.GetLocalNow().DateTime, format);
+        var path = _exportDialogs.PickExportPath(format, name);
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (format == ExportFormat.Json)
+            {
+                await _exports.ExportJsonAsync(path, Version);
+            }
+            else
+            {
+                await _exports.ExportCsvAsync(path);
+            }
+
+            ExportStatus = $"Exported to {path}";
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            ExportStatus = $"Export failed: {ex.Message}";
         }
     }
 

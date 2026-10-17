@@ -7,6 +7,7 @@ using Microsoft.Win32;
 using TaskDesk.App.Notifications;
 using TaskDesk.App.Shell;
 using TaskDesk.Core.Backups;
+using TaskDesk.Core.Export;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Shell;
@@ -49,6 +50,7 @@ public partial class App : Application
         builder.Services.AddTaskDeskData(paths);
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<IListDialogs, WpfListDialogs>();
+        builder.Services.AddSingleton<IExportDialogs, WpfExportDialogs>();
         builder.Services.AddSingleton<IOccurrenceDialogs, WpfOccurrenceDialogs>();
         builder.Services.AddSingleton<ListsViewModel>();
         builder.Services.AddSingleton<MainWindow>();
@@ -86,7 +88,10 @@ public partial class App : Application
             Environment.ProcessPath ?? "",
             AppVersion(),
             sp.GetRequiredService<HotkeyService>(),
-            sp.GetRequiredService<IBackupService>()));
+            sp.GetRequiredService<IBackupService>(),
+            sp.GetRequiredService<IExportService>(),
+            sp.GetRequiredService<IExportDialogs>(),
+            sp.GetRequiredService<TimeProvider>()));
         _host = builder.Build();
 
         await _host.StartAsync();
