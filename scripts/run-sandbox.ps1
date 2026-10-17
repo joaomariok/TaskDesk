@@ -6,7 +6,8 @@
 #                        the icon rail); unset, the app opens at its default 900 x 600
 #   -SampleTasks <n>     fill the folder with n varied Tasks first (tools/TaskDesk.SampleData); 0 starts empty
 #   -Ref <git ref>       run that commit instead of this checkout, for a before/after look (for example main). It is
-#                        checked out in a worktree under %TEMP%\TaskDesk-ref-<ref> and built there.
+#                        checked out in a worktree under %TEMP%\TaskDesk-ref-<ref> and built there; the worktree
+#                        stays for the next run (remove it with `git worktree remove`).
 # Closing the window exits the app. It prints the process id for `winapp ui ... -a <pid>` and the data folder.
 # Each run first deletes the sandbox folders of earlier runs whose app has exited.
 param(
@@ -49,6 +50,8 @@ if (-not $exe) { throw "No TaskDesk.App.exe under $root\src\TaskDesk.App\bin\Deb
 
 $data = Join-Path $env:TEMP ('TaskDesk-sandbox-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory $data | Out-Null
+# This script's id until the app's replaces it, so a run started meanwhile does not take the folder for a leftover.
+Set-Content (Join-Path $data 'sandbox.pid') $PID
 # As in the UI tests: closing the window exits, no first-close hint, no Run key, no global hotkey.
 $settings = @{
     closeBehavior = 'Exit'; trayHintShown = $true; startWithWindows = $false; globalHotkey = ''; themeMode = $Theme

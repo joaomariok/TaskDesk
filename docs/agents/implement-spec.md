@@ -21,7 +21,7 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
 Done means the spec is on `main`, every ticket and the spec are closed, and no agent worktree or branch is left.
 
 1. Review the integration branch with the `code-review` skill. Name the spec issue and its tickets as context, so approvals recorded in a ticket (such as an approved test-expectation change) are not re-flagged.
-2. Fix every confirmed finding in one implementer, then land it like a ticket. If the spec changed the UI, run the `ui-check` skill on the integration tip, with `-Ref main` for the before shots, covering every state the spec's diff touches and the tickets' visual criteria.
+2. Fix every confirmed finding in one implementer, then land it like a ticket. If the spec changed the UI, run the `ui-check` skill on the integration tip, with before shots from `main` (its step 4), covering every state the spec's diff touches and the tickets' visual criteria.
 3. Ask the owner, then fast-forward `main` to the integration tip and push.
 4. Close each ticket, then the spec, with `gh issue close <n> --comment "<commits>, on main."`.
 5. Remove each agent worktree (`git worktree remove`) and delete its `worktree-agent-*` branch (`git branch -D`); every one is integrated by now.

@@ -13,9 +13,9 @@ Run `pwsh scripts/ui-tests.ps1` and judge it by the exit code. A failed test lea
 
 ## 2. Look
 
-1. From the diff, list the **states** it touches: each a window size, theme and the steps that reach it (for example "detail pane open, Due time rejected"). Every state is shot in Light and in Dark.
-2. Start the app: `pwsh scripts/run-sandbox.ps1 -Theme Light|Dark [-Width <px>] [-SampleTasks 30]`. It returns at once and prints the app's pid. `-Width 820` shows the icon rail; `-SampleTasks` fills Lists, Tags, Due and Overdue for you.
-3. Reach each state with `winapp ui` against `-a <pid>`, then `winapp ui screenshot -a <pid> -o <scratch>/<check>/after/<theme>-<state>.png`. Popups and flyouts need `--capture-screen`. Close the app with `Stop-Process -Id <pid>`.
+1. Make a folder `<check>` for this check in the session scratchpad. From the diff, list the **states** it touches: each a window size, theme and the steps that reach it (for example "detail pane open, Due time rejected"). Every state is shot in Light and in Dark.
+2. Start the app: `pwsh scripts/run-sandbox.ps1 -Theme Light|Dark [-Width <px>] [-SampleTasks 30]`. It returns at once and prints the app's pid. `-Width 820` shows the icon rail; `-SampleTasks` adds Tasks with Tags, Subtasks, Due, Overdue and Completed, all in the Default List; make other Lists and Reminders with `winapp ui`.
+3. Reach each state with `winapp ui` against `-a <pid>`, then `winapp ui screenshot -a <pid> -o <check>/after/<theme>-<state>.png`. Popups and flyouts need `--capture-screen`. Close the app with `Stop-Process -Id <pid>`.
    - Find slugs with `winapp ui search "<text>" -a <pid>` or `inspect`.
    - Type into a box with `winapp ui focus <slug>`, then `winapp ui send-keys "<text>" --verbatim --via send-input`, then `send-keys tab --via send-input`. `set-value` skips TaskDesk's LostFocus bindings, so nothing validates or saves.
    - Wait for a result with `winapp ui wait-for "<text>" -a <pid>` rather than sleeping.
