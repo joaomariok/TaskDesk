@@ -109,9 +109,17 @@ public sealed partial class MainViewModel(
     private SmartView? _currentView;
 
     // Positions in a Tag-filtered view or a Smart View are not List positions, so reordering is off there.
-    partial void OnTagFilterChanged(Tag? value) => UpdateReorderEnabled();
+    partial void OnTagFilterChanged(Tag? value)
+    {
+        UpdateReorderEnabled();
+        NotifyPageStateChanged();
+    }
 
-    partial void OnCurrentViewChanged(SmartView? value) => UpdateReorderEnabled();
+    partial void OnCurrentViewChanged(SmartView? value)
+    {
+        UpdateReorderEnabled();
+        NotifyPageStateChanged();
+    }
 
     private void UpdateReorderEnabled() =>
         IsReorderEnabled = TagFilter is null && CurrentView is null && !IsFilterActive;
@@ -238,6 +246,7 @@ public sealed partial class MainViewModel(
             var row = new TaskRowViewModel(task, _clock);
             _all.Add(row);
             Tasks.Add(row);
+            NotifyPageStateChanged();
         }
 
         QuickAddTitle = "";
@@ -343,6 +352,7 @@ public sealed partial class MainViewModel(
         OnPropertyChanged(nameof(HasMoreCompleted));
         OnPropertyChanged(nameof(CompletedHeader));
         OnPropertyChanged(nameof(HasCompletedTasks));
+        NotifyPageStateChanged();
     }
 
     private void SortCompleted()

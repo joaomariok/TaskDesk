@@ -8,6 +8,20 @@
             <!-- Narrator announces a row by its Task title. -->
             <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
         </Style>
+        <!-- A hint drawn over an empty TextBox; the TextBox text arrives through Tag. -->
+        <Style x:Key="HintText" TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="10,0,10,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <Trigger Property="Tag" Value="">
+                    <Setter Property="Visibility" Value="Visible" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <DataTemplate x:Key="TaskRowTemplate">
             <DockPanel LastChildFill="True">
                 <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"
@@ -87,21 +101,47 @@
             <DockPanel>
                 <Button DockPanel.Dock="Right" Content="Add tag" Margin="4,0,0,0" Padding="8,2"
                         Command="{Binding AddTagCommand}" />
-                <TextBox Padding="4" AutomationProperties.Name="New tag name" AutomationProperties.AutomationId="NewTagBox"
-                         Text="{Binding NewTagName, UpdateSourceTrigger=PropertyChanged}">
-                    <TextBox.InputBindings>
-                        <KeyBinding Key="Return" Command="{Binding AddTagCommand}" />
-                    </TextBox.InputBindings>
-                </TextBox>
+                <Grid>
+                    <TextBox x:Name="NewTagBox" Padding="4" AutomationProperties.Name="New tag name" AutomationProperties.AutomationId="NewTagBox"
+                             Text="{Binding NewTagName, UpdateSourceTrigger=PropertyChanged}">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Return" Command="{Binding AddTagCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+                    <TextBlock Style="{StaticResource HintText}" Text="New tag name"
+                               Tag="{Binding Text, ElementName=NewTagBox}" />
+                </Grid>
             </DockPanel>
         </StackPanel>
-        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-            <TextBox x:Name="SearchBox" Padding="6" Margin="0,0,0,4"
-                     AutomationProperties.Name="Search (Ctrl+F)" AutomationProperties.AutomationId="SearchBox"
-                     ToolTip="Search (Ctrl+F). Esc clears."
-                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                     TextChanged="SearchBox_TextChanged" />
-            <WrapPanel>
+        <!-- Page heading: what the view shows, its List menu and the filter chips beside it. -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="0,0,12,0">
+                <TextBlock Style="{StaticResource SubtitleText}" VerticalAlignment="Center"
+                           AutomationProperties.AutomationId="PageHeading"
+                           Text="{Binding PageHeading}" />
+                <Button x:Name="ListMenuButton" Content="&#x22EF;" Margin="4,0,0,0" Padding="8,2"
+                        VerticalAlignment="Center" Click="ListMenuButton_Click"
+                        AutomationProperties.Name="List settings"
+                        AutomationProperties.AutomationId="ListMenuButton"
+                        ToolTip="List settings"
+                        Visibility="{Binding IsListPage, Converter={StaticResource BoolToVisibility}}">
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Rename" Click="ListRename_Click" />
+                            <MenuItem Header="Colour">
+                                <MenuItem Header="None" Tag="" Click="ListColour_Click" />
+                                <MenuItem Header="Red" Tag="#D13438" Click="ListColour_Click" />
+                                <MenuItem Header="Orange" Tag="#F7630C" Click="ListColour_Click" />
+                                <MenuItem Header="Yellow" Tag="#FFB900" Click="ListColour_Click" />
+                                <MenuItem Header="Green" Tag="#107C10" Click="ListColour_Click" />
+                                <MenuItem Header="Blue" Tag="#0078D4" Click="ListColour_Click" />
+                                <MenuItem Header="Purple" Tag="#744DA9" Click="ListColour_Click" />
+                            </MenuItem>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
+            </StackPanel>
+            <WrapPanel VerticalAlignment="Center">
                 <ComboBox x:Name="PriorityFilterBox" Width="150" Margin="0,0,6,0"
                           AutomationProperties.Name="Priority filter"
                           SelectionChanged="PriorityFilterBox_SelectionChanged" />
@@ -131,7 +171,19 @@
                 <Button Content="Clear filters" Padding="8,2" Command="{Binding ClearAllFiltersCommand}"
                         Visibility="{Binding IsFilterActive, Converter={StaticResource BoolToVisibility}}" />
             </WrapPanel>
-        </StackPanel>
+        </DockPanel>
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBox x:Name="SearchBox" Padding="6"
+                     AutomationProperties.Name="Search (Ctrl+F)" AutomationProperties.AutomationId="SearchBox"
+                     ToolTip="Search (Ctrl+F). Esc clears."
+                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                     TextChanged="SearchBox_TextChanged" />
+            <TextBlock Style="{StaticResource HintText}" Text="{Binding SearchScope}"
+                       Tag="{Binding Text, ElementName=SearchBox}" />
+        </Grid>
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource FieldLabel}"
+                   AutomationProperties.AutomationId="QuickAddLabel"
+                   Text="{Binding QuickAddTarget}" />
         <TextBox x:Name="QuickAddBox" DockPanel.Dock="Top" Margin="0,0,0,8" Padding="6"
                  AutomationProperties.Name="Quick add" AutomationProperties.AutomationId="QuickAddBox"
                  Text="{Binding QuickAddTitle, UpdateSourceTrigger=PropertyChanged}">
@@ -139,6 +191,18 @@
                 <KeyBinding Key="Return" Command="{Binding AddTaskCommand}" />
             </TextBox.InputBindings>
         </TextBox>
+        <!-- Empty and no-result states: plain text, no box or outline. -->
+        <StackPanel DockPanel.Dock="Top" Margin="0,8,0,8" AutomationProperties.AutomationId="EmptyState"
+                    Visibility="{Binding HasEmptyMessage, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Style="{StaticResource BodyText}" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       AutomationProperties.AutomationId="EmptyMessage"
+                       Text="{Binding EmptyMessage}" />
+            <Button Content="Clear search" Margin="0,8,0,0" Padding="8,2" HorizontalAlignment="Left"
+                    AutomationProperties.AutomationId="ClearSearchButton"
+                    Command="{Binding ClearSearchCommand}"
+                    Visibility="{Binding ShowClearSearch, Converter={StaticResource BoolToVisibility}}" />
+        </StackPanel>
         <Button DockPanel.Dock="Bottom" Content="Load more completed tasks" Margin="0,8,0,0" Padding="8,2"
                 HorizontalAlignment="Left" Command="{Binding LoadMoreCompletedCommand}"
                 Visibility="{Binding HasMoreCompleted, Converter={StaticResource BoolToVisibility}}" />
@@ -176,6 +240,7 @@
             </ListBox>
         </StackPanel>
         <ListBox x:Name="OpenList" ItemsSource="{Binding Tasks}" AllowDrop="True"
+                 BorderThickness="0" Background="Transparent"
                  HorizontalContentAlignment="Stretch" AutomationProperties.Name="Tasks" AutomationProperties.AutomationId="OpenTaskList"
                  ItemContainerStyle="{StaticResource TaskRowContainer}"
                  ItemTemplate="{StaticResource TaskRowTemplate}"

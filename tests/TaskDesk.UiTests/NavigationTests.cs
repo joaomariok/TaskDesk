@@ -17,6 +17,9 @@ public sealed class NavigationTests : IDisposable
     {
         // Quick add in Today makes the Task due today; in All it has no Due.
         AppSession.Ctrl(VirtualKeyShort.KEY_1);
+        // Switching views is asynchronous; quick add only targets Today once the page shows it.
+        AppSession.WaitUntil(() => _app.Find(Ids.PageHeading).Name == "Today",
+            () => $"The page heading was '{_app.Find(Ids.PageHeading).Name}'.");
         _app.TypeInto(Ids.QuickAddBox, "Due today", pressEnter: true);
         _app.WaitForRows(Ids.OpenTaskList, "Due today");
         AppSession.Ctrl(VirtualKeyShort.KEY_4);

@@ -20,7 +20,7 @@ public partial class MainWindow : Window
         // The quick-add box has the initial focus of the window.
         FocusManager.SetFocusedElement(this, TaskArea.QuickAddBox);
         Details.Initialize();
-        TaskArea.Initialize(viewModel);
+        TaskArea.Initialize(viewModel, lists);
         Navigation.Initialize(viewModel, lists);
         ApplyPaneLimits();
 

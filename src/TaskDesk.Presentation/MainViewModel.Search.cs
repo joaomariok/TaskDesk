@@ -41,13 +41,19 @@ public sealed partial class MainViewModel
     /// <summary>True while a search text or any filter chip narrows the view.</summary>
     public bool IsFilterActive => !BuildSearchQuery(0).IsEmpty;
 
-    partial void OnSearchTextChanged(string value) => UpdateReorderEnabled();
+    partial void OnSearchTextChanged(string value) => OnFilterStateChanged();
 
-    partial void OnMinPriorityFilterChanged(Priority? value) => UpdateReorderEnabled();
+    partial void OnMinPriorityFilterChanged(Priority? value) => OnFilterStateChanged();
 
-    partial void OnHasDueFilterChanged(bool value) => UpdateReorderEnabled();
+    partial void OnHasDueFilterChanged(bool value) => OnFilterStateChanged();
 
-    partial void OnHasReminderFilterChanged(bool value) => UpdateReorderEnabled();
+    partial void OnHasReminderFilterChanged(bool value) => OnFilterStateChanged();
+
+    private void OnFilterStateChanged()
+    {
+        UpdateReorderEnabled();
+        NotifyPageStateChanged();
+    }
 
     private TaskSearchQuery BuildSearchQuery(int skip) => new(
         SearchText,

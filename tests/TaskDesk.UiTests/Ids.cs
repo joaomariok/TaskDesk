@@ -16,6 +16,7 @@ internal static class Ids
     public const string SmartViewList = nameof(SmartViewList);
     public const string NewTagBox = nameof(NewTagBox);
     public const string OpenTaskList = nameof(OpenTaskList);
+    public const string PageHeading = nameof(PageHeading);
     public const string QuickAddBox = nameof(QuickAddBox);
     public const string SearchBox = nameof(SearchBox);
     public const string SidebarSplitter = nameof(SidebarSplitter);

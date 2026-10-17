@@ -23,11 +23,55 @@ public partial class TaskListArea : UserControl
 
     private MainViewModel ViewModel { get; set; } = null!;
 
+    private ListsViewModel Lists { get; set; } = null!;
+
+    // ---- The List's "..." menu in the heading ----
+
+    private void ListMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ListMenuButton.ContextMenu is { } menu)
+        {
+            menu.PlacementTarget = ListMenuButton;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+    }
+
+    private ListItemViewModel? ShownList => Lists.Lists.FirstOrDefault(l => l.IsDefault);
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF event handler; the signature requires void.")]
+    private async void ListRename_Click(object sender, RoutedEventArgs e)
+    {
+        if (ShownList is { } list)
+        {
+            await Lists.RenameCommand.ExecuteAsync(list);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF event handler; the signature requires void.")]
+    private async void ListColour_Click(object sender, RoutedEventArgs e)
+    {
+        if (ShownList is { } list && sender is MenuItem { Tag: string hex })
+        {
+            await Lists.SetColorAsync(list, hex);
+        }
+    }
+
     /// <summary>Connects the area to the view model; called once by <see cref="MainWindow"/>.</summary>
-    public void Initialize(MainViewModel viewModel)
+    public void Initialize(MainViewModel viewModel, ListsViewModel lists)
     {
         ViewModel = viewModel;
+        Lists = lists;
         InitializeSearch();
+
+        // The heading, quick-add label and empty states name the Default List; keep its name current.
+        lists.Lists.CollectionChanged += (_, _) =>
+        {
+            if (lists.Lists.FirstOrDefault(l => l.IsDefault) is { } defaultList)
+            {
+                viewModel.DefaultListName = defaultList.Name;
+            }
+        };
         viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MainViewModel.SelectedTask))
