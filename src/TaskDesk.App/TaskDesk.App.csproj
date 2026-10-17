@@ -15,6 +15,9 @@
     <Resource Include="Assets/TaskDesk.ico" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="TaskDesk.App.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\TaskDesk.Core\TaskDesk.Core.csproj" />
     <ProjectReference Include="..\TaskDesk.Data\TaskDesk.Data.csproj" />
     <ProjectReference Include="..\TaskDesk.Presentation\TaskDesk.Presentation.csproj" />

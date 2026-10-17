@@ -9,6 +9,7 @@
     <Project Path="tools/TaskDesk.SampleData/TaskDesk.SampleData.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TaskDesk.App.Tests/TaskDesk.App.Tests.csproj" />
     <Project Path="tests/TaskDesk.Core.Tests/TaskDesk.Core.Tests.csproj" />
     <Project Path="tests/TaskDesk.Data.Tests/TaskDesk.Data.Tests.csproj" />
     <Project Path="tests/TaskDesk.Presentation.Tests/TaskDesk.Presentation.Tests.csproj" />

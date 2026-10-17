@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Loads every window, view and style dictionary of TaskDesk.App so XAML that fails at load time
+       (a wrong-type resource, a missing StaticResource key, an event inside a Style setter) fails the gate. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.22000.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.22000.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <!-- TaskDesk.App is a self-contained exe; only its assembly is needed here, not its runtime. -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TaskDesk.App\TaskDesk.App.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>
