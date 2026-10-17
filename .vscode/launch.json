@@ -1,0 +1,67 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "TaskDesk (sandbox)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/TaskDesk.App/bin/Debug/net10.0-windows10.0.22000.0/win-x64/TaskDesk.App.dll",
+      "cwd": "${workspaceFolder}",
+      "env": { "TASKDESK_DATA_DIR": "${env:TEMP}\\TaskDesk-dev" },
+      "console": "internalConsole",
+      "stopAtEntry": false
+    },
+    {
+      "name": "TaskDesk (sandbox, --minimized)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/TaskDesk.App/bin/Debug/net10.0-windows10.0.22000.0/win-x64/TaskDesk.App.dll",
+      "args": ["--minimized"],
+      "cwd": "${workspaceFolder}",
+      "env": { "TASKDESK_DATA_DIR": "${env:TEMP}\\TaskDesk-dev" },
+      "console": "internalConsole",
+      "stopAtEntry": false
+    },
+    {
+      "name": "TaskDesk (pick data folder)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/TaskDesk.App/bin/Debug/net10.0-windows10.0.22000.0/win-x64/TaskDesk.App.dll",
+      "cwd": "${workspaceFolder}",
+      "env": { "TASKDESK_DATA_DIR": "${input:dataFolder}" },
+      "console": "internalConsole",
+      "stopAtEntry": false
+    },
+    {
+      "name": "TaskDesk (sandbox, toasts on)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/TaskDesk.App/bin/Debug/net10.0-windows10.0.22000.0/win-x64/TaskDesk.App.dll",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "TASKDESK_DATA_DIR": "${env:TEMP}\\TaskDesk-dev",
+        "TASKDESK_SANDBOX": "0"
+      },
+      "console": "internalConsole",
+      "stopAtEntry": false
+    },
+    {
+      "name": "Attach to TaskDesk",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "dataFolder",
+      "type": "promptString",
+      "description": "Data folder (e.g. a generated sample-data folder); never the real %LOCALAPPDATA%\\TaskDesk",
+      "default": "${env:TEMP}\\TaskDesk-sample"
+    }
+  ]
+}
