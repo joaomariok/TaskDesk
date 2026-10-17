@@ -35,13 +35,14 @@ public sealed class AppSession : IDisposable
     public Window Window { get; private set; } = null!;
 
     /// <param name="theme">The <c>themeMode</c> setting: System, Light or Dark.</param>
-    public static AppSession Start(string theme = "System")
+    /// <param name="globalHotkey">The <c>globalHotkey</c> setting; empty registers none.</param>
+    public static AppSession Start(string theme = "System", string globalHotkey = "")
     {
         var dataDirectory = Path.Combine(Path.GetTempPath(), "TaskDesk-uitest-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dataDirectory);
-        // Closing the window exits (so layout and pending edits are flushed), no first-close hint, no global hotkey.
+        // Closing the window exits (so layout and pending edits are flushed), no first-close hint, and by default no global hotkey.
         File.WriteAllText(Path.Combine(dataDirectory, "settings.json"), $$"""
-            { "closeBehavior": "Exit", "trayHintShown": true, "startWithWindows": false, "globalHotkey": "",
+            { "closeBehavior": "Exit", "trayHintShown": true, "startWithWindows": false, "globalHotkey": "{{globalHotkey}}",
               "themeMode": "{{theme}}" }
             """);
         var session = new AppSession(dataDirectory);
@@ -136,6 +137,15 @@ public sealed class AppSession : IDisposable
         Thread.Sleep(300);
         FlaUI.Core.Capturing.Capture.Element(Window).ToFile(path);
     }
+
+    /// <summary>The quick-add window, once it is shown.</summary>
+    public Window QuickAddWindow() =>
+        Eventually(() => _app!.GetAllTopLevelWindows(_automation).FirstOrDefault(w => w.Title == "TaskDesk quick add"),
+            "The quick-add window did not show.");
+
+    /// <summary>True while the quick-add window is shown.</summary>
+    public bool QuickAddWindowShown() =>
+        _app!.GetAllTopLevelWindows(_automation).Any(w => w.Title == "TaskDesk quick add");
 
     /// <summary>Drags an element (a splitter) horizontally by <paramref name="dx"/> physical pixels.</summary>
     public static void DragBy(AutomationElement element, int dx)

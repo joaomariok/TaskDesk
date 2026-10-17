@@ -4,7 +4,7 @@ using FlaUI.Core.WindowsAPI;
 namespace TaskDesk.UiTests;
 
 /// <summary>
-/// Walks the main window through a few typical states in each theme, asserting each step. With
+/// Walks the main window through a few typical states in each theme, and shows the quick-add card, asserting each step. With
 /// <c>TASKDESK_UI_SCREENSHOTS</c> set to a folder it also saves a PNG per state, for eyeballing
 /// (see the ui-check skill); without it, the tour is a smoke test.
 /// </summary>
@@ -63,5 +63,33 @@ public sealed class ScreenshotTour : IDisposable
         AppSession.Ctrl(VirtualKeyShort.KEY_5);
         app.WaitForRows(Ids.CompletedTaskList, "Water plants");
         Shot(5, "completed");
+    }
+
+    [Theory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public void Quick_add_card(string theme)
+    {
+        // A hotkey nobody else uses, so a TaskDesk the owner has running cannot take it.
+        var app = _app = AppSession.Start(theme, "Ctrl+Alt+Shift+F11");
+        AppSession.Press(VirtualKeyShort.CONTROL, VirtualKeyShort.ALT, VirtualKeyShort.SHIFT, VirtualKeyShort.F11);
+
+        var card = app.QuickAddWindow();
+        AppSession.WaitUntil(() => card.FindFirstDescendant(cf => cf.ByName("Task title")) is { } box
+                                   && box.Properties.HasKeyboardFocus.ValueOrDefault,
+            () => "The quick-add title box did not take focus.");
+        Assert.NotNull(card.FindFirstDescendant(cf => cf.ByName("List")));
+        Assert.NotNull(card.FindFirstDescendant(cf => cf.ByName("Due date")));
+
+        var shots = Environment.GetEnvironmentVariable(ScreenshotsVariable);
+        if (!string.IsNullOrWhiteSpace(shots))
+        {
+            Directory.CreateDirectory(shots);
+            Thread.Sleep(300);
+            FlaUI.Core.Capturing.Capture.Element(card).ToFile(Path.Combine(shots, $"{theme.ToLowerInvariant()}-06-quick-add.png"));
+        }
+
+        AppSession.Press(VirtualKeyShort.ESCAPE);
+        AppSession.WaitUntil(() => !app.QuickAddWindowShown(), () => "Esc did not close the quick-add window.");
     }
 }

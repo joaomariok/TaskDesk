@@ -325,7 +325,7 @@ Undoing a completion toggle (Ctrl+Z) on an Occurrence also deletes the next Occu
 ### 6.6 Quick-add window (global hotkey)
 
 - Default hotkey **[ASSUMPTION]**: `Ctrl+Alt+Space`, configurable in Settings.
-- Shows a small, borderless, top-most window centered on the monitor with the mouse cursor: title box, list dropdown (default list preselected), optional due date picker. Enter saves and closes; Esc closes without saving; losing focus closes without saving.
+- Shows a small Fluent card: a borderless, top-most window centered on the monitor with the mouse cursor. It holds a large title box labelled "New Task" (focused), under it a compact row with a labelled List picker (Default List preselected) and a labelled optional Due picker, and the hint "Enter to add · Esc to cancel". Every input has a visible label and an accessible name. Enter saves and closes; Esc closes without saving; losing focus closes without saving.
 - Works whether the main window is open, minimized, or hidden in the tray.
 
 ### 6.7 Settings window

@@ -8,28 +8,36 @@
         <KeyBinding Key="Enter" Command="{Binding SaveCommand}" />
         <KeyBinding Key="Escape" Command="{Binding CancelCommand}" />
     </Window.InputBindings>
-    <Border BorderThickness="1" BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" Padding="16">
+    <Border BorderThickness="1" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+            Padding="24" CornerRadius="{DynamicResource OverlayCornerRadius}">
         <StackPanel>
-            <TextBlock Text="Quick add" FontWeight="SemiBold" Margin="0,0,0,8" />
-            <TextBox x:Name="TitleBox" Padding="6" AutomationProperties.Name="Task title"
+            <TextBlock x:Name="TitleLabel" Text="New Task" Style="{StaticResource FieldLabel}" />
+            <TextBox x:Name="TitleBox" FontSize="20" Padding="10,8"
+                     Margin="0,0,0,16"
+                     AutomationProperties.Name="Task title"
+                     AutomationProperties.LabeledBy="{Binding ElementName=TitleLabel}"
                      Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
-            <Grid Margin="0,10,0,0">
+            <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="12" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="List" Margin="0,0,0,4" />
+                    <TextBlock x:Name="ListLabel" Text="List" Style="{StaticResource FieldLabel}" />
                     <ComboBox ItemsSource="{Binding Lists}" SelectedItem="{Binding SelectedList}"
-                              DisplayMemberPath="Name" AutomationProperties.Name="List" />
+                              DisplayMemberPath="Name" AutomationProperties.Name="List"
+                              AutomationProperties.LabeledBy="{Binding ElementName=ListLabel}" />
                 </StackPanel>
                 <StackPanel Grid.Column="2">
-                    <TextBlock Text="Due date (optional)" Margin="0,0,0,4" />
-                    <DatePicker SelectedDate="{Binding DueDate}" AutomationProperties.Name="Due date" />
+                    <TextBlock x:Name="DueLabel" Text="Due" Style="{StaticResource FieldLabel}" />
+                    <DatePicker SelectedDate="{Binding DueDate}" AutomationProperties.Name="Due date"
+                                AutomationProperties.LabeledBy="{Binding ElementName=DueLabel}" />
                 </StackPanel>
             </Grid>
-            <TextBlock Text="Enter to save, Esc to cancel" Margin="0,10,0,0" Opacity="0.7" />
+            <TextBlock Text="Enter to add · Esc to cancel" Style="{StaticResource SecondaryCaptionText}"
+                       Margin="0,16,0,0" />
         </StackPanel>
     </Border>
 </Window>
