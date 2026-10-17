@@ -1,3 +1,4 @@
+using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 
 namespace TaskDesk.UiTests;
@@ -26,5 +27,24 @@ public sealed class QuickAddTests : IDisposable
 
         AppSession.Press(VirtualKeyShort.ESCAPE);
         AppSession.WaitUntil(() => !app.QuickAddWindowShown(), () => "Esc did not close the quick-add window.");
+    }
+
+    [Fact]
+    public void A_Task_added_on_the_card_with_Enter_appears_in_the_main_window()
+    {
+        var app = _app = AppSession.Start(globalHotkey: "Ctrl+Alt+Shift+F11");
+        app.WaitForRows(Ids.OpenTaskList);
+        AppSession.Press(VirtualKeyShort.CONTROL, VirtualKeyShort.ALT, VirtualKeyShort.SHIFT, VirtualKeyShort.F11);
+
+        var card = app.QuickAddWindow();
+        AppSession.WaitUntil(() => card.FindFirstDescendant(cf => cf.ByName("Task title")) is { } box
+                                   && box.Properties.HasKeyboardFocus.ValueOrDefault,
+            () => "The quick-add title box did not take focus.");
+        Keyboard.Type("Water the plants");
+        AppSession.Press(VirtualKeyShort.RETURN);
+
+        AppSession.WaitUntil(() => !app.QuickAddWindowShown(), () => "Enter did not close the quick-add window.");
+        // The card saves to the Default List, which the main window shows at start-up.
+        app.WaitForRows(Ids.OpenTaskList, "Water the plants");
     }
 }

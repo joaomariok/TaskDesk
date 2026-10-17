@@ -16,6 +16,8 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <EnableMsixTooling>false</EnableMsixTooling>
     <IsPackable>false</IsPackable>
+    <!-- LibraryImport and the message window's unmanaged window procedure. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- MSTest's localized satellites have no en-US default; MrtCore's PRI263 warning about them is an error
          under the gate's -warnaserror and cannot be silenced with NoWarn. -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
@@ -38,5 +40,10 @@
   <ItemGroup>
     <!-- Shared test helpers, linked by source from the xUnit projects that own them. -->
     <Compile Include="..\TaskDesk.Data.Tests\TempDatabase.cs" Link="Helpers\TempDatabase.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- WinUI shell sources under test, linked from the shell exe (an exe cannot be referenced here). -->
+    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\MessageWindow.cs" Link="Shell\MessageWindow.cs" />
+    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\WinUiHotkeyRegistrar.cs" Link="Shell\WinUiHotkeyRegistrar.cs" />
   </ItemGroup>
 </Project>

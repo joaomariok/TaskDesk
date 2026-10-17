@@ -88,6 +88,10 @@ public partial class App : Application
         builder.Services.AddSingleton<WindowLayoutService>();
         builder.Services.AddSingleton<ThemeService>();
         builder.Services.AddSingleton<IThemeService>(sp => sp.GetRequiredService<ThemeService>());
+        builder.Services.AddSingleton<MessageWindow>();
+        builder.Services.AddSingleton<IHotkeyRegistrar, WinUiHotkeyRegistrar>();
+        builder.Services.AddSingleton<HotkeyService>();
+        builder.Services.AddTransient<QuickAddViewModel>();
         _host = builder.Build();
 
         await _host.StartAsync();
@@ -139,8 +143,59 @@ public partial class App : Application
             closing.Cancel = shell.OnWindowClosing();
         };
 
+        // The tray's Quick add and the global hotkey open the quick-add card. A hotkey conflict is logged
+        // (Settings shows it), never blocking start-up.
+        shell.QuickAddRequested += () => window.DispatcherQueue.TryEnqueue(ShowQuickAdd);
+        var hotkeys = _host.Services.GetRequiredService<HotkeyService>();
+        hotkeys.Triggered += () => window.DispatcherQueue.TryEnqueue(ShowQuickAdd);
+        hotkeys.Start();
+
         var exePath = Environment.ProcessPath ?? throw new InvalidOperationException("No process path.");
         await shell.StartAsync(minimizedFlag, exePath);
+    }
+
+    private QuickAddWindow? _quickAddWindow;
+    private bool _quickAddOpening;
+
+    /// <summary>Opens the quick-add card, or brings the open one forward. A saved Task reloads the main window.</summary>
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "UI entry point; failures are logged here.")]
+    private async void ShowQuickAdd()
+    {
+        if (_quickAddWindow is not null)
+        {
+            _quickAddWindow.Activate();
+            return;
+        }
+
+        if (_quickAddOpening)
+        {
+            return;
+        }
+
+        _quickAddOpening = true;
+        try
+        {
+            var main = _host!.Services.GetRequiredService<MainWindow>();
+            var viewModel = _host.Services.GetRequiredService<QuickAddViewModel>();
+#pragma warning disable VSTHRD101 // Action event; a failed reload reaches the UnhandledException log
+            viewModel.TaskCreated += async () => await main.ViewModel.LoadAsync();
+#pragma warning restore VSTHRD101
+            await viewModel.LoadAsync();
+
+            var card = new QuickAddWindow(viewModel);
+            _host.Services.GetRequiredService<ThemeService>().Register(card);
+            card.Closed += (_, _) => _quickAddWindow = null;
+            _quickAddWindow = card;
+            card.Activate();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _host!.Services.GetRequiredService<ILogger<App>>().LogError(ex, "The quick-add card could not open");
+        }
+        finally
+        {
+            _quickAddOpening = false;
+        }
     }
 
     private const int AsfwAny = -1;

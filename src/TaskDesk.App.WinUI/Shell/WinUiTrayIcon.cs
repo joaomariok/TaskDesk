@@ -6,8 +6,8 @@ using TaskDesk.Core.Shell;
 namespace TaskDesk.App.Shell;
 
 /// <summary>
-/// Tray icon built on H.NotifyIcon.WinUI: left click, and a menu with Open TaskDesk and Exit (Quick add and
-/// Settings join it with their windows). Create it on the UI thread. Covered by manual checks only.
+/// Tray icon built on H.NotifyIcon.WinUI: left click, and a menu with Open TaskDesk, Quick add and Exit (Settings
+/// joins it with its window). Create it on the UI thread. Covered by manual checks only.
 /// </summary>
 internal sealed class WinUiTrayIcon : ITrayIcon
 {
@@ -18,6 +18,7 @@ internal sealed class WinUiTrayIcon : ITrayIcon
     {
         var menu = new MenuFlyout();
         menu.Items.Add(Item("Open TaskDesk", () => OpenRequested?.Invoke()));
+        menu.Items.Add(Item("Quick add", () => QuickAddRequested?.Invoke()));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(Item("Exit", () => ExitRequested?.Invoke()));
         _icon = new TaskbarIcon
@@ -33,8 +34,8 @@ internal sealed class WinUiTrayIcon : ITrayIcon
 
     public event Action? LeftClicked;
     public event Action? OpenRequested;
-#pragma warning disable CS0067 // Raised once the tray menu offers Quick add (#64) and Settings (#65).
     public event Action? QuickAddRequested;
+#pragma warning disable CS0067 // Raised once the tray menu offers Settings (#65).
     public event Action? SettingsRequested;
 #pragma warning restore CS0067
     public event Action? ExitRequested;

@@ -9,6 +9,8 @@
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
     <RootNamespace>TaskDesk.Views</RootNamespace>
+    <!-- LibraryImport (user32, shcore) in the quick-add window generates marshalling code. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TaskDesk.Core\TaskDesk.Core.csproj" />

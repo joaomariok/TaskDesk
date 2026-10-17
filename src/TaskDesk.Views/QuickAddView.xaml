@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The quick-add card: a title, the List (Default List preselected) and an optional Due date.
+     Enter adds the Task, Escape dismisses the card (an open drop-down takes Escape first). -->
+<UserControl
+    x:Class="TaskDesk.Views.QuickAddView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:tasks="using:TaskDesk.Core.Tasks"
+    KeyDown="OnKeyDown">
+    <Border x:Name="Card"
+            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            Padding="24">
+        <StackPanel>
+            <TextBlock x:Name="TitleLabel" Text="New Task" Style="{StaticResource FieldLabel}" />
+            <TextBox x:Name="TitleBox"
+                     FontSize="20"
+                     Margin="{StaticResource FieldMargin}"
+                     AutomationProperties.Name="Task title"
+                     AutomationProperties.LabeledBy="{x:Bind TitleLabel, Mode=OneTime}"
+                     Text="{x:Bind ViewModel.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="ListLabel" Text="List" Style="{StaticResource FieldLabel}" />
+                    <ComboBox x:Name="ListBox"
+                              HorizontalAlignment="Stretch"
+                              AutomationProperties.Name="List"
+                              AutomationProperties.LabeledBy="{x:Bind ListLabel, Mode=OneTime}"
+                              ItemsSource="{x:Bind ViewModel.Lists, Mode=OneTime}"
+                              SelectedItem="{x:Bind ViewModel.SelectedList, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="tasks:TaskList">
+                                <TextBlock Text="{x:Bind Name, Mode=OneTime}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                    <TextBlock x:Name="DueLabel" Text="Due" Style="{StaticResource FieldLabel}" />
+                    <CalendarDatePicker x:Name="DueBox"
+                                        HorizontalAlignment="Stretch"
+                                        AutomationProperties.Name="Due date"
+                                        AutomationProperties.LabeledBy="{x:Bind DueLabel, Mode=OneTime}"
+                                        DateChanged="OnDueChanged" />
+                </StackPanel>
+            </Grid>
+            <TextBlock Text="Enter to add · Esc to cancel" Style="{StaticResource SecondaryCaptionText}" Margin="0,16,0,0" />
+        </StackPanel>
+    </Border>
+</UserControl>
