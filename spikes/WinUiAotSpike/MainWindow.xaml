@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="WinUiAotSpike.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:WinUiAotSpike"
+    Title="TaskDesk (WinUI spike)">
+    <Grid Padding="12" RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="QuickAddBox" PlaceholderText="Add a task" KeyDown="OnQuickAddKeyDown" />
+            <Button Grid.Column="1" Content="Add" Click="OnAddClick" />
+        </Grid>
+        <TextBlock x:Name="StatusText" Grid.Row="1" />
+        <!-- ListView virtualizes through its default ItemsStackPanel. -->
+        <ListView x:Name="TaskList" Grid.Row="2" SelectionMode="Single">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="local:TaskRow">
+                    <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</Window>

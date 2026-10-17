@@ -1,0 +1,6 @@
+<Project>
+  <!-- Isolates the throwaway spike from the product's central package management. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

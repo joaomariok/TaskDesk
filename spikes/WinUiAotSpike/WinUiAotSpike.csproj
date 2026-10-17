@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Throwaway spike (outside TaskDesk.slnx): a WinUI 3 shell over the real TaskDesk.Core and TaskDesk.Data.
+    Publish variant: -p:SpikeVariant=plain|r2r|trimmed|trimmed-rooted|aot. PublishTrimmed/PublishAot are set here rather than on
+    the command line, because a global property would also turn on the trim analyzers in the referenced
+    product projects, whose warnings-as-errors then fail their build before the app is trimmed.
+  -->
+  <PropertyGroup Condition="'$(SpikeVariant)' == 'trimmed' or '$(SpikeVariant)' == 'trimmed-rooted'">
+    <PublishTrimmed>true</PublishTrimmed>
+  </PropertyGroup>
+  <!--
+    trimmed-rooted: also keeps every member of the product's Core and Data assemblies and of EF Core, so EF
+    Core can still find what it reaches by reflection (the plain trimmed build loses UtcDateTimeConverter's
+    constructor; rooting only Core and Data then loses EntryCurrentValueComparer<Guid>'s constructor).
+  -->
+  <ItemGroup Condition="'$(SpikeVariant)' == 'trimmed-rooted'">
+    <TrimmerRootAssembly Include="TaskDesk.Core" />
+    <TrimmerRootAssembly Include="TaskDesk.Data" />
+    <TrimmerRootAssembly Include="Microsoft.EntityFrameworkCore" />
+    <TrimmerRootAssembly Include="Microsoft.EntityFrameworkCore.Relational" />
+    <TrimmerRootAssembly Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  </ItemGroup>
+  <!-- r2r: plain plus ReadyToRun, the same compilation mode as the product's win-x64 publish profile. -->
+  <PropertyGroup Condition="'$(SpikeVariant)' == 'r2r'">
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(SpikeVariant)' == 'aot'">
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22000.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.22000.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion>10.0.22000.0</TargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Platforms>x64</Platforms>
+    <SelfContained>true</SelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <!-- The CsWinRT AOT generator emits unsafe code for generic types crossing the WinRT ABI. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CsWinRTAotWarningLevel>2</CsWinRTAotWarningLevel>
+    <AssemblyName>WinUiAotSpike</AssemblyName>
+    <RootNamespace>WinUiAotSpike</RootNamespace>
+    <ApplicationIcon>..\..\src\TaskDesk.App\Assets\TaskDesk.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="..\..\src\TaskDesk.App\Assets\TaskDesk.ico" Link="Assets\TaskDesk.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TaskDesk.Core\TaskDesk.Core.csproj" />
+    <ProjectReference Include="..\..\src\TaskDesk.Data\TaskDesk.Data.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.4.1" />
+  </ItemGroup>
+</Project>
