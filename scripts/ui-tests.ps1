@@ -4,9 +4,11 @@
 # Each test uses a fresh temp data folder (sandbox mode: no Run key, no notification registration).
 #   -Publish <dir>  test TaskDesk.App.exe in a publish folder instead of the Debug build
 #   -Class <name>   run one test class, for example NavigationTests
+#   -Screenshots <dir>  save PNGs of the ScreenshotTour states (Light and Dark) into this folder
 param(
     [string]$Publish,
-    [string]$Class
+    [string]$Class,
+    [string]$Screenshots
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -24,6 +26,10 @@ try {
         if ($LASTEXITCODE -ne 0) { Write-Host "UI TESTS FAILED: app build exit $LASTEXITCODE"; exit $LASTEXITCODE }
     }
 
+    if ($Screenshots) {
+        $env:TASKDESK_UI_SCREENSHOTS = (New-Item -ItemType Directory -Force $Screenshots).FullName
+    }
+
     & dotnet build tests/TaskDesk.UiTests -warnaserror
     if ($LASTEXITCODE -ne 0) { Write-Host "UI TESTS FAILED: test build exit $LASTEXITCODE"; exit $LASTEXITCODE }
 
@@ -31,10 +37,12 @@ try {
     if ($Class) { $runArgs += @('-class', "TaskDesk.UiTests.$Class") }
     & dotnet @runArgs
     $code = $LASTEXITCODE
+    if ($Screenshots) { Write-Host "Screenshots: $env:TASKDESK_UI_SCREENSHOTS" }
     Write-Host ($code -eq 0 ? 'UI TESTS PASSED' : "UI TESTS FAILED: exit $code")
     exit $code
 }
 finally {
     Remove-Item Env:TASKDESK_UI_APP -ErrorAction SilentlyContinue
+    Remove-Item Env:TASKDESK_UI_SCREENSHOTS -ErrorAction SilentlyContinue
     Pop-Location
 }

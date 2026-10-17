@@ -34,13 +34,15 @@ public sealed class AppSession : IDisposable
 
     public Window Window { get; private set; } = null!;
 
-    public static AppSession Start()
+    /// <param name="theme">The <c>themeMode</c> setting: System, Light or Dark.</param>
+    public static AppSession Start(string theme = "System")
     {
         var dataDirectory = Path.Combine(Path.GetTempPath(), "TaskDesk-uitest-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dataDirectory);
         // Closing the window exits (so layout and pending edits are flushed), no first-close hint, no global hotkey.
-        File.WriteAllText(Path.Combine(dataDirectory, "settings.json"), """
-            { "closeBehavior": "Exit", "trayHintShown": true, "startWithWindows": false, "globalHotkey": "" }
+        File.WriteAllText(Path.Combine(dataDirectory, "settings.json"), $$"""
+            { "closeBehavior": "Exit", "trayHintShown": true, "startWithWindows": false, "globalHotkey": "",
+              "themeMode": "{{theme}}" }
             """);
         var session = new AppSession(dataDirectory);
         try
@@ -125,6 +127,15 @@ public sealed class AppSession : IDisposable
     public static void Press(params VirtualKeyShort[] keys) => Keyboard.TypeSimultaneously(keys);
 
     public static void Ctrl(VirtualKeyShort key) => Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, key);
+
+    /// <summary>Saves a PNG of the main window as it is on screen; the window is brought to the front first.</summary>
+    public void Capture(string path)
+    {
+        Window.SetForeground();
+        // Let the window finish painting after it comes to the front.
+        Thread.Sleep(300);
+        FlaUI.Core.Capturing.Capture.Element(Window).ToFile(path);
+    }
 
     /// <summary>Drags an element (a splitter) horizontally by <paramref name="dx"/> physical pixels.</summary>
     public static void DragBy(AutomationElement element, int dx)
