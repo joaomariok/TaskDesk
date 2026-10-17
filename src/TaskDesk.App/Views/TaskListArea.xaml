@@ -26,8 +26,9 @@
             <DockPanel x:Name="RowRoot" LastChildFill="True">
                 <Border DockPanel.Dock="Left" Style="{StaticResource RowListStripe}"
                         Background="{Binding ListColorHex}" />
+                <!-- Fluent's box without the room Fluent reserves for a label, so the row stays compact. -->
                 <controls:CommandCheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"
-                          Style="{StaticResource TaskCheckBox}"
+                          MinWidth="0" MinHeight="0"
                           AutomationProperties.Name="Completed"
                           IsChecked="{Binding IsCompleted, Mode=OneWay}"
                           Command="{Binding DataContext.ToggleCompleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"

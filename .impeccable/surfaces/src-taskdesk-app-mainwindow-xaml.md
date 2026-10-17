@@ -20,11 +20,11 @@ The TaskDesk main window: sidebar (`Views/NavigationPane.xaml`), Task list with 
 - Constraints: native Windows 11 Fluent only; minimum 800 × 500; Light, Dark and high contrast.
 
 ## Chosen direction and memorable moment
-List first, details on demand. The list owns the window; the detail pane appears only when asked and stays closed when closed. The memorable moment is completion: the round checkbox fills with the accent, the row dims and is struck through in place, then settles into "Completed (N)".
+List first, details on demand. The list owns the window; the detail pane appears only when asked and stays closed when closed. The memorable moment is completion: Fluent's checkbox fills with the accent, the row dims and is struck through in place, then settles into "Completed (N)".
 
 ## Direction contract
 - THESIS: The list is the whole job, and everything else waits to be asked for. It refuses the category-default three-pane mail layout in which a detail pane is always open and eats the width of a mid-size window.
-- OWN-WORLD: Stock Fluent surfaces, Segoe UI on Fluent's five-step ramp, and the user's own Windows accent, with a soft TaskDesk signature: a round 20 px Task checkbox, pill chips for Due and Tags, count badges, a 3 px List-colour stripe. Colour beyond the neutrals and the accent means Overdue (critical red), today (accent text) or a List's own colour.
+- OWN-WORLD: Stock Fluent surfaces, Segoe UI on Fluent's five-step ramp, and the user's own Windows accent, with a soft TaskDesk signature: pill chips for Due and Tags, count badges, a 3 px List-colour stripe. Colour beyond the neutrals and the accent means Overdue (critical red), today (accent text) or a List's own colour.
 - STORY: The owner opens the window and sees at once what is due today and what is Overdue. They add a Task with Enter, complete one with Space, and open details only when a Task needs editing. They trust that nothing is lost and nothing gets in the way.
 - FIRST VIEWPORT: At 900 × 600, a 180 px sidebar on the left (Smart Views with icons and counts, then Lists, then Tags) and the list taking the rest. In the list, top to bottom: one heading row (the page heading at subtitle size with the "⋯" List menu on the left; the Filter button and the scoped search box on the right), the Filter row only when opened or while a Filter is on, the labelled quick-add box (the primary action, focused at start-up), then one-line rows. No detail pane: it overlays the right of the list on demand and docks only above 1100 px. Below 900 px the sidebar is a 56 px icon rail.
 - FORM: list-first, details on demand. The owner chose it from the three dealt sketches (views-across-top, agenda-by-due, list-first-details-on-demand). seed: 7beb4b93dd6ddd20

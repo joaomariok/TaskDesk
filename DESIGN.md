@@ -64,9 +64,6 @@ spacing:
   lg: "16px"
   xl: "24px"
 components:
-  task-checkbox:
-    rounded: "10px"
-    size: "20px"
   due-chip:
     textColor: "{colors.text-secondary}"
     typography: "{typography.caption}"
@@ -119,14 +116,14 @@ components:
 
 TaskDesk is a tidy desk that is always there and never asks for attention. It is a native Windows 11 app on WPF's built-in Fluent theme (`Application.ThemeMode`), so the window, the controls, the type ramp and every colour come from Windows itself and follow Light, Dark and high contrast without a line of TaskDesk code. The design's job is restraint: calm Fluent surfaces, one list the eye can scan in a glance, and colour that appears only where it carries meaning (a Task that is Overdue, a Due that is today, a List's own colour).
 
-Its signature is soft and small, and it should be reused, not reinvented: a round Task checkbox, pill chips for Due and Tags, count badges in the sidebar and the rail, a List-colour stripe on each row. These pieces are built on Fluent's own brushes and radii, so they read as part of Windows, but together they make a TaskDesk screen recognisable. Density is that of a desktop tool used all day at mid-size: 14 px body text, rows that fit one line, panels that appear on demand rather than crowding the list.
+Its signature is soft and small, and it should be reused, not reinvented: pill chips for Due and Tags, count badges in the sidebar and the rail, a List-colour stripe on each row. These pieces are built on Fluent's own brushes and radii, so they read as part of Windows, but together they make a TaskDesk screen recognisable. Density is that of a desktop tool used all day at mid-size: 14 px body text, rows that fit one line, panels that appear on demand rather than crowding the list.
 
 All colour goes through theme resources. The colour tokens in this file are the Fluent theme's Light and Dark values, recorded so tools can render them (8-digit values are CSS `#RRGGBBAA`; Fluent's XAML writes the same colours as `#AARRGGBB`); the app itself never hard-codes them (the only literal colours are the six List presets, which are user data).
 
 **Key Characteristics:**
 - Native Fluent first: every control is Fluent's own, restyled only through styles `BasedOn` the Fluent style.
 - Meaning-only colour: Overdue, Today and List colour are the only hues beyond the system accent.
-- A soft signature: round checkbox, pill chips, count badges, the List stripe.
+- A soft signature: pill chips, count badges, the List stripe.
 - List first, details on demand: the detail pane opens when asked and stays closed when closed.
 - Every look works in Light, Dark and high contrast, with meaning carried by text as well as colour.
 
@@ -150,7 +147,7 @@ A neutral Fluent palette lifted by the user's own Windows accent, with two signa
 - **Pane Grey** (`surface-pane`, `surface-pane-dark`): the detail pane's background, a step off the list.
 - **Card Veil** (`card-fill`, `card-fill-dark`) with **Hairline** (`card-stroke`, `card-stroke-dark`): Settings cards, the quick-add card and InfoBar edges.
 - **Control Hairline** (`control-stroke`, `control-stroke-dark`): pill-chip borders.
-- **Strong Stroke** (`strong-stroke`, `strong-stroke-dark`): the unchecked Task circle and the hollow ring of a List with no colour (`ListStripeBrush`).
+- **Strong Stroke** (`strong-stroke`, `strong-stroke-dark`): the hollow ring of a List with no colour (`ListStripeBrush`).
 - **Badge Grey** (`neutral-badge`, `neutral-badge-dark`): the rail's count badges.
 
 ### List colours (data)
@@ -202,17 +199,17 @@ TaskDesk is flat at rest. Surfaces separate by tone and a 1 px hairline, never b
 
 ## Shapes
 
-Corners follow Fluent: 4 px (`rounded.control`) on buttons, inputs, Settings cards and InfoBars, and 8 px (`rounded.overlay`) on overlays and the quick-add card. TaskDesk's own forms are round. The Task checkbox is a 20 px circle. Due and Tag chips are pills (10 px radius). Badges are full pills (18 px tall in the sidebar, 16 px on the rail). The List stripe is a 3 px bar with rounded ends, and the List dot is a 10 px circle or, for a List with no colour, a 10 px ring.
+Corners follow Fluent: 4 px (`rounded.control`) on buttons, inputs, Settings cards and InfoBars, and 8 px (`rounded.overlay`) on overlays and the quick-add card. TaskDesk's own forms are round, and the Task checkbox is Fluent's, with its 4 px corners. Due and Tag chips are pills (10 px radius). Badges are full pills (18 px tall in the sidebar, 16 px on the rail). The List stripe is a 3 px bar with rounded ends, and the List dot is a 10 px circle or, for a List with no colour, a 10 px ring.
 
 ## Components
 
 The signature pieces are listed first; reuse them before building anything new.
 
 ### Task Row
-One line, read left to right: List stripe, round checkbox, title, then repeat icon, Subtask progress ("2/5"), up to two Tag chips plus "+N", the List's name (only in Smart Views, Tag pages and searches), the Priority flag, and the Due chip at the far right. Right-hand items are 8 px apart. A completed Task dims to 60 % with its title struck through, stays in place for 400 ms, then moves into "Completed (N)". The move is instant when Windows animations are off. The Completed Smart View shows its rows at full strength, with no dimming and no strike-through (the checked round checkbox stays). The Overdue and "Completed (N)" groups draw their rows without a border or background, like the open Task list.
+One line, read left to right: List stripe, checkbox, title, then repeat icon, Subtask progress ("2/5"), up to two Tag chips plus "+N", the List's name (only in Smart Views, Tag pages and searches), the Priority flag, and the Due chip at the far right. Right-hand items are 8 px apart. A completed Task dims to 60 % with its title struck through, stays in place for 400 ms, then moves into "Completed (N)". The move is instant when Windows animations are off. The Completed Smart View shows its rows at full strength, with no dimming and no strike-through (the checked checkbox stays). The Overdue and "Completed (N)" groups draw their rows without a border or background, like the open Task list.
 
 ### Task Checkbox
-A 20 px circle on Fluent's CheckBox: the unchecked ring uses the strong stroke, and hover previews the check glyph in soft ink. Checked, it fills with the system accent and shows a white or black check (U+E73E). It is used only for completing a Task, in rows and in the detail pane; Subtasks and options keep Fluent's square checkbox.
+Fluent's own CheckBox, unstyled, with no label. In a row it drops the room Fluent reserves for a label (`MinWidth` and `MinHeight` 0), so the box takes 22 × 22 px and the row stays one compact line. Checked, it fills with the system accent. The detail pane uses the same box beside the Task's title.
 
 ### Due Chip
 - **Style:** a borderline pill with no fill, caption text, 1 × 8 px padding.
@@ -257,7 +254,7 @@ Plain soft-ink body text with no box or outline, specific to the page ("Nothing 
 ### Do:
 - **Do** base every style on the Fluent style it replaces (`BasedOn="{StaticResource {x:Type X}}"`) and merge it in `App.xaml` after `ThemeMode` is set.
 - **Do** take colour from Fluent keys or the meaning-named brushes through `DynamicResource`, and add any new meaning to `FoundationResources`.
-- **Do** reuse the signature pieces (round checkbox, pill chips, badges, List stripe) before designing a new one.
+- **Do** reuse the signature pieces (pill chips, badges, List stripe) before designing a new one.
 - **Do** give every control a visible label and an `AutomationProperties.Name`, and check it in Light, Dark and high contrast.
 - **Do** keep rows to one line, with the full title in a tooltip.
 - **Do** let Windows' animation setting switch motion off; the 400 ms completion hold drops to zero.

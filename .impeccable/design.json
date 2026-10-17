@@ -511,10 +511,9 @@
     {
       "name": "Task Row",
       "kind": "custom",
-      "refersTo": "task-checkbox",
-      "description": "One-line Task row: List stripe, round checkbox, title, Tag chip, List caption, Due chip.",
+      "description": "One-line Task row: List stripe, checkbox, title, Tag chip, List caption, Due chip.",
       "html": "<div class=\"ds-row\" tabindex=\"0\"><span class=\"ds-stripe\"></span><span class=\"ds-check\"></span><span class=\"ds-title\">Call the bank</span><span class=\"ds-tag\">health</span><span class=\"ds-caption\">Inbox</span><span class=\"ds-due ds-due-today\">Today 18:00</span></div>",
-      "css": ".ds-row{display:flex;align-items:center;gap:8px;padding:4px 8px;font-family:'Segoe UI',sans-serif;font-size:14px;color:#000000E4;border-radius:4px;max-width:520px}.ds-row:hover{background:#00000006}.ds-row:focus-visible{outline:2px solid #000000E4;outline-offset:1px}.ds-stripe{width:3px;height:20px;border-radius:1.5px;background:#0078D4}.ds-check{width:18px;height:18px;border:1px solid #00000072;border-radius:50%;flex:none}.ds-row:hover .ds-check{background:#0000000F}.ds-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ds-caption{font-size:12px;color:#0000009E}.ds-tag{font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid #0000000F;background:#FFFFFFB3}.ds-due{font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid #0000000F;color:#0000009E}.ds-due-today{border-color:AccentColor;color:AccentColor}"
+      "css": ".ds-row{display:flex;align-items:center;gap:8px;padding:4px 8px;font-family:'Segoe UI',sans-serif;font-size:14px;color:#000000E4;border-radius:4px;max-width:520px}.ds-row:hover{background:#00000006}.ds-row:focus-visible{outline:2px solid #000000E4;outline-offset:1px}.ds-stripe{width:3px;height:20px;border-radius:1.5px;background:#0078D4}.ds-check{width:18px;height:18px;border:1px solid #00000072;border-radius:4px;flex:none}.ds-row:hover .ds-check{background:#0000000F}.ds-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ds-caption{font-size:12px;color:#0000009E}.ds-tag{font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid #0000000F;background:#FFFFFFB3}.ds-due{font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid #0000000F;color:#0000009E}.ds-due-today{border-color:AccentColor;color:AccentColor}"
     },
     {
       "name": "Due Chip (Overdue)",
@@ -567,11 +566,11 @@
   ],
   "narrative": {
     "northStar": "The Quiet Desk",
-    "overview": "TaskDesk is a tidy desk that is always there and never asks for attention. It is a native Windows 11 app on WPF's built-in Fluent theme (`Application.ThemeMode`), so the window, the controls, the type ramp and every colour come from Windows itself and follow Light, Dark and high contrast without a line of TaskDesk code. The design's job is restraint: calm Fluent surfaces, one list the eye can scan in a glance, and colour that appears only where it carries meaning (a Task that is Overdue, a Due that is today, a List's own colour).\n\nIts signature is soft and small, and it should be reused, not reinvented: a round Task checkbox, pill chips for Due and Tags, count badges in the sidebar and the rail, a List-colour stripe on each row. These pieces are built on Fluent's own brushes and radii, so they read as part of Windows, but together they make a TaskDesk screen recognisable. Density is that of a desktop tool used all day at mid-size: 14 px body text, rows that fit one line, panels that appear on demand rather than crowding the list.\n\nAll colour goes through theme resources. The colour tokens in this file are the Fluent theme's Light and Dark values, recorded so tools can render them (8-digit values are CSS `#RRGGBBAA`; Fluent's XAML writes the same colours as `#AARRGGBB`); the app itself never hard-codes them (the only literal colours are the six List presets, which are user data).",
+    "overview": "TaskDesk is a tidy desk that is always there and never asks for attention. It is a native Windows 11 app on WPF's built-in Fluent theme (`Application.ThemeMode`), so the window, the controls, the type ramp and every colour come from Windows itself and follow Light, Dark and high contrast without a line of TaskDesk code. The design's job is restraint: calm Fluent surfaces, one list the eye can scan in a glance, and colour that appears only where it carries meaning (a Task that is Overdue, a Due that is today, a List's own colour).\n\nIts signature is soft and small, and it should be reused, not reinvented: pill chips for Due and Tags, count badges in the sidebar and the rail, a List-colour stripe on each row. These pieces are built on Fluent's own brushes and radii, so they read as part of Windows, but together they make a TaskDesk screen recognisable. Density is that of a desktop tool used all day at mid-size: 14 px body text, rows that fit one line, panels that appear on demand rather than crowding the list.\n\nAll colour goes through theme resources. The colour tokens in this file are the Fluent theme's Light and Dark values, recorded so tools can render them (8-digit values are CSS `#RRGGBBAA`; Fluent's XAML writes the same colours as `#AARRGGBB`); the app itself never hard-codes them (the only literal colours are the six List presets, which are user data).",
     "keyCharacteristics": [
       "Native Fluent first: every control is Fluent's own, restyled only through styles `BasedOn` the Fluent style.",
       "Meaning-only colour: Overdue, Today and List colour are the only hues beyond the system accent.",
-      "A soft signature: round checkbox, pill chips, count badges, the List stripe.",
+      "A soft signature: pill chips, count badges, the List stripe.",
       "List first, details on demand: the detail pane opens when asked and stays closed when closed.",
       "Every look works in Light, Dark and high contrast, with meaning carried by text as well as colour."
     ],
@@ -615,7 +614,7 @@
     "dos": [
       "**Do** base every style on the Fluent style it replaces (`BasedOn=\"{StaticResource {x:Type X}}\"`) and merge it in `App.xaml` after `ThemeMode` is set.",
       "**Do** take colour from Fluent keys or the meaning-named brushes through `DynamicResource`, and add any new meaning to `FoundationResources`.",
-      "**Do** reuse the signature pieces (round checkbox, pill chips, badges, List stripe) before designing a new one.",
+      "**Do** reuse the signature pieces (pill chips, badges, List stripe) before designing a new one.",
       "**Do** give every control a visible label and an `AutomationProperties.Name`, and check it in Light, Dark and high contrast.",
       "**Do** keep rows to one line, with the full title in a tooltip.",
       "**Do** let Windows' animation setting switch motion off; the 400 ms completion hold drops to zero."
