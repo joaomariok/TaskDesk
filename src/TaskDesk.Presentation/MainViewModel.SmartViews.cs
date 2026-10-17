@@ -46,7 +46,7 @@ public sealed partial class MainViewModel
         _completedHasMore = page.Count == IDueService.CompletedPageSize;
         foreach (var task in page)
         {
-            var row = new TaskRowViewModel(task, _clock);
+            var row = CreateRow(task);
             _all.Add(row);
             CompletedTasks.Add(row);
         }

@@ -23,43 +23,63 @@
             </Style.Triggers>
         </Style>
         <DataTemplate x:Key="TaskRowTemplate">
-            <DockPanel LastChildFill="True">
+            <DockPanel x:Name="RowRoot" LastChildFill="True">
+                <Border DockPanel.Dock="Left" Style="{StaticResource RowListStripe}"
+                        Background="{Binding ListColorHex}" />
                 <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"
                           Style="{StaticResource TaskCheckBox}"
                           AutomationProperties.Name="Completed"
                           IsChecked="{Binding IsCompleted, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
                           Command="{Binding DataContext.ToggleCompleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                           CommandParameter="{Binding}" />
-                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" FontWeight="Bold" Foreground="OrangeRed"
-                           Text="{Binding PriorityMarker}" />
-                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Text="&#x21BB;" Foreground="Gray"
-                           AutomationProperties.Name="Repeats" ToolTip="Repeats"
-                           Visibility="{Binding IsRecurring, Converter={StaticResource BoolToVisibility}}" />
                 <Border DockPanel.Dock="Right" Margin="8,0,0,0" VerticalAlignment="Center"
                         Style="{StaticResource DueChip}"
                         Visibility="{Binding HasDue, Converter={StaticResource BoolToVisibility}}">
                     <TextBlock Style="{StaticResource DueChipText}" Text="{Binding DueText}"
                                AutomationProperties.Name="Due" />
                 </Border>
-                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Foreground="Gray"
+                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Style="{StaticResource PriorityFlag}"
+                           Text="&#xE7C1;" AutomationProperties.Name="{Binding PriorityLabel}"
+                           ToolTip="{Binding PriorityLabel}"
+                           Visibility="{Binding HasPriorityFlag, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Style="{StaticResource RowCaptionText}"
+                           AutomationProperties.Name="List" Text="{Binding ListName}"
+                           Visibility="{Binding ShowListName, Converter={StaticResource BoolToVisibility}}" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="8,0,0,0"
+                            VerticalAlignment="Center">
+                    <ItemsControl ItemsSource="{Binding VisibleTags}" AutomationProperties.Name="Tags">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource TagChip}">
+                                    <TextBlock Style="{StaticResource TagChipText}" Text="{Binding Name}" />
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Style="{StaticResource RowCaptionText}" Text="{Binding TagOverflowText}"
+                               AutomationProperties.Name="More tags"
+                               Visibility="{Binding HasTagOverflow, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Style="{StaticResource RowCaptionText}"
                            AutomationProperties.Name="Subtask progress"
                            Text="{Binding SubtaskProgress}"
                            Visibility="{Binding HasSubtasks, Converter={StaticResource BoolToVisibility}}" />
-                <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Tags}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding Name, StringFormat=#{0}}" Margin="6,0,0,0"
-                                       Foreground="SteelBlue" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Style="{StaticResource RowIcon}"
+                           Text="&#xE8EE;" AutomationProperties.Name="Repeats" ToolTip="Repeats"
+                           Visibility="{Binding IsRecurring, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Style="{StaticResource RowTitleText}" Text="{Binding Title}" ToolTip="{Binding Title}" />
             </DockPanel>
+            <DataTemplate.Triggers>
+                <!-- A completed Task is dimmed; the move into "Completed (N)" follows after a moment. -->
+                <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+                    <Setter TargetName="RowRoot" Property="Opacity" Value="0.6" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
     </UserControl.Resources>
     <!-- Search and filters, quick add, the Overdue, open and Completed Task lists, Tags of the

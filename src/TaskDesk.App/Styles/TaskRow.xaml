@@ -1,0 +1,76 @@
+<!--
+    The pieces of a Task row beyond the checkbox and the Due chip: the List stripe, the title, the icons, the
+    Tag chips, the List caption and the Priority flag. The row's DataContext is a TaskRowViewModel. Colours come
+    from the shared brushes and Fluent's neutral brushes, so Light, Dark and high contrast follow the theme.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:tasks="clr-namespace:TaskDesk.Core.Tasks;assembly=TaskDesk.Core">
+
+    <!-- The List's colour as a thin bar; hidden (but still taking its space) when the List has no colour. -->
+    <Style x:Key="RowListStripe" TargetType="Border">
+        <Setter Property="Width" Value="3" />
+        <Setter Property="CornerRadius" Value="1.5" />
+        <Setter Property="Margin" Value="0,2,8,2" />
+        <Setter Property="Visibility" Value="Hidden" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HasListColor}" Value="True">
+                <Setter Property="Visibility" Value="Visible" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- One line, trimmed with an ellipsis; struck through once the Task is completed. -->
+    <Style x:Key="RowTitleText" TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+                <Setter Property="TextDecorations" Value="Strikethrough" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Small secondary text on a row: Subtask progress, the List caption. -->
+    <Style x:Key="RowCaptionText" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- A glyph from the icon font on a row (Recurrence, Priority). -->
+    <Style x:Key="RowIcon" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Critical for High, caution for Medium, neutral for Low. The row hides it for None. -->
+    <Style x:Key="PriorityFlag" TargetType="TextBlock" BasedOn="{StaticResource RowIcon}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Priority}" Value="{x:Static tasks:Priority.High}">
+                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Priority}" Value="{x:Static tasks:Priority.Medium}">
+                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="TagChip" TargetType="Border">
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="8,1" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+    </Style>
+
+    <Style x:Key="TagChipText" TargetType="TextBlock" BasedOn="{StaticResource RowCaptionText}">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="MaxWidth" Value="96" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+</ResourceDictionary>

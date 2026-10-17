@@ -9,15 +9,38 @@ public sealed partial class TaskRowViewModel : ObservableObject
 {
     private readonly TimeProvider _clock;
 
-    public TaskRowViewModel(TaskItem item, TimeProvider? clock = null)
+    /// <summary>How many Tags the row shows as chips; the rest collapse into "+N".</summary>
+    public const int MaxVisibleTags = 2;
+
+    /// <param name="item">The Task.</param>
+    /// <param name="clock">The clock the Due state is judged by.</param>
+    /// <param name="list">The List the Task belongs to, when known.</param>
+    /// <param name="showListName">True in Smart Views and a Tag's page, where the List's name is a caption.</param>
+    public TaskRowViewModel(
+        TaskItem item, TimeProvider? clock = null, TaskList? list = null, bool showListName = false)
     {
         _clock = clock ?? TimeProvider.System;
+        ListName = list?.Name ?? "";
+        ListColorHex = list?.ColorHex;
+        ShowListName = showListName && ListName.Length > 0;
         Id = item.Id;
         Item = item;
         Apply(item);
     }
 
     public Guid Id { get; }
+
+    /// <summary>The name of the List the Task belongs to, or empty when unknown.</summary>
+    public string ListName { get; }
+
+    /// <summary>The List's colour as "#RRGGBB", or null when the List has none.</summary>
+    public string? ListColorHex { get; }
+
+    /// <summary>True when the List has a colour, so the row shows its stripe.</summary>
+    public bool HasListColor => ListColorHex is not null;
+
+    /// <summary>True when the row captions the Task with its List's name (never inside a List).</summary>
+    public bool ShowListName { get; }
 
     /// <summary>The most recently saved state of the Task.</summary>
     public TaskItem Item { get; private set; }
@@ -26,7 +49,7 @@ public sealed partial class TaskRowViewModel : ObservableObject
     private string _title = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PriorityMarker))]
+    [NotifyPropertyChangedFor(nameof(PriorityMarker), nameof(HasPriorityFlag), nameof(PriorityLabel))]
     private Priority _priority;
 
     [ObservableProperty]
@@ -34,7 +57,26 @@ public sealed partial class TaskRowViewModel : ObservableObject
 
     /// <summary>The Tags shown as chips on the row.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VisibleTags), nameof(TagOverflowCount), nameof(HasTagOverflow),
+        nameof(TagOverflowText))]
     private IReadOnlyList<Tag> _tags = [];
+
+    /// <summary>The first <see cref="MaxVisibleTags"/> Tags, shown as chips.</summary>
+    public IReadOnlyList<Tag> VisibleTags => Tags.Count <= MaxVisibleTags ? Tags : [.. Tags.Take(MaxVisibleTags)];
+
+    /// <summary>How many Tags are not shown as chips.</summary>
+    public int TagOverflowCount => Math.Max(0, Tags.Count - MaxVisibleTags);
+
+    public bool HasTagOverflow => TagOverflowCount > 0;
+
+    /// <summary>"+N" for the Tags beyond the chips, or empty.</summary>
+    public string TagOverflowText => HasTagOverflow ? $"+{TagOverflowCount}" : "";
+
+    /// <summary>True for Low, Medium and High: the row shows the Priority flag.</summary>
+    public bool HasPriorityFlag => Priority != Priority.None;
+
+    /// <summary>The flag's accessible name and tooltip ("High priority"), or empty for None.</summary>
+    public string PriorityLabel => HasPriorityFlag ? $"{Priority} priority" : "";
 
     /// <summary>The Subtasks in their manual order; the source of the progress shown on the row.</summary>
     public List<Subtask> Subtasks { get; } = [];

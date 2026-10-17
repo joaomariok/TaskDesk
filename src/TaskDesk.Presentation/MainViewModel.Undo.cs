@@ -99,7 +99,7 @@ public sealed partial class MainViewModel
                 break;
             case DeleteUndo delete:
                 var restored = await taskService.RestoreTaskAsync(delete.Snapshot, cancellationToken);
-                var restoredRow = new TaskRowViewModel(restored, _clock);
+                var restoredRow = CreateRow(restored);
                 var at = _all.FindIndex(r => r.Item.SortOrder > restored.SortOrder);
                 _all.Insert(at < 0 ? _all.Count : at, restoredRow);
                 Place(restoredRow);

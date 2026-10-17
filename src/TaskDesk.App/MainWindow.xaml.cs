@@ -16,6 +16,9 @@ public partial class MainWindow : Window
         ViewModel = viewModel;
         Lists = lists;
         DataContext = viewModel;
+        // A completed Task lingers struck through for a moment, unless Windows asks for less animation.
+        viewModel.CompletionMoveDelay = () =>
+            SystemParameters.ClientAreaAnimation ? TimeSpan.FromMilliseconds(400) : TimeSpan.Zero;
         InitializeComponent();
         // The quick-add box has the initial focus of the window.
         FocusManager.SetFocusedElement(this, TaskArea.QuickAddBox);

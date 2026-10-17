@@ -13,6 +13,7 @@
                 <ResourceDictionary Source="Styles/DueChip.xaml" />
                 <ResourceDictionary Source="Styles/Sidebar.xaml" />
                 <ResourceDictionary Source="Styles/SettingsCard.xaml" />
+                <ResourceDictionary Source="Styles/TaskRow.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

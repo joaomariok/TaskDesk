@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TaskDesk.Core.Lists;
 using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Shell;
 using TaskDesk.Core.Tags;
@@ -17,7 +18,8 @@ public sealed partial class MainViewModel(
     IRecurrenceService? recurrenceService = null,
     IOccurrenceDialogs? occurrenceDialogs = null,
     IReminderService? reminderService = null,
-    IShellSettingsStore? settingsStore = null) : ObservableObject
+    IShellSettingsStore? settingsStore = null,
+    IListService? listService = null) : ObservableObject
 {
     /// <summary>How long text edits wait for further typing before they are saved.</summary>
     public static readonly TimeSpan SaveDebounce = TimeSpan.FromMilliseconds(500);
@@ -48,6 +50,27 @@ public sealed partial class MainViewModel(
     // Needed for Reminder edits only.
     private IReminderService Reminders => reminderService
         ?? throw new InvalidOperationException("No Reminder service was supplied.");
+
+    // The Lists by id, for each row's stripe and caption; loaded with every view.
+    private Dictionary<Guid, TaskList> _lists = [];
+
+    /// <summary>
+    /// How long a Task that was just completed stays in place, struck through and dimmed, before it moves into
+    /// "Completed (N)". Evaluated per completion so the UI can answer zero under Windows' reduced-motion
+    /// setting. The save and the undo entry never wait for it.
+    /// </summary>
+    public Func<TimeSpan> CompletionMoveDelay { get; set; } = () => TimeSpan.Zero;
+
+    private Task _completionMove = Task.CompletedTask;
+
+    /// <summary>Completes when the last delayed move into "Completed (N)" has happened.</summary>
+    public Task CompletionMove => _completionMove;
+
+    // The rows of Smart Views, a Tag's page and search results caption their Task with the List's name.
+    private bool ShowsListNames => CurrentView is not null || TagFilter is not null || IsFilterActive;
+
+    private TaskRowViewModel CreateRow(TaskItem task) =>
+        new(task, _clock, _lists.GetValueOrDefault(task.ListId), ShowsListNames);
 
     private int _completedFetched;
     private bool _completedHasMore;
@@ -158,10 +181,13 @@ public sealed partial class MainViewModel(
         await _pendingSave;
 
         var tags = await tagService.ListTagsAsync(cancellationToken);
+        var lists = listService is null ? [] : await listService.GetListsAsync(cancellationToken);
         if (version != _loadVersion)
         {
             return; // a later load applies its own results
         }
+
+        _lists = lists.ToDictionary(s => s.List.Id, s => s.List);
 
         Tags.Clear();
         foreach (var tag in tags)
@@ -199,7 +225,7 @@ public sealed partial class MainViewModel(
         _completedHasMore = CurrentView == SmartView.Completed && tasks.Count == IDueService.CompletedPageSize;
         foreach (var task in tasks)
         {
-            var row = new TaskRowViewModel(task, _clock);
+            var row = CreateRow(task);
             _all.Add(row);
             GroupOf(row).Add(row);
         }
@@ -243,7 +269,7 @@ public sealed partial class MainViewModel(
         else if (TagFilter is null)
         {
             // A new Task has no Tags, so it never belongs in a Tag-filtered view.
-            var row = new TaskRowViewModel(task, _clock);
+            var row = CreateRow(task);
             _all.Add(row);
             Tasks.Add(row);
             NotifyPageStateChanged();
@@ -312,8 +338,28 @@ public sealed partial class MainViewModel(
     {
         var updated = await taskService.SetCompletedAsync(row.Id, isCompleted, cancellationToken);
         row.Apply(updated);
-        Place(row);
+        var delay = isCompleted ? CompletionMoveDelay() : TimeSpan.Zero;
+        if (delay > TimeSpan.Zero)
+        {
+            // The row shows struck through and dimmed in place; the move follows without holding up the caller.
+            _completionMove = MoveAfterAsync(row, delay);
+        }
+        else
+        {
+            Place(row);
+        }
+
         OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private async Task MoveAfterAsync(TaskRowViewModel row, TimeSpan delay)
+    {
+        await Task.Delay(delay, _clock, CancellationToken.None);
+        // Undone, deleted or reloaded meanwhile: whoever did that has placed the row already.
+        if (row.IsCompleted && _all.Contains(row) && !CompletedTasks.Contains(row))
+        {
+            Place(row);
+        }
     }
 
     // ---- Grouping helpers ----
