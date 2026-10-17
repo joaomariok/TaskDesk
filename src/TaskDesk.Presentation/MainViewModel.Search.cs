@@ -14,28 +14,18 @@ public sealed partial class MainViewModel
 {
     /// <summary>The search text, matched against titles, notes and Subtask titles of the current view.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsNarrowed))]
     private string _searchText = "";
 
     /// <summary>The lowest Priority shown, or null for any.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsNarrowed))]
-    [NotifyPropertyChangedFor(nameof(HasFilter))]
-    [NotifyPropertyChangedFor(nameof(IsFilterBarShown))]
     private Priority? _minPriorityFilter;
 
     /// <summary>Only show Tasks that have a Due date.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsNarrowed))]
-    [NotifyPropertyChangedFor(nameof(HasFilter))]
-    [NotifyPropertyChangedFor(nameof(IsFilterBarShown))]
     private bool _hasDueFilter;
 
     /// <summary>Only show Tasks that have a Reminder.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsNarrowed))]
-    [NotifyPropertyChangedFor(nameof(HasFilter))]
-    [NotifyPropertyChangedFor(nameof(IsFilterBarShown))]
     private bool _hasReminderFilter;
 
     /// <summary>The Tags a Task must all carry to be shown.</summary>
@@ -61,17 +51,24 @@ public sealed partial class MainViewModel
 
     /// <summary>Opens or closes the Filter row. While a Filter is on, the row stays shown either way.</summary>
     [RelayCommand]
-    private void ToggleFilterBar() => IsFilterBarOpen = !IsFilterBarOpen;
-
-    // For changes to FilterTags, which no generated property setter reports.
-    private void NotifyFilterTagsChanged()
+    private void ToggleFilterBar()
     {
-        OnPropertyChanged(nameof(IsNarrowed));
-        OnPropertyChanged(nameof(HasFilter));
-        OnPropertyChanged(nameof(IsFilterBarShown));
+        if (HasFilter)
+        {
+            // The row cannot be hidden now. Report it so a pressed-looking toggle is pushed back.
+            OnPropertyChanged(nameof(IsFilterBarShown));
+            return;
+        }
+
+        IsFilterBarOpen = !IsFilterBarOpen;
     }
 
-    partial void OnSearchTextChanged(string value) => OnFilterStateChanged();
+    partial void OnSearchTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsNarrowed));
+        UpdateReorderEnabled();
+        NotifyPageStateChanged();
+    }
 
     partial void OnMinPriorityFilterChanged(Priority? value) => OnFilterStateChanged();
 
@@ -79,8 +76,13 @@ public sealed partial class MainViewModel
 
     partial void OnHasReminderFilterChanged(bool value) => OnFilterStateChanged();
 
+    // The one path for every change to a Filter, including FilterTags, which no generated property
+    // setter reports. Callers must go through it so nothing is left stale.
     private void OnFilterStateChanged()
     {
+        OnPropertyChanged(nameof(IsNarrowed));
+        OnPropertyChanged(nameof(HasFilter));
+        OnPropertyChanged(nameof(IsFilterBarShown));
         UpdateReorderEnabled();
         NotifyPageStateChanged();
     }
@@ -115,8 +117,7 @@ public sealed partial class MainViewModel
 
         if (removed)
         {
-            NotifyFilterTagsChanged();
-            UpdateReorderEnabled();
+            OnFilterStateChanged();
         }
     }
 
@@ -154,7 +155,7 @@ public sealed partial class MainViewModel
         HasDueFilter = false;
         HasReminderFilter = false;
         FilterTags.Clear();
-        NotifyFilterTagsChanged();
+        OnFilterStateChanged();
         await LoadAsync(cancellationToken);
     }
 
@@ -198,8 +199,7 @@ public sealed partial class MainViewModel
             FilterTags.Remove(existing);
         }
 
-        NotifyFilterTagsChanged();
-        UpdateReorderEnabled();
+        OnFilterStateChanged();
         await LoadAsync(cancellationToken);
     }
 }

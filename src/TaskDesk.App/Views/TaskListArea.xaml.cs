@@ -72,6 +72,9 @@ public partial class TaskListArea : UserControl
         };
     }
 
+    /// <summary>Focuses the quick-add box (Ctrl+N).</summary>
+    public void FocusQuickAdd() => QuickAddBox.Focus();
+
     /// <summary>Focuses the search box with its text selected (Ctrl+F).</summary>
     public void FocusSearch()
     {

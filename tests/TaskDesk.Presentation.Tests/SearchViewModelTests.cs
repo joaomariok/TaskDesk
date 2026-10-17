@@ -365,4 +365,36 @@ public class SearchViewModelTests
         await vm.AddTaskCommand.ExecuteAsync(null);
         Assert.Equal(["milk", "milk 2"], vm.Tasks.Select(t => t.Title));
     }
+
+    [Fact]
+    public async Task Clicking_the_toggle_while_a_filter_is_on_does_not_open_the_row_and_repushes_it()
+    {
+        var (_, _, _, vm) = await StartAsync("a");
+        await vm.ToggleHasDueFilterCommand.ExecuteAsync(null);
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        vm.ToggleFilterBarCommand.Execute(null);
+
+        Assert.False(vm.IsFilterBarOpen);
+        Assert.Contains(nameof(MainViewModel.IsFilterBarShown), changed);
+
+        await vm.ClearAllFiltersCommand.ExecuteAsync(null);
+
+        Assert.False(vm.IsFilterBarShown);
+    }
+
+    [Fact]
+    public async Task Clearing_a_tag_only_filter_turns_reordering_back_on()
+    {
+        var (service, tags, _, vm) = await StartAsync("a");
+        var tag = await tags.AddTagToTaskAsync(service.All[0].Id, "t", Ct);
+        await vm.LoadAsync(Ct);
+        await vm.ToggleFilterTagCommand.ExecuteAsync(tag);
+        Assert.False(vm.IsReorderEnabled);
+
+        await vm.ClearAllFiltersCommand.ExecuteAsync(null);
+
+        Assert.True(vm.IsReorderEnabled);
+    }
 }

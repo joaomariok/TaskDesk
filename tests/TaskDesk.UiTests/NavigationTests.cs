@@ -76,6 +76,36 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
+    public void Clicking_Filter_while_a_Filter_is_on_keeps_the_row_and_the_button_pressed()
+    {
+        AutomationElement? PriorityFilter() =>
+            _app.Window.FindFirstDescendant(cf => cf.ByName("Priority filter"));
+        AutomationElement? HasDue() =>
+            _app.Window.FindFirstDescendant(cf => cf.ByName("Has due filter"));
+        var filter = _app.Find(Ids.FilterButton);
+
+        filter.Click();
+        AppSession.Eventually(HasDue, "Clicking Filter did not show the Filter row.");
+        HasDue()!.Click();
+        AppSession.WaitUntil(() => HasDue()!.AsToggleButton().ToggleState == ToggleState.On,
+            () => "The Has due Filter did not turn on.");
+        try
+        {
+            filter.Click();
+
+            AppSession.WaitUntil(() => filter.AsToggleButton().ToggleState == ToggleState.On,
+                () => "The Filter button was released although a Filter is on.");
+            Assert.NotNull(PriorityFilter());
+        }
+        finally
+        {
+            HasDue()?.Click();
+            AppSession.WaitUntil(() => HasDue() is null || HasDue()!.AsToggleButton().ToggleState == ToggleState.Off,
+                () => "The Has due Filter did not turn off.");
+        }
+    }
+
+    [Fact]
     public void Ctrl_F_searches_and_Esc_clears_the_search()
     {
         _app.TypeInto(Ids.QuickAddBox, "Alpha report", pressEnter: true);
