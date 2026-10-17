@@ -72,7 +72,7 @@ public class RecurrenceCalculatorTests
         { "every 3 months", "monthly/3/10", "due", "", "2026-11-10", "2026-11-10", "2027-02-10" },
         { "every 12 months", "monthly/12/5", "due", "", "2026-10-05", "2026-10-05", "2027-10-05" },
         { "monthly across a year end", "monthly/1/20", "due", "", "2026-12-20", "2026-12-20", "2027-01-20" },
-        { "monthly from the completion date", "monthly/1/10", "done", "", "2026-10-10", "2026-11-02", "2026-12-10" },
+        { "monthly from the completion date", "monthly/1/10", "done", "", "2026-10-10", "2026-11-02", "2026-11-10" },
         { "monthly from the completion date, completed early in the month before", "monthly/1/10", "done", "", "2026-10-10", "2026-09-28", "2026-11-10" },
 
         // Yearly (Month and DayOfMonth are stored, never inferred from the previous Due)
@@ -83,8 +83,14 @@ public class RecurrenceCalculatorTests
         { "yearly Feb 29 returns to Feb 29 in a leap year", "yearly/1/2/29", "due", "", "2031-02-28", "2031-02-28", "2032-02-29" },
         { "every 4 years on Feb 29", "yearly/4/2/29", "due", "", "2028-02-29", "2028-02-29", "2032-02-29" },
         { "yearly on Dec 31", "yearly/1/12/31", "due", "", "2026-12-31", "2026-12-31", "2027-12-31" },
-        { "yearly from the completion date", "yearly/1/10/20", "done", "", "2026-10-20", "2027-01-05", "2028-10-20" },
+        { "yearly from the completion date", "yearly/1/10/20", "done", "", "2026-10-20", "2027-01-05", "2027-10-20" },
         { "yearly from the completion date, completed early", "yearly/1/10/20", "done", "", "2026-10-20", "2026-10-01", "2027-10-20" },
+        { "yearly Dec 25 completed in January: next Dec 25", "yearly/1/12/25", "done", "", "2026-12-25", "2027-01-03", "2027-12-25" },
+        { "yearly Dec 25 every 2 years completed in January", "yearly/2/12/25", "done", "", "2026-12-25", "2027-01-03", "2028-12-25" },
+        { "monthly 15th completed late: next month's 15th", "monthly/1/15", "done", "", "2027-01-15", "2027-01-20", "2027-02-15" },
+        { "monthly 15th completed early: strictly after the Due", "monthly/1/15", "done", "", "2027-01-15", "2027-01-10", "2027-02-15" },
+        { "monthly 31st completed in April clamps to April 30", "monthly/1/31", "done", "", "2027-03-31", "2027-04-10", "2027-04-30" },
+        { "yearly Feb 29 completed in March lands on the next leap Feb 29", "yearly/1/2/29", "done", "", "2027-02-28", "2027-03-01", "2028-02-29" },
 
         // End date
         { "the next date on the end date is kept", "daily/1", "due", "2026-10-21", "2026-10-20", "2026-10-20", "2026-10-21" },

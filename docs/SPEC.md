@@ -225,6 +225,14 @@ Base date = `currentDue` if Anchor = DueDate, else `completionDate`.
 | Monthly | Add Interval months to base's month, then use DayOfMonth; if the month is shorter, **clamp to the last day** (DayOfMonth 31 in April → April 30). |
 | Yearly | Recurrence.Month / Recurrence.DayOfMonth in base's year + Interval (never inferred from the previous Due, so dates do not drift); Feb 29 in a non-leap year → Feb 28, and back to Feb 29 in the next leap year. |
 
+**Monthly and Yearly with Anchor = CompletionDate** do not use the base date plus Interval. Instead, with `completion` = `completionDate`:
+
+1. Candidate = DayOfMonth (and Recurrence.Month for Yearly) in `completion`'s month (Yearly: year), with the same clamping as above (short month → last day; Feb 29 → Feb 28 in a non-leap year).
+2. If the candidate is before `completion`, move to the next month (Yearly: next year) and recompute with the same clamping.
+3. Add (Interval − 1) months (Yearly: years) and recompute DayOfMonth/Month with the same clamping.
+
+Example: a Yearly Dec 25 task, Interval 1, Due 2026-12-25, completed 2027-01-03 → 2027-12-25 (Interval 2 → 2028-12-25). Monthly day 15, Due 2027-01-15, completed 2027-01-20 → 2027-02-15. Daily, Weekly and Anchor = DueDate are unchanged.
+
 Additionally, the next Occurrence must be **strictly after** the current Occurrence's due date (prevents generating a past/duplicate date when Anchor = CompletionDate and the task is completed early).
 
 `completionDate` is the local date of the completion, or of the Skip (5.2).

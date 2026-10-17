@@ -15,8 +15,10 @@ public static class RecurrenceCalculator
         ArgumentNullException.ThrowIfNull(recurrence);
         recurrence.Validate();
 
-        var baseDate = recurrence.Anchor == RecurrenceAnchor.DueDate ? currentDue : completionDate;
-        var next = Step(recurrence, baseDate);
+        var next = recurrence.Anchor == RecurrenceAnchor.DueDate ? Step(recurrence, currentDue)
+            : recurrence.Frequency is RecurrenceFrequency.Monthly or RecurrenceFrequency.Yearly
+                ? FromCompletion(recurrence, completionDate)
+                : Step(recurrence, completionDate);
 
         // Completed early with a completion-date Anchor: keep stepping until after the current Due.
         // Every step moves strictly forward, so this ends.
@@ -26,6 +28,31 @@ public static class RecurrenceCalculator
         }
 
         return recurrence.EndDate is { } end && next > end ? null : next;
+    }
+
+    // Monthly and Yearly counted from the completion date: the first occurrence of the day on or after
+    // the completion date (this month or year, else the next), then Interval - 1 more months or years.
+    private static DateOnly FromCompletion(Recurrence r, DateOnly completion)
+    {
+        var day = r.DayOfMonth!.Value;
+        if (r.Frequency == RecurrenceFrequency.Monthly)
+        {
+            var month = new DateOnly(completion.Year, completion.Month, 1);
+            if (Clamped(month, day) < completion)
+            {
+                month = month.AddMonths(1);
+            }
+
+            return Clamped(month.AddMonths(r.Interval - 1), day);
+        }
+
+        var year = completion.Year;
+        if (Clamped(new DateOnly(year, r.Month!.Value, 1), day) < completion)
+        {
+            year++;
+        }
+
+        return Clamped(new DateOnly(year + r.Interval - 1, r.Month!.Value, 1), day);
     }
 
     // One application of the rule: always strictly after `from`.
