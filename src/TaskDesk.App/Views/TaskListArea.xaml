@@ -97,42 +97,6 @@
                           ActionContent="Undo" ActionCommand="{Binding UndoCommand}" ActionAutomationId="UndoButton"
                           Visibility="{Binding IsUndoBarVisible, Converter={StaticResource BoolToVisibility}}"
                           Content="{Binding UndoBarText}" />
-        <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-            <ItemsControl ItemsSource="{Binding SelectedTask.Tags}" AutomationProperties.Name="Task tags">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <WrapPanel />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Button Margin="0,0,4,4" Padding="6,1"
-                                Command="{Binding DataContext.RemoveTagCommand,
-                                          RelativeSource={RelativeSource AncestorType=Window}}"
-                                CommandParameter="{Binding}"
-                                ToolTip="Remove tag">
-                            <TextBlock>
-                                <Run Text="#" /><Run Text="{Binding Name, Mode=OneWay}" /><Run Text=" x" />
-                            </TextBlock>
-                        </Button>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <DockPanel>
-                <Button DockPanel.Dock="Right" Content="Add tag" Margin="4,0,0,0" Padding="8,2"
-                        Command="{Binding AddTagCommand}" />
-                <Grid>
-                    <TextBox x:Name="NewTagBox" Padding="4" AutomationProperties.Name="New tag name" AutomationProperties.AutomationId="NewTagBox"
-                             Text="{Binding NewTagName, UpdateSourceTrigger=PropertyChanged}">
-                        <TextBox.InputBindings>
-                            <KeyBinding Key="Return" Command="{Binding AddTagCommand}" />
-                        </TextBox.InputBindings>
-                    </TextBox>
-                    <TextBlock Style="{StaticResource HintText}" Text="New tag name"
-                               Tag="{Binding Text, ElementName=NewTagBox}" />
-                </Grid>
-            </DockPanel>
-        </StackPanel>
         <!-- Page heading: what the view shows, its List menu and the filter chips beside it. -->
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="0,0,12,0">
@@ -236,7 +200,8 @@
                      ItemTemplate="{StaticResource TaskRowTemplate}"
                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                      ScrollViewer.CanContentScroll="True"
-                     SelectionChanged="TaskList_SelectionChanged">
+                     SelectionChanged="TaskList_SelectionChanged"
+                     KeyDown="TaskList_KeyDown" MouseLeftButtonUp="TaskList_MouseLeftButtonUp">
                 <ListBox.InputBindings>
                     <KeyBinding Key="Space" Command="{Binding ToggleSelectedCompleteCommand}" />
                     <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
@@ -252,7 +217,8 @@
                      ItemTemplate="{StaticResource TaskRowTemplate}"
                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                      ScrollViewer.CanContentScroll="True"
-                     SelectionChanged="TaskList_SelectionChanged">
+                     SelectionChanged="TaskList_SelectionChanged"
+                     KeyDown="TaskList_KeyDown" MouseLeftButtonUp="TaskList_MouseLeftButtonUp">
                 <ListBox.InputBindings>
                     <KeyBinding Key="Space" Command="{Binding ToggleSelectedCompleteCommand}" />
                     <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
@@ -267,6 +233,7 @@
                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                  ScrollViewer.CanContentScroll="True"
                  SelectionChanged="TaskList_SelectionChanged"
+                 KeyDown="TaskList_KeyDown" MouseLeftButtonUp="TaskList_MouseLeftButtonUp"
                  PreviewMouseLeftButtonDown="TaskList_PreviewMouseLeftButtonDown"
                  PreviewMouseMove="TaskList_PreviewMouseMove"
                  DragOver="TaskList_DragOver" Drop="TaskList_Drop">

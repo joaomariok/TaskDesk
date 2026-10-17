@@ -30,6 +30,8 @@ public sealed class RestartTests : IDisposable
     [Fact]
     public void Pane_widths_set_with_the_splitters_survive_a_restart()
     {
+        // The detail pane is docked, with its splitter, only above 1100 px; the window size is restored on restart.
+        _app.ResizeTo(1200, 600);
         _app.TypeInto(Ids.QuickAddBox, "Plan trip", pressEnter: true);
         OpenDetails("Plan trip");
         var navigationBefore = Width(Ids.NavigationPane);

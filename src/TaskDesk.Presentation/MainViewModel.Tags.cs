@@ -27,12 +27,12 @@ public sealed partial class MainViewModel
             return;
         }
 
-        await tagService.AddTagToTaskAsync(SelectedTask!.Id, NewTagName.Trim(), cancellationToken);
+        await tagService.AddTagToTaskAsync(DetailTask!.Id, NewTagName.Trim(), cancellationToken);
         NewTagName = "";
         await LoadAsync(cancellationToken);
     }
 
-    private bool CanAddTag() => SelectedTask is not null && TagName.IsValid(NewTagName?.Trim());
+    private bool CanAddTag() => DetailTask is not null && TagName.IsValid(NewTagName?.Trim());
 
     [RelayCommand(CanExecute = nameof(CanRemoveTag))]
     private async Task RemoveTagAsync(Tag tag, CancellationToken cancellationToken)
@@ -42,11 +42,11 @@ public sealed partial class MainViewModel
             return;
         }
 
-        await tagService.RemoveTagFromTaskAsync(SelectedTask!.Id, tag.Id, cancellationToken);
+        await tagService.RemoveTagFromTaskAsync(DetailTask!.Id, tag.Id, cancellationToken);
         await LoadAsync(cancellationToken);
     }
 
-    private bool CanRemoveTag() => SelectedTask is not null;
+    private bool CanRemoveTag() => DetailTask is not null;
 
     /// <summary>Deletes the Tag for good. The view must ask for confirmation first; there is no undo.</summary>
     public async Task DeleteTagAsync(Tag tag, CancellationToken cancellationToken = default)

@@ -56,6 +56,11 @@ public sealed partial class MainViewModel
             SelectedTask = null;
         }
 
+        if (DetailTask == row)
+        {
+            DetailTask = null;
+        }
+
         _all.Remove(row);
         Tasks.Remove(row);
         OverdueTasks.Remove(row);

@@ -153,6 +153,7 @@ public sealed partial class MainViewModel(
     private int _loadVersion;
     private int _loadsInFlight;
     private Guid? _reselectId;
+    private Guid? _reselectDetailId;
     private bool _reselectPaneOpen;
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
@@ -162,6 +163,7 @@ public sealed partial class MainViewModel(
         {
             // Remember the selection once: a load that overlaps another sees it already cleared.
             _reselectId = SelectedTask?.Id;
+            _reselectDetailId = DetailTask?.Id;
             _reselectPaneOpen = IsDetailPaneOpen;
         }
 
@@ -177,7 +179,8 @@ public sealed partial class MainViewModel(
 
     private async Task LoadLatestAsync(int version, CancellationToken cancellationToken)
     {
-        SelectedTask = null; // flushes a pending detail edit of the old row
+        SelectedTask = null;
+        DetailTask = null; // flushes a pending detail edit of the old row
         await _pendingSave;
 
         var tags = await tagService.ListTagsAsync(cancellationToken);
@@ -235,6 +238,11 @@ public sealed partial class MainViewModel(
 
         // Reselect the same Task without reopening a detail pane the owner closed.
         SelectedTask = _all.Find(r => r.Id == _reselectId);
+        if (!IsDetailDocked)
+        {
+            DetailTask = _all.Find(r => r.Id == _reselectDetailId); // overlaid: the pane keeps its own Task
+        }
+
         IsDetailPaneOpen = _reselectPaneOpen;
         _loadedToday = DueCalculator.LocalToday(_clock.GetUtcNow(), _clock.LocalTimeZone);
         ScheduleDueRefresh();

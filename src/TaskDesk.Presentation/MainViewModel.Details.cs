@@ -8,22 +8,39 @@ namespace TaskDesk.Presentation;
 // The detail pane of the selected Task: title, notes, Priority and Due, saved after a debounce.
 public sealed partial class MainViewModel
 {
+    /// <summary>The Task selected in the list: the target of Space, Delete and the row highlight.</summary>
+    [ObservableProperty]
+    private TaskRowViewModel? _selectedTask;
+
+    /// <summary>
+    /// The Task the detail pane shows and edits. It follows <see cref="SelectedTask"/> while the pane is
+    /// docked; while it overlays the list it changes only on <see cref="OpenDetailPane"/>.
+    /// </summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddTagCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveTagCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddSubtaskCommand))]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(IsDetailPaneVisible))]
-    private TaskRowViewModel? _selectedTask;
+    [NotifyPropertyChangedFor(nameof(HasDetailDue))]
+    private TaskRowViewModel? _detailTask;
 
-    public bool HasSelection => SelectedTask is not null;
+    public bool HasSelection => DetailTask is not null;
 
-    /// <summary>The pane shows when it is open and a Task is selected.</summary>
+    /// <summary>The pane shows when it is open and has a Task.</summary>
     public bool IsDetailPaneVisible => IsDetailPaneOpen && HasSelection;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDetailPaneVisible))]
     private bool _isDetailPaneOpen = true;
+
+    /// <summary>
+    /// True when the view docks the pane beside the list (a wide window); false when it overlays the list.
+    /// The view sets it from the window width. Docked, a selection loads the pane; overlaid, only
+    /// <see cref="OpenDetailPane"/> does.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isDetailDocked = true;
 
     [ObservableProperty]
     private string _detailTitle = "";
@@ -34,20 +51,62 @@ public sealed partial class MainViewModel
     [ObservableProperty]
     private Priority _detailPriority;
 
-    /// <summary>The Due date of the selected Task (a calendar date); null when it has none.</summary>
+    /// <summary>The Due date of the shown Task (a calendar date); null when it has none.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDetailDue))]
     private DateTime? _detailDueDate;
 
-    /// <summary>The Due time of the selected Task as "H:mm" text; empty when it has none.</summary>
+    /// <summary>Repeat only applies once the Task has a Due date, so the pane hides it until then.</summary>
+    public bool HasDetailDue => DetailDueDate is not null;
+
+    /// <summary>The Due time of the shown Task as "H:mm" text; empty when it has none.</summary>
     [ObservableProperty]
     private string _detailDueTime = "";
 
     /// <summary>Completes when every save started so far has finished.</summary>
     public Task PendingSave => _pendingSave;
 
-    partial void OnSelectedTaskChanging(TaskRowViewModel? value) => FlushPendingEdit();
+    /// <summary>
+    /// Opens the pane on a Task (a click or Enter on its row): selects it and shows it, whether the pane is
+    /// docked or overlaid. With no row, opens it on the selected Task.
+    /// </summary>
+    public void OpenDetailPane(TaskRowViewModel? row = null)
+    {
+        row ??= SelectedTask;
+        if (row is null)
+        {
+            return;
+        }
+
+        SelectedTask = row;
+        DetailTask = row;
+        IsDetailPaneOpen = true;
+    }
 
     partial void OnSelectedTaskChanged(TaskRowViewModel? value)
+    {
+        if (IsDetailDocked)
+        {
+            DetailTask = value;
+            if (value is not null)
+            {
+                IsDetailPaneOpen = true;
+            }
+        }
+    }
+
+    // A pane that overlaid the list and is now docked beside it follows the selection again.
+    partial void OnIsDetailDockedChanged(bool value)
+    {
+        if (value && SelectedTask is not null && DetailTask is not null && SelectedTask != DetailTask)
+        {
+            DetailTask = SelectedTask;
+        }
+    }
+
+    partial void OnDetailTaskChanging(TaskRowViewModel? value) => FlushPendingEdit();
+
+    partial void OnDetailTaskChanged(TaskRowViewModel? value)
     {
         _loadingDetail = true;
         DetailTitle = value?.Title ?? "";
@@ -59,10 +118,6 @@ public sealed partial class MainViewModel
         _loadingDetail = false;
         Repeat.Load(value?.Item.Recurrence, value?.Item.DueDate);
         RebuildSubtaskItems();
-        if (value is not null)
-        {
-            IsDetailPaneOpen = true;
-        }
     }
 
     partial void OnDetailTitleChanged(string value) => ScheduleSave(immediate: false);
@@ -93,7 +148,7 @@ public sealed partial class MainViewModel
 
     private void ScheduleDueSave()
     {
-        if (_loadingDetail || SelectedTask is not { } row)
+        if (_loadingDetail || DetailTask is not { } row)
         {
             return;
         }
@@ -130,7 +185,7 @@ public sealed partial class MainViewModel
         {
             var updated = await Due.SetDueAsync(row.Id, date, time);
             row.Apply(updated);
-            if (row == SelectedTask && updated.Recurrence is null)
+            if (row == DetailTask && updated.Recurrence is null)
             {
                 Repeat.Load(null, updated.DueDate); // the Repeat defaults follow the new Due date
             }
@@ -157,6 +212,11 @@ public sealed partial class MainViewModel
         IsDetailPaneOpen = false;
     }
 
+    /// <summary>Deletes the Task shown in the pane (the pane's "Delete Task" button).</summary>
+    [RelayCommand]
+    private Task DeleteDetailTaskAsync(CancellationToken cancellationToken)
+        => DetailTask is null ? Task.CompletedTask : DeleteRowAsync(DetailTask, cancellationToken);
+
     /// <summary>Saves any debounced edit now and waits for all saves; call before the app exits.</summary>
     public Task FlushPendingSaveAsync()
     {
@@ -173,13 +233,14 @@ public sealed partial class MainViewModel
         FlushPendingEdit();
         await _pendingSave;
         SelectedTask = null;
+        DetailTask = null;
         IsDetailPaneOpen = false;
         await _pendingSave;
     }
 
     private void FlushPendingEdit()
     {
-        if (_debounce is not null && SelectedTask is { } row)
+        if (_debounce is not null && DetailTask is { } row)
         {
             ScheduleSave(row, immediate: true);
         }
@@ -187,7 +248,7 @@ public sealed partial class MainViewModel
 
     private void ScheduleSave(bool immediate)
     {
-        if (!_loadingDetail && SelectedTask is { } row)
+        if (!_loadingDetail && DetailTask is { } row)
         {
             ScheduleSave(row, immediate);
         }

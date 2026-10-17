@@ -192,6 +192,112 @@ public class TaskDetailsViewModelTests
     }
 
     [Fact]
+    public async Task A_docked_pane_loads_the_selected_Task()
+    {
+        var (_, vm, _) = await StartAsync("a", "b");
+        vm.IsDetailDocked = true;
+
+        vm.SelectedTask = vm.Tasks[0];
+        vm.SelectedTask = vm.Tasks[1];
+
+        Assert.Same(vm.Tasks[1], vm.DetailTask);
+        Assert.Equal("b", vm.DetailTitle);
+        Assert.True(vm.IsDetailPaneVisible);
+    }
+
+    [Fact]
+    public async Task An_overlaid_pane_does_not_load_a_selection()
+    {
+        var (_, vm, _) = await StartAsync("a");
+        vm.IsDetailDocked = false;
+
+        vm.SelectedTask = vm.Tasks[0];
+
+        Assert.Null(vm.DetailTask);
+        Assert.Equal("", vm.DetailTitle);
+        Assert.False(vm.IsDetailPaneVisible);
+    }
+
+    [Fact]
+    public async Task An_overlaid_pane_stays_on_its_Task_until_another_explicit_open()
+    {
+        var (_, vm, _) = await StartAsync("a", "b");
+        vm.IsDetailDocked = false;
+        vm.OpenDetailPane(vm.Tasks[0]);
+
+        vm.SelectedTask = vm.Tasks[1];
+
+        Assert.Same(vm.Tasks[0], vm.DetailTask);
+        Assert.Equal("a", vm.DetailTitle);
+        Assert.True(vm.IsDetailPaneVisible);
+
+        vm.OpenDetailPane(vm.Tasks[1]);
+
+        Assert.Same(vm.Tasks[1], vm.DetailTask);
+        Assert.Equal("b", vm.DetailTitle);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task An_explicit_open_always_loads_the_Task_and_reopens_a_closed_pane(bool docked)
+    {
+        var (_, vm, _) = await StartAsync("a");
+        vm.IsDetailDocked = docked;
+        vm.OpenDetailPane(vm.Tasks[0]);
+        vm.CloseDetailPaneCommand.Execute(null);
+        Assert.False(vm.IsDetailPaneVisible);
+
+        vm.OpenDetailPane(vm.Tasks[0]);
+
+        Assert.True(vm.IsDetailPaneVisible);
+        Assert.Equal("a", vm.DetailTitle);
+        Assert.Same(vm.Tasks[0], vm.SelectedTask);
+    }
+
+    [Fact]
+    public async Task Docking_an_overlaid_pane_makes_it_follow_the_selection()
+    {
+        var (_, vm, _) = await StartAsync("a", "b");
+        vm.IsDetailDocked = false;
+        vm.OpenDetailPane(vm.Tasks[0]);
+        vm.SelectedTask = vm.Tasks[1];
+
+        vm.IsDetailDocked = true;
+
+        Assert.Same(vm.Tasks[1], vm.DetailTask);
+    }
+
+    [Fact]
+    public async Task Repeat_is_hidden_until_the_Task_has_a_Due_date()
+    {
+        var (_, vm, _) = await StartAsync("a");
+        vm.SelectedTask = vm.Tasks[0];
+        Assert.False(vm.HasDetailDue);
+
+        vm.DetailDueDate = new DateTime(2026, 10, 20);
+        Assert.True(vm.HasDetailDue);
+
+        vm.DetailDueDate = null;
+        Assert.False(vm.HasDetailDue);
+    }
+
+    [Fact]
+    public async Task Delete_Task_in_the_pane_deletes_the_Task_the_pane_shows()
+    {
+        var (_, vm, _) = await StartAsync("a", "b");
+        vm.IsDetailDocked = false;
+        vm.OpenDetailPane(vm.Tasks[0]);
+        vm.SelectedTask = vm.Tasks[1];
+
+        await vm.DeleteDetailTaskCommand.ExecuteAsync(null);
+
+        Assert.Equal(["b"], vm.Tasks.Select(t => t.Title));
+        Assert.Null(vm.DetailTask);
+        Assert.False(vm.IsDetailPaneVisible);
+    }
+
+    [Fact]
     public async Task Preparing_for_an_import_saves_the_pending_edit_and_closes_the_pane()
     {
         var (service, vm, clock) = await StartAsync("a");

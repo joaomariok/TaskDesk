@@ -108,6 +108,44 @@ public partial class TaskListArea : UserControl
         ViewModel.SelectedTask = row;
     }
 
+    // A click on a row opens the detail pane on it; arrow keys only move the selection.
+    private void TaskList_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (ItemUnder(e.OriginalSource) is { DataContext: TaskRowViewModel row })
+        {
+            ViewModel.OpenDetailPane(row);
+        }
+    }
+
+    // Enter on a focused row opens the detail pane and moves focus into it.
+    private void TaskList_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && e.OriginalSource is ListBoxItem { DataContext: TaskRowViewModel row })
+        {
+            ViewModel.OpenDetailPane(row);
+            EnterRequested?.Invoke(this, EventArgs.Empty);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Raised when Enter opened the detail pane on a row and focus should move into it.</summary>
+    public event EventHandler? EnterRequested;
+
+    /// <summary>Gives keyboard focus back to the row of a Task (after Esc closed the detail pane).</summary>
+    public void FocusRow(TaskRowViewModel row)
+    {
+        var list = new[] { OverdueList, OpenList, CompletedList }.FirstOrDefault(l => l.Items.Contains(row));
+        if (list is null)
+        {
+            return;
+        }
+
+        list.SelectedItem = row;
+        list.ScrollIntoView(row);
+        list.UpdateLayout();
+        (list.ItemContainerGenerator.ContainerFromItem(row) as ListBoxItem)?.Focus();
+    }
+
     // Shows the view model's selection (for example after a reload) in whichever list holds the row.
     private void SyncTaskListSelection()
     {

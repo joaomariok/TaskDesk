@@ -12,7 +12,7 @@ public sealed partial class MainViewModel
 
     private void OnRepeatEdited()
     {
-        if (SelectedTask is not { } row)
+        if (DetailTask is not { } row)
         {
             return;
         }

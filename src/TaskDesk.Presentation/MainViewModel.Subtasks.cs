@@ -15,7 +15,7 @@ public sealed partial class MainViewModel
     [NotifyCanExecuteChangedFor(nameof(AddSubtaskCommand))]
     private string _newSubtaskTitle = "";
 
-    private bool CanAddSubtask() => SelectedTask is not null && TaskTitle.IsValid(NewSubtaskTitle);
+    private bool CanAddSubtask() => DetailTask is not null && TaskTitle.IsValid(NewSubtaskTitle);
 
     [RelayCommand(CanExecute = nameof(CanAddSubtask))]
     private async Task AddSubtaskAsync(CancellationToken cancellationToken)
@@ -25,12 +25,12 @@ public sealed partial class MainViewModel
             return;
         }
 
-        var row = SelectedTask!;
+        var row = DetailTask!;
         var subtask = await taskService.AddSubtaskAsync(row.Id, NewSubtaskTitle, cancellationToken);
         row.Subtasks.Add(subtask);
         row.RefreshSubtaskProgress();
         NewSubtaskTitle = "";
-        if (row == SelectedTask)
+        if (row == DetailTask)
         {
             RebuildSubtaskItems();
         }
@@ -39,7 +39,7 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private async Task DeleteSubtaskAsync(SubtaskRowViewModel? subtask, CancellationToken cancellationToken)
     {
-        if (subtask is null || SelectedTask is not { } row)
+        if (subtask is null || DetailTask is not { } row)
         {
             return;
         }
@@ -48,7 +48,7 @@ public sealed partial class MainViewModel
         var deleted = await taskService.DeleteSubtaskAsync(subtask.Id, cancellationToken);
         row.Subtasks.RemoveAll(s => s.Id == deleted.Id);
         row.RefreshSubtaskProgress();
-        if (row == SelectedTask)
+        if (row == DetailTask)
         {
             RebuildSubtaskItems();
         }
@@ -68,7 +68,7 @@ public sealed partial class MainViewModel
         var at = row.Subtasks.FindIndex(s => s.SortOrder > restored.SortOrder);
         row.Subtasks.Insert(at < 0 ? row.Subtasks.Count : at, restored);
         row.RefreshSubtaskProgress();
-        if (row == SelectedTask)
+        if (row == DetailTask)
         {
             RebuildSubtaskItems();
         }
@@ -84,7 +84,7 @@ public sealed partial class MainViewModel
 
     private async Task MoveSubtaskAsync(SubtaskRowViewModel? subtask, int offset, CancellationToken cancellationToken)
     {
-        if (subtask is null || SelectedTask is not { } row)
+        if (subtask is null || DetailTask is not { } row)
         {
             return;
         }
@@ -99,7 +99,7 @@ public sealed partial class MainViewModel
         var ordered = await taskService.MoveSubtaskAsync(subtask.Id, newIndex, cancellationToken);
         row.Subtasks.Clear();
         row.Subtasks.AddRange(ordered);
-        if (row == SelectedTask)
+        if (row == DetailTask)
         {
             RebuildSubtaskItems();
         }
@@ -108,7 +108,7 @@ public sealed partial class MainViewModel
     private void RebuildSubtaskItems()
     {
         SubtaskItems.Clear();
-        if (SelectedTask is { } row)
+        if (DetailTask is { } row)
         {
             foreach (var subtask in row.Subtasks)
             {
@@ -120,7 +120,7 @@ public sealed partial class MainViewModel
     // A title edit or a tick made in the pane. Saved in order with the other pending saves.
     private void OnSubtaskEdited(SubtaskRowViewModel subtask, SubtaskEdit edit)
     {
-        if (SelectedTask is { } row)
+        if (DetailTask is { } row)
         {
             _pendingSave = SaveSubtaskAsync(_pendingSave, row, subtask, edit, subtask.Title, subtask.IsCompleted);
         }

@@ -78,7 +78,7 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private async Task ClearSnoozeAsync()
     {
-        if (SelectedTask is not { } row)
+        if (DetailTask is not { } row)
         {
             return;
         }
@@ -119,7 +119,7 @@ public sealed partial class MainViewModel
     private void ApplyReminderChange(TaskRowViewModel row, TaskItem task)
     {
         row.Apply(task);
-        if (SelectedTask == row)
+        if (DetailTask == row)
         {
             LoadSnoozeDetail(task);
         }
@@ -147,7 +147,7 @@ public sealed partial class MainViewModel
 
     private void ScheduleReminderSave()
     {
-        if (_loadingDetail || SelectedTask is not { } row)
+        if (_loadingDetail || DetailTask is not { } row)
         {
             return;
         }
@@ -242,8 +242,7 @@ public sealed partial class MainViewModel
             return;
         }
 
-        SelectedTask = row;
-        IsDetailPaneOpen = true;
+        OpenDetailPane(row);
     }
 
     /// <summary>Completes a Task from its Reminder notification. A Task deleted since is ignored.</summary>

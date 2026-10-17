@@ -122,6 +122,21 @@ public sealed class AppSession : IDisposable
     public AutomationElement? FindOnDesktop(string automationId) =>
         _automation.GetDesktop().FindFirstDescendant(cf => cf.ByAutomationId(automationId));
 
+    /// <summary>The name of the element with keyboard focus (a Task row is named by its title).</summary>
+    public string? FocusedName() => _automation.FocusedElement()?.Properties.Name.ValueOrDefault;
+
+    /// <summary>Resizes the main window to a width and height in device-independent pixels (what WPF measures).</summary>
+    public void ResizeTo(int width, int height)
+    {
+        var scale = GetDpiForWindow(Window.Properties.NativeWindowHandle.Value) / 96.0;
+        Window.Patterns.Transform.Pattern.Resize(width * scale, height * scale);
+        WaitUntil(() => Math.Abs(Window.BoundingRectangle.Width - width * scale) < 4,
+            () => $"The window did not resize to {width} (is {Window.BoundingRectangle.Width / scale}).");
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
     public string? FocusedAutomationId() => _automation.FocusedElement()?.Properties.AutomationId.ValueOrDefault;
 
     /// <summary>Gives an element keyboard focus and waits until it has it.</summary>

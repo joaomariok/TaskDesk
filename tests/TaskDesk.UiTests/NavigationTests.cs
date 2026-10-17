@@ -87,6 +87,7 @@ public sealed class NavigationTests : IDisposable
     {
         _app.TypeInto(Ids.QuickAddBox, "Pay rent", pressEnter: true);
         _app.SelectRow(Ids.OpenTaskList, "Pay rent");
+        AppSession.Press(VirtualKeyShort.RETURN); // Enter opens the detail pane, which holds the Tags
 
         _app.TypeInto(Ids.NewTagBox, "home", pressEnter: true);
 

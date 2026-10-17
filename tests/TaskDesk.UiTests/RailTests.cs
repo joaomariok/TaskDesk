@@ -73,6 +73,7 @@ public sealed class RailTests : IDisposable
     {
         _app.TypeInto(Ids.QuickAddBox, "Pay rent", pressEnter: true);
         _app.SelectRow(Ids.OpenTaskList, "Pay rent");
+        AppSession.Press(VirtualKeyShort.RETURN); // Enter opens the detail pane, which holds the Tags
         _app.TypeInto(Ids.NewTagBox, "home", pressEnter: true);
         AppSession.WaitUntil(() => _app.Rows(Ids.TagList).Contains("home"),
             () => $"Tags were [{string.Join(", ", _app.Rows(Ids.TagList))}].");
