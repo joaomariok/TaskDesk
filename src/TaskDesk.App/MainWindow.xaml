@@ -378,6 +378,8 @@
             <ListBox x:Name="CompletedList" MaxHeight="160" ItemsSource="{Binding CompletedTasks}"
                      HorizontalContentAlignment="Stretch" AutomationProperties.Name="Completed tasks"
                      ItemTemplate="{StaticResource TaskRowTemplate}"
+                     VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                     ScrollViewer.CanContentScroll="True"
                      SelectionChanged="TaskList_SelectionChanged">
                 <ListBox.InputBindings>
                     <KeyBinding Key="Space" Command="{Binding ToggleSelectedCompleteCommand}" />
@@ -391,6 +393,8 @@
             <ListBox x:Name="OverdueList" MaxHeight="160" ItemsSource="{Binding OverdueTasks}"
                      HorizontalContentAlignment="Stretch" AutomationProperties.Name="Overdue tasks"
                      ItemTemplate="{StaticResource TaskRowTemplate}"
+                     VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                     ScrollViewer.CanContentScroll="True"
                      SelectionChanged="TaskList_SelectionChanged">
                 <ListBox.InputBindings>
                     <KeyBinding Key="Space" Command="{Binding ToggleSelectedCompleteCommand}" />
@@ -401,6 +405,8 @@
         <ListBox x:Name="OpenList" ItemsSource="{Binding Tasks}" AllowDrop="True"
                  HorizontalContentAlignment="Stretch" AutomationProperties.Name="Tasks"
                  ItemTemplate="{StaticResource TaskRowTemplate}"
+                 VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                 ScrollViewer.CanContentScroll="True"
                  SelectionChanged="TaskList_SelectionChanged"
                  PreviewMouseLeftButtonDown="TaskList_PreviewMouseLeftButtonDown"
                  PreviewMouseMove="TaskList_PreviewMouseMove"

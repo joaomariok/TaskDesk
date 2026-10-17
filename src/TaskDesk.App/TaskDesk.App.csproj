@@ -23,5 +23,6 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="H.NotifyIcon.Wpf" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
   </ItemGroup>
 </Project>

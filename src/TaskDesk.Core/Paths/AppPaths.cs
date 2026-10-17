@@ -23,9 +23,19 @@ public sealed class AppPaths : IAppPaths
     public string BackupsDirectory => Path.Combine(DataDirectory, "backups");
     public string LogsDirectory => Path.Combine(DataDirectory, "logs");
 
-    /// <summary>Paths under <c>%LOCALAPPDATA%\TaskDesk</c>.</summary>
-    public static IAppPaths Default() => ForRoot(Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TaskDesk"));
+    /// <summary>Name of the environment variable that redirects the data folder (for measuring and testing).</summary>
+    public const string DataDirectoryVariable = "TASKDESK_DATA_DIR";
+
+    /// <summary>
+    /// Paths under <c>%LOCALAPPDATA%\TaskDesk</c>, or under the folder named by the
+    /// <c>TASKDESK_DATA_DIR</c> environment variable when it is set and not blank.
+    /// </summary>
+    public static IAppPaths Default() => Resolve(Environment.GetEnvironmentVariable(DataDirectoryVariable));
+
+    /// <summary>The paths for an optional override folder; a null or blank override means the default location.</summary>
+    public static IAppPaths Resolve(string? overrideRoot) => ForRoot(string.IsNullOrWhiteSpace(overrideRoot)
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TaskDesk")
+        : overrideRoot);
 
     /// <summary>Paths under an arbitrary root; tests use this to redirect to a temp folder.</summary>
     public static IAppPaths ForRoot(string root) => new AppPaths(root);

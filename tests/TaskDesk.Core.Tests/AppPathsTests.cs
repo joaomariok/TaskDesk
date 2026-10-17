@@ -28,6 +28,27 @@ public class AppPathsTests
         Assert.Equal(expected, paths.DataDirectory);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Resolve_without_an_override_uses_local_app_data(string? overrideRoot)
+    {
+        var expected = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TaskDesk");
+
+        Assert.Equal(expected, AppPaths.Resolve(overrideRoot).DataDirectory);
+    }
+
+    [Fact]
+    public void Resolve_with_an_override_uses_that_folder()
+    {
+        IAppPaths paths = AppPaths.Resolve(Root);
+
+        Assert.Equal(Root, paths.DataDirectory);
+        Assert.Equal(Path.Combine(Root, "taskdesk.db"), paths.DatabaseFile);
+    }
+
     [Fact]
     public void EnsureDirectories_creates_data_backups_and_logs_folders()
     {
