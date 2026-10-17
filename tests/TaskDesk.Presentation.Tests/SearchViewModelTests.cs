@@ -179,7 +179,7 @@ public class SearchViewModelTests
     }
 
     [Fact]
-    public async Task Clear_all_resets_text_and_every_chip()
+    public async Task Clear_filters_resets_every_chip_and_keeps_the_search_text()
     {
         var (_, _, _, vm) = await StartAsync("a");
         vm.SearchText = "x";
@@ -188,11 +188,65 @@ public class SearchViewModelTests
 
         await vm.ClearAllFiltersCommand.ExecuteAsync(null);
 
-        Assert.False(vm.IsNarrowed);
+        Assert.Equal("x", vm.SearchText);
+        Assert.True(vm.IsNarrowed);
         Assert.Null(vm.MinPriorityFilter);
         Assert.False(vm.HasDueFilter);
-        Assert.Equal(["a"], vm.Tasks.Select(t => t.Title));
-        Assert.True(vm.IsReorderEnabled);
+        Assert.False(vm.HasFilter);
+        Assert.Empty(vm.Tasks);
+        Assert.False(vm.IsReorderEnabled);
+    }
+
+    [Fact]
+    public async Task Has_filter_is_false_with_only_search_text_and_true_with_any_single_filter()
+    {
+        var (service, tags, _, vm) = await StartAsync("a");
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        vm.SearchText = "a";
+        Assert.False(vm.HasFilter);
+        Assert.DoesNotContain(nameof(MainViewModel.HasFilter), changed);
+        vm.SearchText = "";
+
+        await vm.SetMinPriorityFilterAsync(Priority.High, Ct);
+        Assert.True(vm.HasFilter);
+        await vm.SetMinPriorityFilterAsync(null, Ct);
+        Assert.False(vm.HasFilter);
+
+        await vm.ToggleHasDueFilterCommand.ExecuteAsync(null);
+        Assert.True(vm.HasFilter);
+        await vm.ToggleHasDueFilterCommand.ExecuteAsync(null);
+        Assert.False(vm.HasFilter);
+
+        await vm.ToggleHasReminderFilterCommand.ExecuteAsync(null);
+        Assert.True(vm.HasFilter);
+        await vm.ToggleHasReminderFilterCommand.ExecuteAsync(null);
+        Assert.False(vm.HasFilter);
+
+        var tag = await tags.AddTagToTaskAsync(service.All[0].Id, "t", Ct);
+        await vm.LoadAsync(Ct);
+        await vm.ToggleFilterTagCommand.ExecuteAsync(tag);
+        Assert.True(vm.HasFilter);
+        await vm.ToggleFilterTagCommand.ExecuteAsync(tag);
+        Assert.False(vm.HasFilter);
+        Assert.Contains(nameof(MainViewModel.HasFilter), changed);
+    }
+
+    [Fact]
+    public async Task Clear_filters_keeps_the_search_text_and_the_list_still_shows_its_results()
+    {
+        var (service, _, _, vm) = await StartAsync("milk", "milk due", "bread");
+        service.All[1].DueDate = new DateOnly(2026, 1, 1);
+        vm.SearchText = "milk";
+        await vm.ToggleHasDueFilterCommand.ExecuteAsync(null);
+        Assert.Equal(["milk due"], vm.Tasks.Select(t => t.Title));
+
+        await vm.ClearAllFiltersCommand.ExecuteAsync(null);
+
+        Assert.Equal("milk", vm.SearchText);
+        Assert.False(vm.HasFilter);
+        Assert.Equal(["milk", "milk due"], vm.Tasks.Select(t => t.Title));
     }
 
     [Fact]

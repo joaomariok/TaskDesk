@@ -305,7 +305,7 @@ Smart Views select on Due only; a Reminder never places a Task in a Smart View (
 
 ### 6.3 Search and filters
 
-Ctrl+F focuses search. Search applies within the current view. Filter chips: priority (≥ chosen level), tag(s) (AND), has due date, has reminder. Clearing search restores the view.
+Ctrl+F focuses search. Search applies within the current view. Filter chips: priority (≥ chosen level), tag(s) (AND), has due date, has reminder. Clearing search restores the view. "Clear filters" turns off every filter chip and leaves the search text alone; it shows only while a filter chip is on, not while only a search is active. Search is cleared with Esc or the empty state's "Clear search".
 
 ### 6.4 Keyboard shortcuts (in main window)
 

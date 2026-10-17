@@ -20,16 +20,19 @@ public sealed partial class MainViewModel
     /// <summary>The lowest Priority shown, or null for any.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNarrowed))]
+    [NotifyPropertyChangedFor(nameof(HasFilter))]
     private Priority? _minPriorityFilter;
 
     /// <summary>Only show Tasks that have a Due date.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNarrowed))]
+    [NotifyPropertyChangedFor(nameof(HasFilter))]
     private bool _hasDueFilter;
 
     /// <summary>Only show Tasks that have a Reminder.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNarrowed))]
+    [NotifyPropertyChangedFor(nameof(HasFilter))]
     private bool _hasReminderFilter;
 
     /// <summary>The Tags a Task must all carry to be shown.</summary>
@@ -40,6 +43,10 @@ public sealed partial class MainViewModel
 
     /// <summary>True while a search text or any filter chip narrows the view.</summary>
     public bool IsNarrowed => !BuildSearchQuery(0).IsEmpty;
+
+    /// <summary>True while any Filter is on. The search text does not count: search is not a Filter.</summary>
+    public bool HasFilter =>
+        MinPriorityFilter is not null || HasDueFilter || HasReminderFilter || FilterTags.Count > 0;
 
     partial void OnSearchTextChanged(string value) => OnFilterStateChanged();
 
@@ -86,6 +93,7 @@ public sealed partial class MainViewModel
         if (removed)
         {
             OnPropertyChanged(nameof(IsNarrowed));
+            OnPropertyChanged(nameof(HasFilter));
             UpdateReorderEnabled();
         }
     }
@@ -116,15 +124,16 @@ public sealed partial class MainViewModel
         await LoadAsync(cancellationToken);
     }
 
-    /// <summary>Clears the search text and every filter chip.</summary>
+    /// <summary>Turns off every Filter chip. The search text stays.</summary>
     [RelayCommand]
     private async Task ClearAllFiltersAsync(CancellationToken cancellationToken)
     {
-        SearchText = "";
         MinPriorityFilter = null;
         HasDueFilter = false;
         HasReminderFilter = false;
         FilterTags.Clear();
+        OnPropertyChanged(nameof(IsNarrowed));
+        OnPropertyChanged(nameof(HasFilter));
         await LoadAsync(cancellationToken);
     }
 
@@ -169,6 +178,7 @@ public sealed partial class MainViewModel
         }
 
         OnPropertyChanged(nameof(IsNarrowed));
+        OnPropertyChanged(nameof(HasFilter));
         UpdateReorderEnabled();
         await LoadAsync(cancellationToken);
     }
