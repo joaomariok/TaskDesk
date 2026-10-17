@@ -1,6 +1,6 @@
 # UI framework: stay on WPF, do not port to WinUI 3 / Native AOT now
 
-**Status: Accepted (2026-10-17): stay on WPF.** Based on the spike in `spikes/WinUiAotSpike/` (outside `TaskDesk.slnx`), measured on the owner's PC in one session together with the current WPF app.
+**Status: Superseded by [0004](0004-port-to-winui.md) (2026-10-17).** Was: Accepted (2026-10-17), stay on WPF. Based on the spike in `spikes/WinUiAotSpike/` (outside `TaskDesk.slnx`), measured on the owner's PC in one session together with the current WPF app.
 
 The question was whether porting the WPF app to WinUI 3, possibly with Native AOT, would give a smaller publish folder and a faster cold start. The measurements say Native AOT would, but EF Core cannot run the product's Data layer under AOT without rewriting it. The WinUI builds that do run with the real database are not smaller than the framework-dependent WPF build, and they use more memory than WPF.
 
