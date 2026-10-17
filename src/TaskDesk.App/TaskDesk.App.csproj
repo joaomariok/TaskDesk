@@ -25,4 +25,5 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
   </ItemGroup>
+  <Import Project="WindowsAppSdkPayload.targets" />
 </Project>

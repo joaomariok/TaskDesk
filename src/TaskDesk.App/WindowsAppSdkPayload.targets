@@ -1,0 +1,49 @@
+<Project>
+  <!--
+    Keeps the Windows App SDK payload that TaskDesk never loads out of every publish (issue #21, ADR 0002).
+    The Runtime package must stay referenced (AppNotificationManager.Register() needs its
+    Microsoft.WindowsAppRuntime.Insights.Resource.dll), but it also brings AI/ML, Widgets and WinUI binaries.
+
+    Patterns are case-insensitive regular expressions matched against each file's path relative to the
+    publish folder. TaskDesk only uses AppNotifications, AppNotifications.Builder and AppLifecycle, so their
+    projections, Microsoft.Windows.SDK.NET.dll and WinRT.Runtime.dll stay.
+  -->
+  <PropertyGroup>
+    <!-- Stage A: AI/ML, Widgets, Graphics.Imaging. -->
+    <_TaskDeskUnusedAiPayload>onnxruntime[^\\]*|DirectML[^\\]*|NpuDetect\\.*|Microsoft\.Windows\.AI\.[^\\]*|Microsoft\.Windows\.(Private\.)?Workloads[^\\]*|workloads[^\\]*\.json|Microsoft\.Windows\.Widgets\.[^\\]*|Microsoft\.Graphics\.(Imaging|ImagingInternal|Internal\.Imaging)[^\\]*|Microsoft\.Windows\.(Vision|VisionInternal|Internal\.Vision|SemanticSearch)\.winmd</_TaskDeskUnusedAiPayload>
+    <!-- Stage A: managed projections nothing in TaskDesk references (directly or through the kept projections). -->
+    <_TaskDeskUnusedProjections>Microsoft\.InteractiveExperiences\.Projection\.dll|Microsoft\.Security\.Authentication\.OAuth\.Projection\.dll|Microsoft\.Windows\.(ApplicationModel\.(Background|DynamicDependency|Resources|WindowsAppRuntime)|BadgeNotifications|Foundation|Management\.Deployment|Media\.Capture|PushNotifications|Security\.AccessControl|Storage\.Pickers|Storage|System\.Power|System)\.Projection\.dll|Microsoft\.WindowsAppRuntime\.Bootstrap\.Net\.dll</_TaskDeskUnusedProjections>
+    <!--
+      Stage B: WinUI, composition, input and DWriteCore, with their .mui language folders. TaskDesk's UI is WPF.
+      Microsoft.Internal.FrameworkUdk.dll stays: Microsoft.WindowsAppRuntime.dll delay-loads it.
+    -->
+    <_TaskDeskUnusedWinUiPayload>Microsoft\.UI\.Xaml[^\\]*|Microsoft\.UI\.Xaml\\.*|WinUIEdit[^\\]*|DWriteCore[^\\]*|dwm[^\\]*|dcomp[^\\]*|Microsoft\.UI\.(Input|Windowing|Composition)[^\\]*|Microsoft\.UI\.(dll|winmd|pri)|Microsoft\.UI\.(Text\.winmd|Designer\.dll)|Microsoft\.InputStateManager\.dll|Microsoft\.DirectManipulation\.dll|CoreMessagingXP\.dll|marshal\.dll|wuceffectsi\.dll|Microsoft\.Graphics\.(Display\.dll|winmd)|[^\\]+\\[^\\]+\.mui</_TaskDeskUnusedWinUiPayload>
+    <TaskDeskUnusedPayloadPattern>^(?i)($(_TaskDeskUnusedAiPayload)|$(_TaskDeskUnusedProjections)|$(_TaskDeskUnusedWinUiPayload))$</TaskDeskUnusedPayloadPattern>
+  </PropertyGroup>
+
+  <!--
+    The removed managed projections are NuGet runtime assets, so they are also listed in the deps.json. A file
+    listed there but missing from the folder stops the .NET host at startup, so publish generates its own
+    deps.json from the NuGet assets still marked for publish instead of reusing the build one.
+  -->
+  <Target Name="TaskDeskExcludeUnusedProjectionsFromDeps" AfterTargets="_ComputeUseBuildDependencyFile">
+    <PropertyGroup>
+      <_UseBuildDependencyFile>false</_UseBuildDependencyFile>
+    </PropertyGroup>
+    <ItemGroup>
+      <RuntimeCopyLocalItems Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)%(Extension)', '$(TaskDeskUnusedPayloadPattern)'))">
+        <CopyToPublishDirectory>false</CopyToPublishDirectory>
+      </RuntimeCopyLocalItems>
+    </ItemGroup>
+  </Target>
+
+  <!-- Runs before ReadyToRun compilation and the copy to the publish folder. -->
+  <Target Name="TaskDeskExcludeUnusedWindowsAppSdkPayload" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_TaskDeskUnusedPayload Include="@(ResolvedFileToPublish)"
+                              Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ResolvedFileToPublish.RelativePath)', '$(TaskDeskUnusedPayloadPattern)'))" />
+      <ResolvedFileToPublish Remove="@(_TaskDeskUnusedPayload)" />
+    </ItemGroup>
+    <Message Importance="high" Text="TaskDesk: excluded @(_TaskDeskUnusedPayload->Count()) unused Windows App SDK files from publish" />
+  </Target>
+</Project>

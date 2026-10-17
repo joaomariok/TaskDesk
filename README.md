@@ -27,11 +27,21 @@ Run it once from the published folder (below), then turn on "Start with Windows"
 
 ## Publish
 
+Two publish profiles, both `win-x64` and ReadyToRun compiled, write to `publish/<profile>/` (git-ignored):
+
 ```powershell
 dotnet publish src/TaskDesk.App -p:PublishProfile=win-x64
+dotnet publish src/TaskDesk.App -p:PublishProfile=win-x64-fdd
 ```
 
-This produces a self-contained `win-x64` folder at `publish/win-x64/` (git-ignored), ReadyToRun compiled, about 320 MB (see "Known limits"). Copy the whole folder anywhere, for example `%LOCALAPPDATA%\Programs\TaskDesk`, and run `TaskDesk.App.exe`. No .NET install is needed. The profile is `src/TaskDesk.App/Properties/PublishProfiles/win-x64.pubxml`.
+| Profile | .NET runtime | Size | Use it when |
+|---|---|---|---|
+| `win-x64` | self-contained, inside the folder | about 222 MB | the PC may not have .NET 10, or you want a folder that runs anywhere on Windows 11 x64 |
+| `win-x64-fdd` | framework-dependent | about 52 MB | the PC has the **.NET 10 Desktop Runtime** (x64) installed, for example a developer PC |
+
+`win-x64-fdd` does not start without the .NET 10 Desktop Runtime (`Microsoft.WindowsDesktop.App` 10.0); the plain .NET Runtime is not enough because TaskDesk is a WPF app. Both profiles carry the Windows App SDK runtime themselves, so neither needs a Windows App Runtime install.
+
+Copy the whole folder anywhere, for example `%LOCALAPPDATA%\Programs\TaskDesk`, and run `TaskDesk.App.exe`. The profiles are in `src/TaskDesk.App/Properties/PublishProfiles/`. Every publish leaves out the Windows App SDK files TaskDesk never loads (AI/ML, Widgets, WinUI and composition); the list and the measured sizes are in [ADR 0002](docs/adr/0002-notification-delivery.md) and the rules in `src/TaskDesk.App/WindowsAppSdkPayload.targets`.
 
 ## Data location
 
@@ -69,7 +79,7 @@ Sandbox mode keeps the test run away from your Run key. Measured results and met
 
 ## Known limits
 
-- The publish folder is large (about 320 MB) because the Windows App SDK runtime brings ONNX Runtime, DirectML and WinUI binaries that TaskDesk does not use. Trimming is a possible follow-up.
+- The self-contained publish is still about 222 MB: most of it is the .NET and WPF runtime and the 25 MB Windows SDK projection (`Microsoft.Windows.SDK.NET.dll`). Use `win-x64-fdd` where the .NET 10 Desktop Runtime is installed.
 - Cold start to a visible window with 5,000 Tasks was measured at about 1.5 to 1.7 s, and the `--minimized` working set at about 170 MB. Both are slightly over their targets; the working set target is not a hard requirement.
 - Notifications are not delivered when TaskDesk runs elevated, or while Windows Do Not Disturb is on.
 - The default global hotkey `Ctrl+Alt+Space` may already belong to another application. TaskDesk logs the conflict and shows it in Settings; choose another combination there.
