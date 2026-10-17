@@ -39,7 +39,6 @@ public sealed class ScreenshotTour : IDisposable
                 }
                 else
                 {
-                    Thread.Sleep(300);
                     AppSession.CaptureFrame(window, path);
                 }
             }

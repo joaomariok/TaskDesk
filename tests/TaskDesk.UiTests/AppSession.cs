@@ -165,14 +165,23 @@ public sealed class AppSession : IDisposable
     public void Capture(string path)
     {
         Window.SetForeground();
-        // Let the window finish painting after it comes to the front.
-        Thread.Sleep(300);
         CaptureFrame(Window, path);
     }
 
-    /// <summary>Saves a PNG of what a window draws on screen, without its invisible resize border.</summary>
-    public static void CaptureFrame(Window window, string path) =>
-        FlaUI.Core.Capturing.Capture.Rectangle(VisibleFrame(window)).ToFile(path);
+    /// <summary>
+    /// Saves a PNG of what a window draws on screen, without its invisible resize border. The mouse is moved
+    /// off the window first, so no hover highlight from an earlier click lands in the shot.
+    /// </summary>
+    public static void CaptureFrame(Window window, string path)
+    {
+        var frame = VisibleFrame(window);
+        Mouse.Position = frame.Left >= 40
+            ? new Point(frame.Left - 20, frame.Top + frame.Height / 2)
+            : new Point(frame.Right + 20, frame.Top + frame.Height / 2);
+        // Let the window drop the hover and finish painting.
+        Thread.Sleep(300);
+        FlaUI.Core.Capturing.Capture.Rectangle(frame).ToFile(path);
+    }
 
     // The window's bounding rectangle includes the invisible resize border, which shows whatever is behind the
     // window and differs from run to run; DWM's frame bounds are only what the window draws.
