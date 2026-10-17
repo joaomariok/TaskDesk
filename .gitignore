@@ -9,3 +9,5 @@ TestResults/
 *.db-shm
 *.db-wal
 .claude/worktrees/
+.impeccable/mocks/
+.impeccable/questions/
