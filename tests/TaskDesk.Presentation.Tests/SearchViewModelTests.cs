@@ -49,7 +49,7 @@ public class SearchViewModelTests
     {
         var (_, _, search, vm) = await StartAsync("a", "b");
 
-        Assert.False(vm.IsFilterActive);
+        Assert.False(vm.IsNarrowed);
         Assert.Empty(search.Queries);
         Assert.Equal(["a", "b"], vm.Tasks.Select(t => t.Title));
     }
@@ -131,7 +131,7 @@ public class SearchViewModelTests
 
         await vm.ToggleFilterTagCommand.ExecuteAsync(home);
         await vm.ToggleFilterTagCommand.ExecuteAsync(work);
-        Assert.False(vm.IsFilterActive);
+        Assert.False(vm.IsNarrowed);
         Assert.Equal(3, vm.Tasks.Count);
     }
 
@@ -146,7 +146,7 @@ public class SearchViewModelTests
         await vm.DeleteTagAsync(vm.Tags.Single(), Ct);
 
         Assert.Empty(vm.FilterTags);
-        Assert.False(vm.IsFilterActive);
+        Assert.False(vm.IsNarrowed);
         Assert.Equal(["a"], vm.Tasks.Select(t => t.Title));
     }
 
@@ -188,7 +188,7 @@ public class SearchViewModelTests
 
         await vm.ClearAllFiltersCommand.ExecuteAsync(null);
 
-        Assert.False(vm.IsFilterActive);
+        Assert.False(vm.IsNarrowed);
         Assert.Null(vm.MinPriorityFilter);
         Assert.False(vm.HasDueFilter);
         Assert.Equal(["a"], vm.Tasks.Select(t => t.Title));

@@ -14,22 +14,22 @@ public sealed partial class MainViewModel
 {
     /// <summary>The search text, matched against titles, notes and Subtask titles of the current view.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFilterActive))]
+    [NotifyPropertyChangedFor(nameof(IsNarrowed))]
     private string _searchText = "";
 
     /// <summary>The lowest Priority shown, or null for any.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFilterActive))]
+    [NotifyPropertyChangedFor(nameof(IsNarrowed))]
     private Priority? _minPriorityFilter;
 
     /// <summary>Only show Tasks that have a Due date.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFilterActive))]
+    [NotifyPropertyChangedFor(nameof(IsNarrowed))]
     private bool _hasDueFilter;
 
     /// <summary>Only show Tasks that have a Reminder.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFilterActive))]
+    [NotifyPropertyChangedFor(nameof(IsNarrowed))]
     private bool _hasReminderFilter;
 
     /// <summary>The Tags a Task must all carry to be shown.</summary>
@@ -39,7 +39,7 @@ public sealed partial class MainViewModel
     public ObservableCollection<FilterTagChip> FilterTagChips { get; } = [];
 
     /// <summary>True while a search text or any filter chip narrows the view.</summary>
-    public bool IsFilterActive => !BuildSearchQuery(0).IsEmpty;
+    public bool IsNarrowed => !BuildSearchQuery(0).IsEmpty;
 
     partial void OnSearchTextChanged(string value) => OnFilterStateChanged();
 
@@ -85,7 +85,7 @@ public sealed partial class MainViewModel
 
         if (removed)
         {
-            OnPropertyChanged(nameof(IsFilterActive));
+            OnPropertyChanged(nameof(IsNarrowed));
             UpdateReorderEnabled();
         }
     }
@@ -168,7 +168,7 @@ public sealed partial class MainViewModel
             FilterTags.Remove(existing);
         }
 
-        OnPropertyChanged(nameof(IsFilterActive));
+        OnPropertyChanged(nameof(IsNarrowed));
         UpdateReorderEnabled();
         await LoadAsync(cancellationToken);
     }

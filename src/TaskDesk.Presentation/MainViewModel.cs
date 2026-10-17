@@ -64,7 +64,7 @@ public sealed partial class MainViewModel(
     public Task CompletionMove => _completionMove;
 
     // The rows of Smart Views, a Tag's page and search results caption their Task with the List's name.
-    private bool ShowsListNames => CurrentView is not null || TagFilter is not null || IsFilterActive;
+    private bool ShowsListNames => CurrentView is not null || TagFilter is not null || IsNarrowed;
 
     private TaskRowViewModel CreateRow(TaskItem task) =>
         new(task, _clock, _lists.GetValueOrDefault(task.ListId), ShowsListNames);
@@ -148,7 +148,7 @@ public sealed partial class MainViewModel(
     }
 
     private void UpdateReorderEnabled() =>
-        IsReorderEnabled = TagFilter is null && CurrentView is null && !IsFilterActive;
+        IsReorderEnabled = TagFilter is null && CurrentView is null && !IsNarrowed;
 
     // Loads may overlap (a reload after a Task change while a search reload runs). Each load takes a
     // version; only the latest one applies its results, so Tags are never added twice and an older query
@@ -215,7 +215,7 @@ public sealed partial class MainViewModel(
         PruneFilterTags();
         RebuildFilterTagChips();
 
-        var tasks = IsFilterActive
+        var tasks = IsNarrowed
             ? await Search.SearchAsync(BuildSearchQuery(0), cancellationToken)
             : CurrentView is { } view
             ? await Due.ListSmartViewAsync(view, 0, cancellationToken)
@@ -276,7 +276,7 @@ public sealed partial class MainViewModel(
 
             await LoadAsync(cancellationToken);
         }
-        else if (IsFilterActive)
+        else if (IsNarrowed)
         {
             // The new Task may not match the search or the filters, so let them decide.
             await LoadAsync(cancellationToken);

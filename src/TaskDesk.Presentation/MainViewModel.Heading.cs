@@ -58,7 +58,7 @@ public sealed partial class MainViewModel
             return $"No Tasks match '{SearchText}'";
         }
 
-        if (IsFilterActive)
+        if (IsNarrowed)
         {
             return "No Tasks match the filters.";
         }

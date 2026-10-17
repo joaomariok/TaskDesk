@@ -154,7 +154,7 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
                 <Button Content="Clear filters" Padding="8,2" Command="{Binding ClearAllFiltersCommand}"
-                        Visibility="{Binding IsFilterActive, Converter={StaticResource BoolToVisibility}}" />
+                        Visibility="{Binding IsNarrowed, Converter={StaticResource BoolToVisibility}}" />
             </WrapPanel>
         </StackPanel>
         <Grid DockPanel.Dock="Top" Margin="0,0,0,8">

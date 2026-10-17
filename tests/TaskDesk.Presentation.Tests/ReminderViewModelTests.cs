@@ -296,7 +296,7 @@ public class ReminderViewModelTests
         await s.Vm.ToggleHasReminderFilterCommand.ExecuteAsync(null);
 
         Assert.True(s.Vm.HasReminderFilter);
-        Assert.True(s.Vm.IsFilterActive);
+        Assert.True(s.Vm.IsNarrowed);
         Assert.False(s.Vm.IsReorderEnabled);
         Assert.True(s.Search.Queries[^1].HasReminder);
         Assert.Equal(["reminded"], s.Vm.Tasks.Select(t => t.Title));

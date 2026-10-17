@@ -39,7 +39,7 @@ public sealed partial class MainViewModel
             return;
         }
 
-        var page = IsFilterActive
+        var page = IsNarrowed
             ? await Search.SearchAsync(BuildSearchQuery(_completedFetched), cancellationToken)
             : await Due.ListSmartViewAsync(SmartView.Completed, _completedFetched, cancellationToken);
         _completedFetched += page.Count;
