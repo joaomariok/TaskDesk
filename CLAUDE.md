@@ -13,3 +13,7 @@ Default canonical labels: needs-triage, needs-info, ready-for-agent, ready-for-h
 ### Domain docs
 
 Single-context: one root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/domain.md`.
+
+### Implementing a spec
+
+Running `/implement-spec`, or fanning tickets out to worktree agents: follow `docs/agents/implement-spec.md`.
