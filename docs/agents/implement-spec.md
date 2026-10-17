@@ -9,8 +9,8 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
 3. Launch one implementer per ready ticket, each in its own worktree. Set `model` explicitly. Brief each with the **Implementer brief** below, plus its ticket number, `<BASE>`, and the scratchpad subfolder it owns.
 4. When an implementer reports, read its diff and keep the diff uncommitted in its worktree. The report is a claim, not evidence.
 5. Land the tickets one at a time, in the order they finish. For each:
-   - Copy the diff onto the integration branch. When it does not apply cleanly, launch a merger with the **Merger brief** below.
-   - Run the **Gate** on the integration working tree.
+   - Run `pwsh scripts/integrate-worktree.ps1 -Worktree <WT> -Base <BASE>` from the integration checkout, which must be clean. It applies the worktree's tracked diff with `git apply --3way`, copies its untracked files, runs the **Gate** and exits with the gate's code. It prints the changed and new files; stage those paths by name. It never commits.
+   - Exit 3 means conflicts: it lists the conflicted files and stops. Launch a merger with the **Merger brief** below. Exit 2 means a pre-check failed (dirty target, or worktree HEAD is not `<BASE>`) and nothing was changed.
    - Commit once, as `<type>: <what changed>`, after the gate exits 0 and the owner approves.
 6. Advance `<BASE>` to the new integration tip before launching the next wave of implementers.
 7. When the last ticket is committed, run the **Gate** once more on the integration tip. Report the exit codes and test counts, and list the acceptance criteria that need a manual check.
