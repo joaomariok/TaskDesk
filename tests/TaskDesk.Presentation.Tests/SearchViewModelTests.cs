@@ -28,6 +28,50 @@ public class SearchViewModelTests
         }
     }
 
+    // Holds a search until released, then fails as a disposed database does (its window closed and let it go).
+    private sealed class DisposedOnReleaseSearchService : ITaskSearchService
+    {
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void Release() => _release.SetResult();
+
+        public async Task<IReadOnlyList<TaskItem>> SearchAsync(
+            TaskSearchQuery query, CancellationToken cancellationToken = default)
+        {
+            await _release.Task;
+            throw new ObjectDisposedException("IServiceProvider");
+        }
+    }
+
+    [Fact]
+    public async Task A_search_cancelled_while_loading_ends_quietly_when_its_database_is_then_gone()
+    {
+        var search = new DisposedOnReleaseSearchService();
+        var service = new FakeTaskService();
+        var vm = new MainViewModel(service, new FakeTagService(service), searchService: search);
+        vm.SearchText = "milk";
+
+        var run = vm.ApplySearchCommand.ExecuteAsync(null);
+        vm.ApplySearchCommand.Cancel();
+        search.Release();
+
+        await run;
+    }
+
+    [Fact]
+    public async Task A_search_whose_database_is_gone_still_fails_when_nothing_cancelled_it()
+    {
+        var search = new DisposedOnReleaseSearchService();
+        var service = new FakeTaskService();
+        var vm = new MainViewModel(service, new FakeTagService(service), searchService: search);
+        vm.SearchText = "milk";
+
+        var run = vm.ApplySearchCommand.ExecuteAsync(null);
+        search.Release();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => run);
+    }
+
     private static async Task<(FakeTaskService Service, FakeTagService Tags, FakeSearchService Search, MainViewModel Vm)>
         StartAsync(params string[] titles)
     {

@@ -133,7 +133,8 @@ public sealed partial class MainViewModel
 
     /// <summary>
     /// Reloads the current view with the search text and filters (call after typing pauses). A search cancelled
-    /// through the command (its window closed) ends quietly.
+    /// through the command (its window closed) ends quietly, also when the database it was reading has been let go
+    /// of meanwhile.
     /// </summary>
     [RelayCommand]
     private async Task ApplySearchAsync(CancellationToken cancellationToken)
@@ -142,7 +143,8 @@ public sealed partial class MainViewModel
         {
             await LoadAsync(cancellationToken);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException
+            && cancellationToken.IsCancellationRequested)
         {
             // Nothing to show: the page that asked for it is gone.
         }
