@@ -37,19 +37,20 @@ public sealed partial class MainViewModel
     }
 
     [RelayCommand]
-    private async Task DeleteSubtaskAsync(SubtaskRowViewModel? subtask, CancellationToken cancellationToken)
+    private Task DeleteSubtaskAsync(SubtaskRowViewModel? subtask, CancellationToken cancellationToken)
     {
         if (subtask is null || DetailTask is not { } row)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        await _pendingSave; // a rename or tick still in flight must land before the Subtask goes
-        if (_lifetime.IsStopped)
-        {
-            return; // the stop ended while this waited: no work against a host being stopped
-        }
+        // A rename or tick still in flight lands before the Subtask goes.
+        return EnqueueSubtaskChange(() => DeleteSubtaskNowAsync(row, subtask, cancellationToken));
+    }
 
+    private async Task DeleteSubtaskNowAsync(
+        TaskRowViewModel row, SubtaskRowViewModel subtask, CancellationToken cancellationToken)
+    {
         var deleted = await taskService.DeleteSubtaskAsync(subtask.Id, cancellationToken);
         row.Subtasks.RemoveAll(s => s.Id == deleted.Id);
         row.RefreshSubtaskProgress();
@@ -87,31 +88,68 @@ public sealed partial class MainViewModel
     private Task MoveSubtaskDownAsync(SubtaskRowViewModel? subtask, CancellationToken cancellationToken)
         => MoveSubtaskAsync(subtask, 1, cancellationToken);
 
-    private async Task MoveSubtaskAsync(SubtaskRowViewModel? subtask, int offset, CancellationToken cancellationToken)
+    private Task MoveSubtaskAsync(SubtaskRowViewModel? subtask, int offset, CancellationToken cancellationToken)
     {
         if (subtask is null || DetailTask is not { } row)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var newIndex = SubtaskItems.IndexOf(subtask) + offset;
         if (newIndex < 0 || newIndex >= SubtaskItems.Count)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        await _pendingSave;
-        if (_lifetime.IsStopped)
-        {
-            return;
-        }
+        return EnqueueSubtaskChange(() => MoveSubtaskNowAsync(row, subtask, newIndex, cancellationToken));
+    }
 
+    private async Task MoveSubtaskNowAsync(
+        TaskRowViewModel row, SubtaskRowViewModel subtask, int newIndex, CancellationToken cancellationToken)
+    {
         var ordered = await taskService.MoveSubtaskAsync(subtask.Id, newIndex, cancellationToken);
         row.Subtasks.Clear();
         row.Subtasks.AddRange(ordered);
         if (row == DetailTask)
         {
             RebuildSubtaskItems();
+        }
+    }
+
+    /// <summary>
+    /// Joins a Subtask delete or move to the chain of saves (<see cref="EnqueueSave"/>), so it runs after the saves
+    /// already pending, a later save waits for it, and the stop waits for it. The change runs through the lifetime:
+    /// once the view model has stopped it starts nothing, also when it was queued before the stop. The returned
+    /// task completes with the change and carries its failure to the command; the chain carries on past a failure.
+    /// </summary>
+    private Task EnqueueSubtaskChange(Func<Task> change)
+    {
+        var link = Task.CompletedTask;
+        EnqueueSave(previous =>
+        {
+            link = RunSubtaskChangeAsync(previous, change);
+            return ContinuePastFailureAsync(link);
+        });
+        return link;
+    }
+
+    private async Task RunSubtaskChangeAsync(Task previous, Func<Task> change)
+    {
+        await previous; // saves of one Task never overlap
+
+        // The change keeps the command's token, not the stop's: a change in flight at the stop lands, as a save does.
+        await _lifetime.RunAsync(_ => change());
+    }
+
+    private static async Task ContinuePastFailureAsync(Task link)
+    {
+        try
+        {
+            await link;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // The command that queued the change reports it; later saves still run.
         }
     }
 

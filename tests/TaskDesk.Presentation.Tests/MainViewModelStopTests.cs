@@ -117,11 +117,14 @@ public sealed class MainViewModelStopTests
             => throw new NotSupportedException();
     }
 
-    // Wraps the fake Task service: a Subtask tick is held until released, and the Subtask deletes and moves
-    // that reach it are recorded.
-    private sealed class GatedSubtaskService(FakeTaskService inner) : ITaskService
+    // Wraps the fake Task service: a Subtask tick is held until released, and the Subtask ticks, deletes and
+    // moves that reach it are recorded. A held delete waits for its own release.
+    private sealed class GatedSubtaskService(FakeTaskService inner, bool holdDeletes = false) : ITaskService
     {
         private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _deleteGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public List<Guid> Ticks { get; } = [];
 
         public List<Guid> Deletes { get; } = [];
 
@@ -129,9 +132,12 @@ public sealed class MainViewModelStopTests
 
         public void Release() => _gate.SetResult();
 
+        public void ReleaseDelete() => _deleteGate.SetResult();
+
         public async Task<Subtask> SetSubtaskCompletedAsync(
             Guid subtaskId, bool isCompleted, CancellationToken cancellationToken = default)
         {
+            Ticks.Add(subtaskId);
             await _gate.Task;
             return await inner.SetSubtaskCompletedAsync(subtaskId, isCompleted, cancellationToken);
         }
@@ -143,10 +149,15 @@ public sealed class MainViewModelStopTests
             return inner.MoveSubtaskAsync(subtaskId, newIndex, cancellationToken);
         }
 
-        public Task<Subtask> DeleteSubtaskAsync(Guid subtaskId, CancellationToken cancellationToken = default)
+        public async Task<Subtask> DeleteSubtaskAsync(Guid subtaskId, CancellationToken cancellationToken = default)
         {
             Deletes.Add(subtaskId);
-            return inner.DeleteSubtaskAsync(subtaskId, cancellationToken);
+            if (holdDeletes)
+            {
+                await _deleteGate.Task;
+            }
+
+            return await inner.DeleteSubtaskAsync(subtaskId, cancellationToken);
         }
 
         public Task<TaskItem> CreateTaskAsync(string title, CancellationToken cancellationToken = default)
@@ -200,6 +211,24 @@ public sealed class MainViewModelStopTests
         vm.SubtaskItems[0].IsCompleted = true;
         Assert.False(vm.PendingSave.IsCompleted);
         return (gated, vm);
+    }
+
+    // A selected Task with two Subtasks, whose Subtask deletes are held in flight once they reach the service.
+    private static async Task<(FakeTaskService Inner, GatedSubtaskService Service, MainViewModel Vm)>
+        StartWithDeletesHeldAsync()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 20, 13, 0, 0, TimeSpan.Zero));
+        clock.SetLocalTimeZone(Zone);
+        var fake = new FakeTaskService();
+        var task = await fake.CreateTaskAsync("a", Ct);
+        await fake.AddSubtaskAsync(task.Id, "one", Ct);
+        await fake.AddSubtaskAsync(task.Id, "two", Ct);
+        var gated = new GatedSubtaskService(fake, holdDeletes: true);
+        gated.Release(); // ticks are not held
+        var vm = new MainViewModel(gated, new CountingTagService(fake), clock, new CountingDueService(fake, clock));
+        await vm.LoadAsync(Ct);
+        vm.SelectedTask = vm.Tasks[0];
+        return (fake, gated, vm);
     }
 
     private sealed record Setup(
@@ -430,6 +459,40 @@ public sealed class MainViewModelStopTests
         await move;
 
         Assert.Empty(service.Moves);
+    }
+
+    [Fact]
+    public async Task The_stop_waits_for_a_Subtask_delete_in_flight_to_land()
+    {
+        var (inner, service, vm) = await StartWithDeletesHeldAsync();
+        var gone = vm.SubtaskItems[0].Id;
+        var delete = vm.DeleteSubtaskCommand.ExecuteAsync(vm.SubtaskItems[0]);
+        Assert.Equal([gone], service.Deletes);
+
+        var stop = vm.StopAsync();
+        Assert.False(stop.IsCompleted);
+
+        service.ReleaseDelete();
+        await stop;
+        Assert.True(delete.IsCompleted);
+        var tasks = await inner.ListDefaultListTasksAsync(Ct);
+        Assert.DoesNotContain(tasks[0].Subtasks, s => s.Id == gone);
+    }
+
+    [Fact]
+    public async Task A_save_queued_after_a_Subtask_delete_waits_for_the_delete()
+    {
+        var (_, service, vm) = await StartWithDeletesHeldAsync();
+        var delete = vm.DeleteSubtaskCommand.ExecuteAsync(vm.SubtaskItems[0]);
+        var ticked = vm.SubtaskItems[1].Id;
+
+        vm.SubtaskItems[1].IsCompleted = true;
+        Assert.Empty(service.Ticks);
+
+        service.ReleaseDelete();
+        await delete;
+        await vm.PendingSave;
+        Assert.Equal([ticked], service.Ticks);
     }
 
     [Fact]
