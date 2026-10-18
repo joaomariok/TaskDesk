@@ -58,9 +58,15 @@ public sealed partial class MainViewModel
     public Task DueRefresh => _dueRefresh;
 
     // Arms a one-shot timer for the next instant the Due state of the loaded Tasks can change: local midnight
-    // or the next timed Due of today (DueCalculator.NextChange). Every refresh arms the next one.
+    // or the next timed Due of today (DueCalculator.NextChange). Every refresh arms the next one; none is armed once
+    // the view model has stopped.
     private void ScheduleDueRefresh()
     {
+        if (_lifetime.IsStopped)
+        {
+            return;
+        }
+
         _uiContext ??= SynchronizationContext.Current; // the UI thread in the app; none in tests
         var now = _clock.GetUtcNow();
         var due = DueCalculator.NextChange(_all.Select(r => r.Item), now, _clock.LocalTimeZone) - now;
@@ -78,7 +84,8 @@ public sealed partial class MainViewModel
         {
             try
             {
-                await RefreshDueStateAsync();
+                // A tick already queued when the view model stopped runs nothing.
+                await _lifetime.RunAsync(_ => RefreshDueStateAsync());
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -99,6 +106,12 @@ public sealed partial class MainViewModel
         {
             run(null);
         }
+    }
+
+    private void StopDueRefresh()
+    {
+        _dueRefreshTimer?.Dispose();
+        _dueRefreshTimer = null;
     }
 
     private async Task RefreshDueStateAsync()

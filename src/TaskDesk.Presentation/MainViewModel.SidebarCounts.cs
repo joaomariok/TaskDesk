@@ -28,16 +28,14 @@ public sealed partial class MainViewModel
 
     /// <summary>
     /// Recounts the open Tasks of Today, Upcoming, Overdue and All with count queries (no Task is loaded).
-    /// Does nothing when no Due service was supplied.
+    /// Does nothing when no Due service was supplied, or once the view model has stopped (<see cref="StopAsync"/>).
     /// </summary>
-    public async Task RefreshSmartViewCountsAsync(CancellationToken cancellationToken = default)
-    {
-        if (dueService is null)
-        {
-            return;
-        }
+    public Task RefreshSmartViewCountsAsync(CancellationToken cancellationToken = default) =>
+        dueService is null ? Task.CompletedTask : _lifetime.RunAsync(RefreshCountsAsync, cancellationToken);
 
-        var counts = await dueService.CountSmartViewsAsync(cancellationToken);
+    private async Task RefreshCountsAsync(CancellationToken cancellationToken)
+    {
+        var counts = await dueService!.CountSmartViewsAsync(cancellationToken);
         TodayCount = counts.Today;
         UpcomingCount = counts.Upcoming;
         OverdueCount = counts.Overdue;

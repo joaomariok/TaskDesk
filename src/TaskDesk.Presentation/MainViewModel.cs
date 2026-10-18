@@ -184,7 +184,15 @@ public sealed partial class MainViewModel(
     private Guid? _reselectDetailId;
     private bool _reselectPaneOpen;
 
-    public async Task LoadAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Loads the current page. Does nothing once the view model has stopped (<see cref="StopAsync"/>), so the
+    /// reloads that pass no token (a List edited, a quick-add Task created, an import) do nothing after it too; a
+    /// load the stop cancelled ends quietly, also when its database has been let go of meanwhile.
+    /// </summary>
+    public Task LoadAsync(CancellationToken cancellationToken = default) =>
+        _lifetime.RunAsync(LoadInLifetimeAsync, cancellationToken);
+
+    private async Task LoadInLifetimeAsync(CancellationToken cancellationToken)
     {
         var version = ++_loadVersion;
         if (_loadsInFlight++ == 0)
@@ -400,7 +408,7 @@ public sealed partial class MainViewModel(
         if (delay > TimeSpan.Zero)
         {
             // The row shows struck through and dimmed in place; the move follows without holding up the caller.
-            _completionMove = MoveAfterAsync(row, delay);
+            _completionMove = _lifetime.RunAsync(token => MoveAfterAsync(row, delay, token));
         }
         else
         {
@@ -410,9 +418,10 @@ public sealed partial class MainViewModel(
         OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private async Task MoveAfterAsync(TaskRowViewModel row, TimeSpan delay)
+    // Cancelled only by the stop, which ends it quietly.
+    private async Task MoveAfterAsync(TaskRowViewModel row, TimeSpan delay, CancellationToken cancellationToken)
     {
-        await Task.Delay(delay, _clock, CancellationToken.None);
+        await Task.Delay(delay, _clock, cancellationToken);
         // Undone, deleted or reloaded meanwhile: whoever did that has placed the row already.
         var stillHeld = IsCompletedPage
             ? !row.IsCompleted && Tasks.Contains(row)

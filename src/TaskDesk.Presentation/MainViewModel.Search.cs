@@ -15,7 +15,7 @@ public sealed partial class MainViewModel
     /// <summary>How long the search waits for typing to pause before it reloads the page.</summary>
     public static readonly TimeSpan SearchDelay = TimeSpan.FromMilliseconds(250);
 
-    // Searches and reloads stop with the view model (see StopAsync).
+    // Searches, loads, count refreshes and timers stop with the view model (see StopAsync).
     private readonly ViewModelLifetime _lifetime = new();
 
     private ITimer? _searchTimer;
@@ -29,13 +29,16 @@ public sealed partial class MainViewModel
 
     /// <summary>
     /// Stops the view model's deferred work: from now on nothing starts, and work still running is cancelled and
-    /// ends quietly. For now that is the search, waiting or loading. Idempotent; the stop itself happens before
-    /// this returns, and the task completes once the cancelled work has ended, however it ended.
+    /// ends quietly. That is the search (waiting or loading), <see cref="LoadAsync"/>, the Smart View count refresh,
+    /// the due refresh timer (disposed, never armed again), the Undo bar timer and the completion hold. Idempotent;
+    /// the stop itself happens before this returns, and the task completes once the cancelled work has ended,
+    /// however it ended.
     /// </summary>
     public Task StopAsync()
     {
         var stopping = _lifetime.StopAsync();
         DropQueuedSearch();
+        StopDueRefresh();
         return stopping;
     }
 
@@ -216,7 +219,7 @@ public sealed partial class MainViewModel
     /// been let go of meanwhile.
     /// </summary>
     [RelayCommand]
-    private Task ApplySearchAsync(CancellationToken cancellationToken) => _lifetime.RunAsync(LoadAsync, cancellationToken);
+    private Task ApplySearchAsync(CancellationToken cancellationToken) => LoadAsync(cancellationToken);
 
     /// <summary>Clears the search text (the Esc shortcut) and restores the view. Filter chips stay.</summary>
     [RelayCommand]

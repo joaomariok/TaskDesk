@@ -132,7 +132,7 @@ public sealed partial class MainViewModel
         _barTimer?.Cancel();
         _barTimer = new CancellationTokenSource();
         IsUndoBarVisible = true;
-        UndoBarExpiry = ExpireUndoBarAsync(_barTimer.Token);
+        UndoBarExpiry = _lifetime.RunAsync(ExpireUndoBarAsync, _barTimer.Token);
     }
 
     private void HideUndoBar()
@@ -145,6 +145,7 @@ public sealed partial class MainViewModel
     /// <summary>Completes when the current Undo bar has timed out or been dismissed.</summary>
     public Task UndoBarExpiry { get; private set; } = Task.CompletedTask;
 
+    // Cancelled by a newer bar, Undo or the stop; each of those leaves the bar as it is.
     private async Task ExpireUndoBarAsync(CancellationToken token)
     {
         try
