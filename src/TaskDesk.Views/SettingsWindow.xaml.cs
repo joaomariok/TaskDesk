@@ -29,14 +29,10 @@ public sealed partial class SettingsWindow : Window
         presenter.PreferredMinimumHeight = WindowLayoutCalculator.ToPhysical(MinimumHeight, scale);
         AppWindow.SetPresenter(presenter);
 
-        var width = WindowLayoutCalculator.ToPhysical(DefaultWidth, scale);
-        var height = WindowLayoutCalculator.ToPhysical(DefaultHeight, scale);
         var work = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest).WorkArea;
-        AppWindow.MoveAndResize(new RectInt32(
-            work.X + ((work.Width - width) / 2),
-            work.Y + Math.Max(0, (work.Height - height) / 2),
-            width,
-            Math.Min(height, work.Height)));
+        var placed = SettingsPlacement.Centre(
+            new PixelRect(work.X, work.Y, work.Width, work.Height), DefaultWidth, DefaultHeight, scale);
+        AppWindow.MoveAndResize(new RectInt32(placed.Left, placed.Top, placed.Width, placed.Height));
     }
 
     public SettingsView View { get; }

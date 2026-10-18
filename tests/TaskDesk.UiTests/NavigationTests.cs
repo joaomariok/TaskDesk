@@ -167,6 +167,11 @@ public sealed class NavigationTests : IDisposable
         Keyboard.Type(VirtualKeyShort.F2);
         AppSession.WaitUntil(() => _app.TextBox(Ids.DetailTitleBox).Text == "Pay the rent",
             () => "The detail pane did not open.");
+        if (AppSession.IsWinUI)
+        {
+            WinUIDueYesterdayPickedInTheCalendarPutsTheTaskInOverdue();
+            return;
+        }
 
         // Yesterday, typed into the Due date picker, which parses with the current culture.
         var yesterday = DateTime.Today.AddDays(-1).ToString("d", CultureInfo.CurrentCulture);
@@ -187,6 +192,49 @@ public sealed class NavigationTests : IDisposable
             () => $"Overdue rows were [{string.Join(", ", _app.Rows(Ids.OpenTaskList))}]; the typed Due '{yesterday}' did not save.");
         AppSession.WaitUntil(() => _app.Find(Ids.PageHeading).Name == "Overdue", () => "The Overdue view did not open.");
     }
+
+    // The WinUI build's CalendarDatePicker has no text box: open its calendar flyout and pick yesterday's day, paging
+    // back a month when yesterday is in the previous one.
+    private void WinUIDueYesterdayPickedInTheCalendarPutsTheTaskInOverdue()
+    {
+        var yesterday = DateTime.Today.AddDays(-1);
+        _app.Find(Ids.DetailDueDatePicker).Click();
+        // The calendar flyout is a pop-up, so look from the desktop.
+        var calendar = AppSession.Eventually(
+            () => _app.Window.Automation.GetDesktop().FindFirstDescendant(cf => cf.ByClassName("CalendarView")),
+            "The Due date picker opened no calendar.");
+        if (yesterday.Month != DateTime.Today.Month)
+        {
+            AppSession.Eventually(() => calendar.FindFirstDescendant(cf => cf.ByAutomationId("PreviousButton")),
+                "The Due date calendar has no previous-month button.").AsButton().Invoke();
+        }
+
+        AutomationElement? Yesterday()
+        {
+            // The month's days start at its first "1"; the shown days before it belong to the month before.
+            var shown = calendar.FindAllDescendants(cf => cf.ByClassName("CalendarViewDayItem"))
+                .Where(item => !item.IsOffscreen).ToList();
+            var first = shown.FindIndex(item => IsDay(item, 1));
+            var index = first + yesterday.Day - 1;
+            return first >= 0 && index < shown.Count && IsDay(shown[index], yesterday.Day) ? shown[index] : null;
+        }
+
+        AppSession.Eventually(Yesterday, $"The Due date calendar does not show {yesterday:D}.").Click();
+
+        // The Due edit saves after a short debounce, so reopen Overdue until the Task shows there.
+        AppSession.WaitUntil(() =>
+            {
+                AppSession.Ctrl(VirtualKeyShort.KEY_3);
+                Thread.Sleep(300);
+                return _app.Rows(Ids.OpenTaskList).Contains("Pay the rent");
+            },
+            () => $"Overdue rows were [{string.Join(", ", _app.Rows(Ids.OpenTaskList))}]; the picked Due {yesterday:d} did not save.");
+        AppSession.WaitUntil(() => _app.Find(Ids.PageHeading).Name == "Overdue", () => "The Overdue view did not open.");
+    }
+
+    // A day is named by its number; today's adds ", today".
+    private static bool IsDay(AutomationElement item, int day) =>
+        item.Name.Split(',')[0] == day.ToString(CultureInfo.CurrentCulture);
 
     [Fact]
     public void Ctrl_F_searches_and_Esc_clears_the_search()

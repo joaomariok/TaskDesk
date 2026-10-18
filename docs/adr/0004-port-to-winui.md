@@ -33,6 +33,22 @@ ADR 0003 measured a WinUI 3 port and decided to stay on WPF. A WinUI build that 
 
 `spikes/WinUiAotSpike/` stays as the reference for a future AOT measurement.
 
+## Measurement (parity ticket, 2026-10-17)
+
+`scripts/measure-startup.ps1` on the same machine, Release publishes, 5,000 sample Tasks, sandbox mode. Cold start is the median of 7 launches to a visible main window after one discarded warm-up. Working set is the median of 3 `--minimized` launches, read after 12 s.
+
+| Build | Publish | Cold start | Working set |
+|---|---|---|---|
+| WPF, framework-dependent | 52.3 MB, 99 files | 1663 ms (1588 to 1712) | 172.3 MB |
+| WPF, self-contained | 222.6 MB, 494 files | 1625 ms (1590 to 1707) | 168.1 MB |
+| WinUI, self-contained | 238.7 MB, 513 files | 922 ms (913 to 948) | 214.1 MB |
+
+The WinUI build starts in about half the time. It uses about 42 to 46 MB more memory, and its publish is 16 MB larger than self-contained WPF.
+
+The platform forced two deviations from the spec:
+- **Session end.** A message-only window never receives `WM_QUERYENDSESSION`, so a hidden top-level window handles session end.
+- **Resume.** `SystemEvents.PowerModeChanged` needs the WPF or WinForms framework, so resume is read from `WM_POWERBROADCAST`.
+
 ## Consequences
 
 - Publish size and working set are expected to grow (0003: 226 to 281 MB self-contained against 137.7 MB framework-dependent; 176 to 194 MB against 168 MB). This is accepted.

@@ -23,6 +23,11 @@ public sealed class RailTests : IDisposable
         Assert.NotEmpty(listNames);
         Assert.NotNull(_app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.SmartViewList)));
         Assert.Null(_app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.SidebarExpandButton)));
+        if (AppSession.IsWinUI)
+        {
+            WinUIRailKeepsItsItemsAndWidensAgain(listNames);
+            return;
+        }
 
         _app.ResizeWidth(NarrowFactor);
 
@@ -47,6 +52,12 @@ public sealed class RailTests : IDisposable
     [Fact]
     public void The_hamburger_opens_the_full_sidebar_as_an_overlay_that_Esc_and_picking_an_item_close()
     {
+        if (AppSession.IsWinUI)
+        {
+            WinUIHamburgerOpensAnOverlayThatEscAndPickingCloses();
+            return;
+        }
+
         _app.ResizeWidth(NarrowFactor);
 
         _app.Find(Ids.SidebarExpandButton).AsButton().Invoke();
@@ -66,6 +77,59 @@ public sealed class RailTests : IDisposable
                 "The overlay has no 'All' Smart View.")
             .AsListBoxItem().Select();
         AppSession.WaitUntil(() => _app.FindOnDesktop(Ids.SmartViewList) is null, () => "Picking an item did not close the overlay.");
+    }
+
+    // The WinUI build's native NavigationView keeps one Smart View list (SmartViewList) in both modes: the rail is
+    // its pane narrowed to the icons, and the hamburger's overlay is that pane widened over the page, inside the
+    // main window. NavigationView names its toggle button itself.
+    private double PaneWidth() => _app.Find(Ids.NavigationPane).BoundingRectangle.Width;
+
+    private void WinUIRailKeepsItsItemsAndWidensAgain(IReadOnlyList<string> listNames)
+    {
+        var fullWidth = PaneWidth();
+
+        _app.ResizeWidth(NarrowFactor);
+
+        AppSession.WaitUntil(() => PaneWidth() < fullWidth / 2,
+            () => $"The sidebar did not collapse to the rail below 900 px (it is {PaneWidth()} px of {fullWidth}).");
+        AppSession.WaitUntil(() => Names(_app.Find(Ids.SmartViewList)).SequenceEqual(["Today", "Upcoming", "Overdue", "All", "Completed"]),
+            () => $"The rail's Smart Views were [{string.Join(", ", Names(_app.Find(Ids.SmartViewList)))}].");
+        Assert.Equal(listNames, _app.Rows(Ids.RailListsList));
+        _app.Find(Ids.SidebarExpandButton);
+
+        _app.ResizeWidth(1 / NarrowFactor);
+
+        AppSession.WaitUntil(() => Math.Abs(PaneWidth() - fullWidth) < 2,
+            () => $"Widening past 900 px did not restore the full sidebar (it is {PaneWidth()} px of {fullWidth}).");
+    }
+
+    private void WinUIHamburgerOpensAnOverlayThatEscAndPickingCloses()
+    {
+        var fullWidth = PaneWidth();
+        _app.ResizeWidth(NarrowFactor);
+        AppSession.WaitUntil(() => PaneWidth() < fullWidth / 2,
+            () => $"The sidebar did not collapse to the rail below 900 px (it is {PaneWidth()} px of {fullWidth}).");
+        var railWidth = PaneWidth();
+        bool IsOpen() => PaneWidth() > railWidth * 2;
+        bool IsClosed() => Math.Abs(PaneWidth() - railWidth) < 2;
+
+        _app.Find(Ids.SidebarExpandButton).AsButton().Invoke();
+        AppSession.WaitUntil(IsOpen, () => "The hamburger opened no sidebar overlay.");
+        AppSession.WaitUntil(() => _app.FocusedAutomationId() is { } id && id.StartsWith("SmartView", StringComparison.Ordinal),
+            () => $"Opening the overlay left focus on '{_app.FocusedAutomationId()}'.");
+
+        AppSession.Press(VirtualKeyShort.ESCAPE);
+        AppSession.WaitUntil(IsClosed, () => "Esc did not close the overlay.");
+        AppSession.WaitUntil(() => _app.FocusedAutomationId() == Ids.SidebarExpandButton,
+            () => $"Closing the overlay left focus on '{_app.FocusedAutomationId()}'.");
+
+        _app.Find(Ids.SidebarExpandButton).AsButton().Invoke();
+        AppSession.WaitUntil(IsOpen, () => "The overlay did not reopen.");
+        AppSession.Eventually(
+                () => _app.Find(Ids.SmartViewList).FindFirstChild(cf => cf.ByControlType(ControlType.ListItem).And(cf.ByName("All"))),
+                "The overlay has no 'All' Smart View.")
+            .AsListBoxItem().Select();
+        AppSession.WaitUntil(IsClosed, () => "Picking an item did not close the overlay.");
     }
 
     [Fact]

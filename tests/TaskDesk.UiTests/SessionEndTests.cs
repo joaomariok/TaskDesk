@@ -24,6 +24,10 @@ public sealed class SessionEndTests : IDisposable
         _app.Focus(Ids.DetailTitleBox);
         Keyboard.Type(VirtualKeyShort.END);
         Keyboard.Type(" v2");
+        // Typed keys wait in the app's input queue, but Windows' session-end messages are sent, and a thread handles
+        // sent messages before its queued input: wait until the edit is made, as a person's edit is before they sign out.
+        AppSession.WaitUntil(() => _app.TextBox(Ids.DetailTitleBox).Text == "Draft v2",
+            () => $"The title box holds '{_app.TextBox(Ids.DetailTitleBox).Text}', not the edit.");
 
         _app.EndSessionAndRestart();
 

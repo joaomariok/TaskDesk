@@ -74,7 +74,8 @@ public sealed class AppSession : IDisposable
 
     /// <summary>
     /// Does to the app what Windows does at sign-out: WM_QUERYENDSESSION, then WM_ENDSESSION, to each of its
-    /// top-level windows (hidden ones too). Asserts the process ends, then starts it again on the same data folder.
+    /// top-level windows (hidden ones too), waiting for each answer; then ends the process if it still runs, as
+    /// Windows does. Starts it again on the same data folder.
     /// </summary>
     public void EndSessionAndRestart()
     {
@@ -92,20 +93,43 @@ public sealed class AppSession : IDisposable
         Assert.NotEmpty(windows);
         foreach (var hwnd in windows)
         {
-            SendMessageTimeoutW(hwnd, WmQueryEndSession, IntPtr.Zero, EndSessionLogoff, SmtoAbortIfHung, 10_000, out _);
+            SendEndSessionMessage(hwnd, WmQueryEndSession, IntPtr.Zero);
         }
 
         foreach (var hwnd in windows)
         {
-            SendMessageTimeoutW(hwnd, WmEndSession, 1, EndSessionLogoff, SmtoAbortIfHung, 10_000, out _);
+            SendEndSessionMessage(hwnd, WmEndSession, 1);
         }
 
-        Assert.True(process.WaitForExit(Timeout), "TaskDesk did not exit when the session ended.");
+        // Once every window has answered WM_ENDSESSION, Windows ends the process: whatever it had not saved is lost.
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // It had exited by itself.
+        }
+
+        Assert.True(process.WaitForExit(Timeout), "TaskDesk did not end with the session.");
         _app.Dispose();
         _app = null;
         Launch();
     }
 
+    // Sends one session-end message and waits for the answer, as Windows does. A window closed meanwhile (the app
+    // exits on the first message) answers nothing, which is fine; one that does not answer in time would get
+    // Windows' "This app is preventing shutdown" screen.
+    private static void SendEndSessionMessage(IntPtr hwnd, uint message, IntPtr wParam)
+    {
+        if (SendMessageTimeoutW(hwnd, message, wParam, EndSessionLogoff, SmtoAbortIfHung, 5_000, out _) == IntPtr.Zero)
+        {
+            var error = Marshal.GetLastWin32Error();
+            Assert.True(error != ErrorTimeout, $"TaskDesk did not answer session-end message 0x{message:X4} in time.");
+        }
+    }
+
+    private const int ErrorTimeout = 1460;
     private const uint WmQueryEndSession = 0x0011;
     private const uint WmEndSession = 0x0016;
     private const uint SmtoAbortIfHung = 0x0002;
@@ -119,7 +143,7 @@ public sealed class AppSession : IDisposable
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out int processId);
 
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SendMessageTimeoutW(
         IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
 
@@ -239,6 +263,28 @@ public sealed class AppSession : IDisposable
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    // The focused element's type, class and process, for a failure message: the focus can be outside the app.
+    private string DescribeFocused()
+    {
+        try
+        {
+            var focused = _automation.FocusedElement();
+            if (focused is null)
+            {
+                return "nothing";
+            }
+
+            var process = focused.Properties.ProcessId.ValueOrDefault;
+            var owner = process == _app?.ProcessId ? "TaskDesk" : $"process {process}";
+            return $"{focused.Properties.ControlType.ValueOrDefault} '{focused.Properties.Name.ValueOrDefault}', " +
+                   $"class {focused.Properties.ClassName.ValueOrDefault}, in {owner}";
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return ex.Message;
+        }
+    }
 
     public string? FocusedAutomationId() => _automation.FocusedElement()?.Properties.AutomationId.ValueOrDefault;
 
@@ -527,6 +573,31 @@ public sealed class AppSession : IDisposable
         }
     }
 
+    // Puts a window above every other non-topmost window, without activating it: in and out of the topmost band.
+    private static void RaiseWithoutActivating(IntPtr hwnd)
+    {
+        const uint flags = SwpNoMove | SwpNoSize | SwpNoActivate;
+        SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0, flags);
+        SetWindowPos(hwnd, HwndNoTopmost, 0, 0, 0, 0, flags);
+    }
+
+    private static readonly IntPtr HwndTopmost = new(-1);
+    private static readonly IntPtr HwndNoTopmost = new(-2);
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoActivate = 0x0010;
+    private const uint GaRoot = 2;
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(Point point);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+
     private void Launch()
     {
         var start = new ProcessStartInfo(AppPath()) { UseShellExecute = false };
@@ -539,14 +610,22 @@ public sealed class AppSession : IDisposable
         // app. A click on the title bar is input, which always activates the window; the app still picks the element
         // that takes focus.
         Window.SetForeground();
+        // Refused, the new window opens behind the app in front (after a restart, the one Windows activated when the
+        // old window closed), and the click would land on that app instead. Raising the window in the z-order is not
+        // activation, so Windows allows it; the click then reaches the title bar.
+        var handle = Window.Properties.NativeWindowHandle.Value;
+        RaiseWithoutActivating(handle);
         var bounds = Window.BoundingRectangle;
-        Mouse.Click(new Point(bounds.Left + bounds.Width / 2, bounds.Top + 16));
+        var titleBar = new Point(bounds.Left + bounds.Width / 2, bounds.Top + 16);
+        WaitUntil(() => GetAncestor(WindowFromPoint(titleBar), GaRoot) == handle,
+            () => $"Another window covers TaskDesk's title bar at {titleBar}.");
+        Mouse.Click(titleBar);
         // The window shows before its first load finishes; quick add is enabled once it has.
         WaitUntil(() => Find(Ids.QuickAddBox).IsEnabled, () => "Quick add never became ready.");
         // Wait for start-up focus to land in quick add, without moving it there, so a test's first shortcut
         // reaches the app and start-up focus stays tested.
         WaitUntil(() => FocusedAutomationId() == Ids.QuickAddBox,
-            () => $"Start-up focus never reached quick add; it is on '{FocusedAutomationId()}'.");
+            () => $"Start-up focus never reached quick add; it is on '{FocusedAutomationId()}' ({DescribeFocused()}).");
     }
 
     /// <summary>True when the app under test is the WinUI build (TaskDesk.App.WinUI.exe), false for the WPF one.</summary>
