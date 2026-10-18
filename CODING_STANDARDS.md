@@ -18,6 +18,14 @@ Delete, import and replace each either restore everything on undo (Tags, Subtask
 
 Registry writes, files outside the data folder and OS registration sit behind an interface, and tests use a fake. A direct call to the real thing from app logic is a finding.
 
+## Test isolation
+
+Gate tests (xUnit and the in-process MSTest app) use per-test state only: temp folders and fakes. Machine-global state (clipboard, registry, real global hotkeys, the foreground window) belongs to the opt-in FlaUI suite.
+
+## Test tool limits
+
+Product code serves the product. When a test tool cannot drive something, fix the test tool; a product-code workaround for it is a finding.
+
 ## Changed tests
 
 A changed existing test asserts at least as much as before; a removed assertion is replaced by one that implies it. A changed test that checks less is a finding, even when the change was approved.

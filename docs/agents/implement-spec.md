@@ -6,7 +6,7 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
 
 1. Start from a clean checkout: commit pending work first, including untracked `.impeccable/critique/` snapshots, which are tracked. Create the integration branch from `main` and note its tip commit. Every brief names this tip as `<BASE>`.
 2. Read the spec issue and its tickets (see `issue-tracker.md`). Split them into tickets that can run in parallel and tickets that must wait for an earlier one.
-3. Launch one implementer per ready ticket, each in its own worktree. Set `model` explicitly. Brief each with the **Implementer brief** below, plus its ticket number, `<BASE>`, and the scratchpad subfolder it owns.
+3. Launch implementers for ready tickets, within the **Concurrency** limits below, each in its own worktree. Set `model` explicitly. Brief each with the **Implementer brief** below, plus its ticket number, `<BASE>`, and the scratchpad subfolder it owns.
    - If the launch fails with "core.worktree redirect", the session's working directory has become lowercase `d:`. Return to `D:\GIT\TaskDesk` and retry.
 4. When an implementer reports, read its diff and keep the diff uncommitted in its worktree. The report is a claim, not evidence.
 5. Land the tickets one at a time, in the order they finish. For each:
@@ -21,12 +21,21 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
 Done means the spec is on `main`, every ticket and the spec are closed, and no agent worktree or branch is left.
 
 1. Review the integration branch with the `code-review` skill. Name the spec issue and its tickets as context, so approvals recorded in a ticket (such as an approved test-expectation change) are not re-flagged.
-2. Fix every confirmed finding in one implementer, then land it like a ticket. If the spec changed the UI, run the `ui-check` skill on the integration tip, with before shots from `main` (its step 4), covering every state the spec's diff touches and the tickets' visual criteria.
-3. Ask the owner, then fast-forward `main` to the integration tip and push.
-4. Close each ticket, then the spec, with `gh issue close <n> --comment "<commits>, on main."`.
-5. Remove each agent worktree (`git worktree remove`) and delete its `worktree-agent-*` branch (`git branch -D`); every one is integrated by now.
+2. Fix every confirmed finding in one implementer, then land it like a ticket.
+3. Run the `ui-check` skill on the integration tip, against the build the spec ships (the WinUI app: `-WinUI` on `run-sandbox.ps1` and `ui-tests.ps1`), with before shots from `main` (its step 4; in a port, the replaced app on `main`), covering every state the spec's diff touches and the tickets' visual criteria. Report its findings before any owner acceptance run.
+4. Ask the owner, then fast-forward `main` to the integration tip and push.
+5. Close each ticket, then the spec, with `gh issue close <n> --comment "<commits>, on main."`.
+6. Remove each agent worktree (`git worktree remove`) and delete its `worktree-agent-*` branch (`git branch -D`); every one is integrated by now.
 
 Subagents never commit, create branches or touch another worktree. The orchestrator owns every commit and every branch.
+
+## Concurrency
+
+The desktop is a shared resource: the gate's in-process WinUI tests (`TaskDesk.Views.Tests`) open real windows, and the FlaUI suite takes over the keyboard and mouse.
+
+- Run at most 2 implementers at once.
+- The orchestrator runs the FlaUI suite (`scripts/ui-tests.ps1`), or the one agent its brief names for it.
+- While the owner runs an acceptance session, every agent waits: no gate, test or app run.
 
 ## Gate
 
@@ -58,6 +67,8 @@ Beyond that one fast-forward, leave git alone: no commit, branch, checkout, merg
   - Thin ViewModel tests against fakes.
   - In tests, pass `TestContext.Current.CancellationToken` to every awaited call (xUnit1051 is an error).
 - These test seams are already agreed with the owner. The brief is pre-approved, so skip the plan step.
+- For a ticket touching WinUI views, the WinUI shell or `TaskDesk.Views.Tests`, read `docs/agents/winui.md`.
+- In a port, the running app being replaced is the reference. Where the spec's description differs from it, match the running app and report the difference.
 
 ### Scope
 
@@ -65,8 +76,9 @@ Beyond that one fast-forward, leave git alone: no commit, branch, checkout, merg
 - Keep edits to shared files (`TaskDeskDbContext`, `App.xaml.cs`, `MainViewModel`, `MainWindow.xaml`, `Directory.Packages.props`) minimal and additive.
 - Confirm that any package or API exists in the version you pick before you use it.
 - Write everything in English. Tests are never weakened, skipped or deleted.
-- Tests write only to temp locations, never to `%LOCALAPPDATA%` or the registry. Do not run the WPF app.
-- To measure startup time or working set, use `pwsh scripts/measure-startup.ps1 -Publish <publish dir>` (sandbox mode, temp data folder, no leftover processes) instead of an ad-hoc script. It is the one allowed way to run the app. `scripts/verify-toast.ps1` is owner-run only.
+- Tests write only to temp locations, never to `%LOCALAPPDATA%` or the registry.
+- Write the FlaUI tests your ticket needs and leave running them to the orchestrator (see **Concurrency**); list the test classes to run in your report.
+- To measure startup time or working set, use `pwsh scripts/measure-startup.ps1 -Publish <publish dir> [-WinUI]` (sandbox mode, temp data folder, no leftover processes) instead of an ad-hoc script. It is the one way an implementer runs either app. `scripts/verify-toast.ps1` is owner-run only.
 
 ### Migrations
 

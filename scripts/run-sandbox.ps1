@@ -1,13 +1,15 @@
 #requires -Version 7
 # Starts TaskDesk on a throwaway data folder, for looking at it with `winapp ui` (the ui-check skill). The folder
 # turns on sandbox mode, so the owner's data, the Run key and notification registration are never touched.
+#   -WinUI               run the WinUI app (src/TaskDesk.App.WinUI, TaskDesk.App.WinUI.exe) instead of the WPF one
 #   -Theme <name>        Light, Dark or System (default), written to the folder's settings.json
 #   -Width/-Height <px>  the main window's size (the app's minimum is 800 x 500; below 900 wide the sidebar is
 #                        the icon rail); unset, the app opens at its default 900 x 600
 #   -SampleTasks <n>     fill the folder with n varied Tasks first (tools/TaskDesk.SampleData); 0 starts empty
 #   -Ref <git ref>       run that commit instead of this checkout, for a before/after look (for example main). It is
 #                        checked out in a worktree under %TEMP%\TaskDesk-ref-<ref> and built there; the worktree
-#                        stays for the next run (remove it with `git worktree remove`).
+#                        stays for the next run (remove it with `git worktree remove`). With -WinUI the ref must
+#                        hold src/TaskDesk.App.WinUI.
 # Closing the window exits the app. It prints the process id for `winapp ui ... -a <pid>` and the data folder.
 # Each run first deletes the sandbox folders of earlier runs whose app has exited.
 param(
@@ -15,10 +17,13 @@ param(
     [int]$Width,
     [int]$Height,
     [ValidateRange(0, 100000)][int]$SampleTasks = 0,
-    [string]$Ref
+    [string]$Ref,
+    [switch]$WinUI
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+# The app to run: the WPF app by default; the WinUI shell keeps its own assembly name until the swap (#68).
+$appName = $WinUI ? 'TaskDesk.App.WinUI' : 'TaskDesk.App'
 
 # Earlier sandboxes: each holds the id of the app that used it.
 foreach ($old in Get-ChildItem $env:TEMP -Directory -Filter 'TaskDesk-sandbox-*') {
@@ -42,11 +47,13 @@ if ($Ref) {
     Write-Host "Running $Ref ($($commit.Substring(0, 9))) from $root"
 }
 
-& dotnet build (Join-Path $root 'src/TaskDesk.App') -nologo -v q
+$appProject = Join-Path $root "src/$appName"
+if (-not (Test-Path $appProject)) { throw "No src/$appName in $root" }
+& dotnet build $appProject -nologo -v q
 if ($LASTEXITCODE -ne 0) { throw "Build failed in $root" }
-$exe = Get-ChildItem (Join-Path $root 'src/TaskDesk.App/bin/Debug') -Filter 'TaskDesk.App.exe' -Recurse |
+$exe = Get-ChildItem (Join-Path $appProject 'bin/Debug') -Filter "$appName.exe" -Recurse |
     Sort-Object LastWriteTimeUtc | Select-Object -Last 1
-if (-not $exe) { throw "No TaskDesk.App.exe under $root\src\TaskDesk.App\bin\Debug" }
+if (-not $exe) { throw "No $appName.exe under $appProject\bin\Debug" }
 
 $data = Join-Path $env:TEMP ('TaskDesk-sandbox-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory $data | Out-Null
@@ -89,5 +96,5 @@ while ($app.MainWindowHandle -eq 0 -and -not $app.HasExited -and (Get-Date) -lt 
 if ($app.HasExited) { throw "TaskDesk exited at start-up (code $($app.ExitCode)); see the log in $data" }
 if ($app.MainWindowHandle -eq 0) { throw "TaskDesk showed no window within 20 s (pid $($app.Id))." }
 
-Write-Host "TaskDesk pid $($app.Id), theme $Theme, data $data"
+Write-Host "$appName pid $($app.Id), theme $Theme, data $data"
 Write-Host "Look with: winapp ui inspect -a $($app.Id)   Close the window (or Stop-Process $($app.Id)) when done."
