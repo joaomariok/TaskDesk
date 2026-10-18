@@ -16,12 +16,14 @@ internal delegate bool WindowMessageHook(uint message, nint wParam, nint lParam,
 /// </summary>
 /// <remarks>
 /// A message-only window gets posted and sent messages, but no broadcasts and no WM_QUERYENDSESSION /
-/// WM_ENDSESSION (Windows sends those to top-level windows only).
+/// WM_ENDSESSION (Windows sends those to top-level windows only). Pass <c>topLevel: true</c> for a hidden
+/// top-level window instead, which gets them too (session end, WM_POWERBROADCAST).
 /// </remarks>
 internal sealed unsafe partial class MessageWindow : IDisposable
 {
     private const string ClassName = "TaskDeskMessageWindow";
     private const nint HwndMessage = -3;
+    private const uint WsExToolWindow = 0x00000080;
 
     // Window handle -> instance, for the static window procedure.
     private static readonly Dictionary<nint, MessageWindow> Windows = [];
@@ -29,11 +31,18 @@ internal sealed unsafe partial class MessageWindow : IDisposable
 
     private readonly List<WindowMessageHook> _hooks = [];
 
-    public MessageWindow()
+    /// <param name="topLevel">
+    /// True for a hidden top-level window (never shown, no taskbar button) that also receives broadcasts and
+    /// session-end messages; false for a message-only window.
+    /// </param>
+    public MessageWindow(bool topLevel = false)
     {
         var instance = GetModuleHandleW(null);
         RegisterClassOnce(instance);
-        Handle = CreateWindowExW(0, ClassName, ClassName, 0, 0, 0, 0, 0, HwndMessage, 0, instance, 0);
+        // A top-level window without WS_VISIBLE stays hidden; WS_EX_TOOLWINDOW keeps it out of Alt+Tab.
+        Handle = topLevel
+            ? CreateWindowExW(WsExToolWindow, ClassName, ClassName, 0, 0, 0, 0, 0, 0, 0, instance, 0)
+            : CreateWindowExW(0, ClassName, ClassName, 0, 0, 0, 0, 0, HwndMessage, 0, instance, 0);
         if (Handle == 0)
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "The message window could not be created.");

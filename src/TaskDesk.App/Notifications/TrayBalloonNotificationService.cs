@@ -1,5 +1,5 @@
-using TaskDesk.App.Shell;
 using TaskDesk.Core.Reminders;
+using TaskDesk.Core.Shell;
 
 namespace TaskDesk.App.Notifications;
 
@@ -8,7 +8,7 @@ namespace TaskDesk.App.Notifications;
 /// and body. It has no buttons; clicking it opens the Task of the last balloon, or the Today view after a
 /// missed-Reminders summary. Manual checks only.
 /// </summary>
-internal sealed class TrayBalloonNotificationService(HNotifyTrayIcon tray) : INotificationService
+internal sealed class TrayBalloonNotificationService(IBalloonTray tray) : INotificationService
 {
     private NotificationActivation? _lastActivation;
     private bool _registered;

@@ -75,6 +75,7 @@ public partial class App : Application
         builder.Services.AddSingleton<ISingleInstance>(singleInstance);
         builder.Services.AddSingleton<HNotifyTrayIcon>();
         builder.Services.AddSingleton<ITrayIcon>(sp => sp.GetRequiredService<HNotifyTrayIcon>());
+        builder.Services.AddSingleton<IBalloonTray>(sp => sp.GetRequiredService<HNotifyTrayIcon>());
         builder.Services.AddSingleton<TrayBalloonNotificationService>();
         if (!mode.RegistersNotifications)
         {

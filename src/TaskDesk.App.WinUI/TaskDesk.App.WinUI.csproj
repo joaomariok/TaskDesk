@@ -29,6 +29,8 @@
     <Compile Include="..\TaskDesk.App\Shell\NamedPipeSingleInstance.cs" Link="Shell\NamedPipeSingleInstance.cs" />
     <Compile Include="..\TaskDesk.App\Shell\RegistryRunKey.cs" Link="Shell\RegistryRunKey.cs" />
     <Compile Include="..\TaskDesk.App\Shell\ExplorerFolderOpener.cs" Link="Shell\ExplorerFolderOpener.cs" />
+    <Compile Include="..\TaskDesk.App\Notifications\AppSdkNotificationService.cs" Link="Notifications\AppSdkNotificationService.cs" />
+    <Compile Include="..\TaskDesk.App\Notifications\TrayBalloonNotificationService.cs" Link="Notifications\TrayBalloonNotificationService.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TaskDesk.Core\TaskDesk.Core.csproj" />

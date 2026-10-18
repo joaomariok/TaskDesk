@@ -4,12 +4,15 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.UI.Xaml;
+using TaskDesk.App.Notifications;
 using TaskDesk.App.Shell;
 using TaskDesk.Core.Backups;
 using TaskDesk.Core.Export;
 using TaskDesk.Core.Import;
 using TaskDesk.Core.Paths;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Shell;
 using TaskDesk.Data;
 using TaskDesk.Data.Logging;
@@ -58,7 +61,10 @@ public partial class App : Application
         {
             // This launch has the foreground; let the running instance take it when it shows its window.
             AllowSetForegroundWindow(AsfwAny);
-            await singleInstance.SignalExistingAsync(SecondLaunchArguments.Build(minimizedFlag, null), CancellationToken.None);
+            // Forward --minimized and a Reminder toast click to the running instance (SPEC 7.1).
+            var forwarded = SecondLaunchArguments.Build(
+                minimizedFlag, mode.RegistersNotifications ? ReadLaunchActivation() : null);
+            await singleInstance.SignalExistingAsync(forwarded, CancellationToken.None);
             singleInstance.Dispose();
             Exit();
             return;
@@ -87,7 +93,17 @@ public partial class App : Application
         builder.Services.AddSingleton<IMainWindow>(sp => sp.GetRequiredService<WinUiMainWindow>());
         builder.Services.AddSingleton<IAppShutdown>(sp => sp.GetRequiredService<WinUiMainWindow>());
         builder.Services.AddSingleton<ISingleInstance>(singleInstance);
-        builder.Services.AddSingleton<ITrayIcon, WinUiTrayIcon>();
+        builder.Services.AddSingleton<WinUiTrayIcon>();
+        builder.Services.AddSingleton<ITrayIcon>(sp => sp.GetRequiredService<WinUiTrayIcon>());
+        builder.Services.AddSingleton<IBalloonTray>(sp => sp.GetRequiredService<WinUiTrayIcon>());
+        // Toasts with the balloon fallback, or the balloon only in sandbox mode (no toast registration).
+        builder.Services.AddTaskDeskNotifications(mode);
+        builder.Services.AddSingleton<ReminderScheduler>();
+        builder.Services.AddSingleton<ReminderActivationHandler>();
+        builder.Services.AddSingleton(sp => new ReminderActivationRouter(
+            sp.GetRequiredService<MainWindow>().DispatcherQueue,
+            sp.GetRequiredService<ReminderActivationHandler>(),
+            sp.GetRequiredService<ILogger<ReminderActivationRouter>>()));
         builder.Services.AddSingleton<IRunKey, RegistryRunKey>();
         builder.Services.AddSingleton<AutoStartService>();
         builder.Services.AddSingleton<IShellSettingsStore>(_ => new JsonShellSettingsStore(paths.SettingsFile));
@@ -181,8 +197,75 @@ public partial class App : Application
         shell.SettingsRequested += () => window.DispatcherQueue.TryEnqueue(ShowSettings);
         window.ViewModel.SettingsRequested += (_, _) => ShowSettings();
 
+        // Rich notifications, or the tray balloon fallback with a banner explaining why (SPEC 7.3). Every
+        // Reminder activation (toast, balloon, a later launch from a toast) opens or acts on its Task.
+        var notifications = _host.Services.GetRequiredService<INotificationService>();
+        if (notifications is NotificationDelivery delivery)
+        {
+            delivery.FellBack += reason =>
+                window.DispatcherQueue.TryEnqueue(() => window.ViewModel.ShowNotificationBanner(reason));
+        }
+
+        var activations = _host.Services.GetRequiredService<ReminderActivationRouter>();
+        activations.Attach(notifications);
+        shell.ActivationRequested += activations.Route;
+        notifications.Register();
+        var launch = notifications.GetLaunchActivation();
+
+        // Launched by "Mark done" or a Snooze button on a toast: act without opening the window.
+        var minimized = minimizedFlag
+            || launch?.Action is ReminderAction.MarkDone or ReminderAction.SnoozeShort or ReminderAction.SnoozeLong;
         var exePath = Environment.ProcessPath ?? throw new InvalidOperationException("No process path.");
-        await shell.StartAsync(minimizedFlag, exePath);
+        await shell.StartAsync(minimized, exePath);
+        if (launch is not null)
+        {
+            await activations.HandleAsync(launch);
+        }
+
+        // Checks on start, every 30 s, on every Task change and on resume from sleep (SPEC 7.4).
+        var reminders = _host.Services.GetRequiredService<ReminderScheduler>();
+        _ = reminders.StartAsync();
+        StartSystemHooks(shell, reminders, notifications);
+    }
+
+    // Session end and resume from sleep reach top-level windows only, so they get a hidden one of their own.
+    private void StartSystemHooks(ShellController shell, ReminderScheduler reminders, INotificationService notifications)
+    {
+        var systemWindow = new MessageWindow(topLevel: true);
+        // Windows signing out or shutting down: exit now (flush the pending edit, stop the host), then answer.
+        var sessionEnd = new SessionEndHook(systemWindow, shell.ExitAsync);
+        var resume = new PowerResumeHook(systemWindow, () => _ = reminders.RequestCheck());
+        var logger = _host!.Services.GetRequiredService<ILogger<App>>();
+        shell.AddExitStep(() =>
+        {
+            resume.Dispose();
+            sessionEnd.Dispose();
+            systemWindow.Dispose();
+            reminders.Dispose();
+            try
+            {
+                notifications.Unregister();
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                logger.LogWarning(ex, "Unregistering notifications failed");
+            }
+
+            return Task.CompletedTask;
+        });
+    }
+
+    // The Reminder toast click that launched this (second) process, read before any registration.
+    private static NotificationActivation? ReadLaunchActivation()
+    {
+        try
+        {
+            return new AppSdkNotificationService(NullLogger<AppSdkNotificationService>.Instance).GetLaunchActivation();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return null; // no Windows App SDK runtime: there was no toast to forward
+        }
     }
 
     private QuickAddWindow? _quickAddWindow;

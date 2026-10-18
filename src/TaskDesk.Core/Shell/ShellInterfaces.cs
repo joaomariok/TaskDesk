@@ -15,6 +15,18 @@ public interface ITrayIcon : IDisposable
     void ShowHint(string message);
 }
 
+/// <summary>
+/// The tray icon's Reminder balloons, the fallback when rich notifications are unavailable (SPEC 7.3).
+/// </summary>
+public interface IBalloonTray
+{
+    /// <summary>Raised when the owner clicks a balloon shown by <see cref="ShowBalloon"/> (not a hint balloon).</summary>
+    event Action? BalloonClicked;
+
+    /// <summary>Shows a Reminder balloon; safe to call from any thread.</summary>
+    void ShowBalloon(string title, string message);
+}
+
 /// <summary>The main window, as far as the shell cares. Implementations marshal to the UI thread.</summary>
 public interface IMainWindow
 {

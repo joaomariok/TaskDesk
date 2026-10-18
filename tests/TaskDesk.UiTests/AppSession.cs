@@ -71,6 +71,57 @@ public sealed class AppSession : IDisposable
         Launch();
     }
 
+    /// <summary>
+    /// Does to the app what Windows does at sign-out: WM_QUERYENDSESSION, then WM_ENDSESSION, to each of its
+    /// top-level windows (hidden ones too). Asserts the process ends, then starts it again on the same data folder.
+    /// </summary>
+    public void EndSessionAndRestart()
+    {
+        var process = Process.GetProcessById(_app!.ProcessId);
+        var windows = new List<IntPtr>();
+        EnumWindows((hwnd, _) =>
+        {
+            if (GetWindowThreadProcessId(hwnd, out var owner) != 0 && owner == process.Id)
+            {
+                windows.Add(hwnd);
+            }
+
+            return true;
+        }, IntPtr.Zero);
+        Assert.NotEmpty(windows);
+        foreach (var hwnd in windows)
+        {
+            SendMessageTimeoutW(hwnd, WmQueryEndSession, IntPtr.Zero, EndSessionLogoff, SmtoAbortIfHung, 10_000, out _);
+        }
+
+        foreach (var hwnd in windows)
+        {
+            SendMessageTimeoutW(hwnd, WmEndSession, 1, EndSessionLogoff, SmtoAbortIfHung, 10_000, out _);
+        }
+
+        Assert.True(process.WaitForExit(Timeout), "TaskDesk did not exit when the session ended.");
+        _app.Dispose();
+        _app = null;
+        Launch();
+    }
+
+    private const uint WmQueryEndSession = 0x0011;
+    private const uint WmEndSession = 0x0016;
+    private const uint SmtoAbortIfHung = 0x0002;
+    private static readonly IntPtr EndSessionLogoff = unchecked((IntPtr)0x80000000L);
+
+    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out int processId);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessageTimeoutW(
+        IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+
     /// <summary>Closes the window (with the Exit close behaviour) and asserts the process ends.</summary>
     public void CloseAndWaitForExit()
     {

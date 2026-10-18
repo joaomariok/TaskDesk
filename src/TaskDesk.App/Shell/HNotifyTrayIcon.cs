@@ -7,7 +7,7 @@ using TaskDesk.Core.Shell;
 namespace TaskDesk.App.Shell;
 
 /// <summary>Tray icon built on H.NotifyIcon.Wpf. Covered by manual checks only.</summary>
-internal sealed class HNotifyTrayIcon : ITrayIcon
+internal sealed class HNotifyTrayIcon : ITrayIcon, IBalloonTray
 {
     private readonly TaskbarIcon _icon;
 
