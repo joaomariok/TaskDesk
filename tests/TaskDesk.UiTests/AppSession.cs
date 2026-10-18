@@ -382,6 +382,34 @@ public sealed class AppSession : IDisposable
     public bool QuickAddWindowShown() =>
         _app!.GetAllTopLevelWindows(_automation).Any(w => w.Title == "TaskDesk quick add");
 
+    /// <summary>
+    /// The bounds of the element once it has stopped moving. A ListView's rows slide in with an entrance transition
+    /// after a reload, and UI Automation reports the bounds mid-slide (about 10 px low), so a point aimed at a row
+    /// read too early lands on the wrong part of it.
+    /// </summary>
+    public static Rectangle SettledBounds(Func<AutomationElement> find)
+    {
+        var last = Rectangle.Empty;
+        var settled = Rectangle.Empty;
+        WaitUntil(
+            () =>
+            {
+                var bounds = find().BoundingRectangle;
+                var same = !bounds.IsEmpty && bounds == last;
+                last = bounds;
+                if (!same)
+                {
+                    Thread.Sleep(150);
+                    return false;
+                }
+
+                settled = bounds;
+                return true;
+            },
+            () => $"The element did not stop moving (last at {last}).");
+        return settled;
+    }
+
     /// <summary>A drag a person makes: press, move in small steps (drag and drop needs real pointer moves; the cursor
     /// jumps of Mouse.Drag and Mouse.Position send none to WinUI), pause over the target, release.</summary>
     public static void DragSlowly(Point from, Point to)

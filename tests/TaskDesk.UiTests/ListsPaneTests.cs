@@ -26,8 +26,9 @@ public sealed class ListsPaneTests : IDisposable
 
         _app.WaitForRows(Ids.ListsList, "Inbox", "A", "B", "C");
 
-        var dragged = Row("C").BoundingRectangle;
-        var target = Row("A").BoundingRectangle;
+        // The rows slide in after each reload; aim at where they come to rest.
+        var dragged = AppSession.SettledBounds(() => Row("C"));
+        var target = AppSession.SettledBounds(() => Row("A"));
         AppSession.DragSlowly(
             new Point(dragged.Left + dragged.Width / 2, dragged.Top + dragged.Height / 2),
             new Point(target.Left + target.Width / 2, target.Top + target.Height / 4));
