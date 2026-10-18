@@ -12,6 +12,13 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      # The runner's 1024 x 768 screen caps window width; the docked-pane tests need 1200 px.
+      - name: Set display resolution
+        shell: pwsh
+        run: |
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Add-Type -AssemblyName System.Windows.Forms
+          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
       - name: Run gate
         shell: pwsh
         run: pwsh scripts/gate.ps1

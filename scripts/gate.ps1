@@ -18,7 +18,9 @@ function Invoke-Step {
 
 function Get-TestTotal {
     param([System.Collections.Generic.List[string]]$Output, [string]$Label)
-    $values = foreach ($l in $Output) {
+    $values = foreach ($line in $Output) {
+        # On CI the test output carries ANSI colour codes ahead of the summary labels.
+        $l = $line -replace '\e\[[0-9;]*m', ''
         if ($l -match "^\s*$Label\s*:\s*(\d+)\s*$") { [int]$Matches[1] }
     }
     return [int](($values | Measure-Object -Sum).Sum)
