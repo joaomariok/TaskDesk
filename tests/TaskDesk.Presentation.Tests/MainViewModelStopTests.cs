@@ -496,6 +496,45 @@ public sealed class MainViewModelStopTests
     }
 
     [Fact]
+    public async Task Preparing_for_an_import_waits_for_a_Subtask_delete_ahead_of_a_debounced_edit()
+    {
+        var (inner, service, vm) = await StartWithDeletesHeldAsync();
+        var gone = vm.SubtaskItems[0].Id;
+        var delete = vm.DeleteSubtaskCommand.ExecuteAsync(vm.SubtaskItems[0]);
+        vm.DetailNotes = "typed";
+
+        // The superseded debounce ends on another thread, so give the chain a moment to run ahead if it would.
+        var prepare = vm.PrepareForImportAsync();
+        var first = await Task.WhenAny(prepare, Task.Delay(TimeSpan.FromMilliseconds(250), Ct));
+        Assert.False(prepare.IsCompleted, "The import went ahead while a Subtask delete was in flight.");
+        Assert.NotSame(prepare, first);
+
+        service.ReleaseDelete();
+        await prepare;
+        Assert.True(delete.IsCompleted);
+        var tasks = await inner.ListDefaultListTasksAsync(Ct);
+        Assert.DoesNotContain(tasks[0].Subtasks, s => s.Id == gone);
+        Assert.Equal("typed", tasks[0].Notes);
+    }
+
+    [Fact]
+    public async Task A_Subtask_move_queued_behind_its_delete_does_nothing()
+    {
+        var (service, vm) = await StartWithTickInFlightAsync();
+        var gone = vm.SubtaskItems[1];
+        var delete = vm.DeleteSubtaskCommand.ExecuteAsync(gone);
+        var move = vm.MoveSubtaskUpCommand.ExecuteAsync(gone);
+
+        service.Release();
+        await delete;
+        await move;
+
+        Assert.Equal([gone.Id], service.Deletes);
+        Assert.Empty(service.Moves);
+        Assert.Null(vm.ErrorMessage);
+    }
+
+    [Fact]
     public async Task After_the_stop_a_Due_change_touches_no_service()
     {
         var s = await StartAsync("a");

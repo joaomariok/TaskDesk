@@ -304,12 +304,15 @@ public sealed partial class MainViewModel
             }
             catch (OperationCanceledException)
             {
-                return; // superseded by a later edit, a flush or a delete
+                // superseded by a later edit, a flush or a delete
             }
 
             if (!waited)
             {
-                return; // the view model stopped
+                // Superseded, or the view model stopped: store nothing, but still complete only after the save
+                // ahead, so the links queued after this one keep waiting for it.
+                await previous;
+                return;
             }
 
             _debounce = null;

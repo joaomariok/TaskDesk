@@ -51,6 +51,11 @@ public sealed partial class MainViewModel
     private async Task DeleteSubtaskNowAsync(
         TaskRowViewModel row, SubtaskRowViewModel subtask, CancellationToken cancellationToken)
     {
+        if (!row.Subtasks.Exists(s => s.Id == subtask.Id))
+        {
+            return; // a change queued ahead of this one deleted it already
+        }
+
         var deleted = await taskService.DeleteSubtaskAsync(subtask.Id, cancellationToken);
         row.Subtasks.RemoveAll(s => s.Id == deleted.Id);
         row.RefreshSubtaskProgress();
@@ -107,6 +112,11 @@ public sealed partial class MainViewModel
     private async Task MoveSubtaskNowAsync(
         TaskRowViewModel row, SubtaskRowViewModel subtask, int newIndex, CancellationToken cancellationToken)
     {
+        if (!row.Subtasks.Exists(s => s.Id == subtask.Id))
+        {
+            return; // a change queued ahead of this one deleted it already
+        }
+
         var ordered = await taskService.MoveSubtaskAsync(subtask.Id, newIndex, cancellationToken);
         row.Subtasks.Clear();
         row.Subtasks.AddRange(ordered);
