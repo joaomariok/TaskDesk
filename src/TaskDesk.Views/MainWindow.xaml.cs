@@ -59,10 +59,10 @@ public sealed partial class MainWindow : Window
         {
             // A closed window has no handle or size to measure.
             _closed = true;
-            // Stops the view model's deferred work now: the stop latches and cancels before it returns, so a text
-            // change delivered after Closed or a tick already queued starts nothing, and a search still loading stops
-            // before the caller lets the database go. Not awaited: the cancelled work ends on its own, quietly.
-            _ = ViewModel.StopAsync();
+            // Stops the view models' deferred work now: each stop latches and cancels before it returns, so a text
+            // change delivered after Closed or a tick already queued starts nothing, and a search or load still running
+            // stops before the caller lets the database go. Not awaited: the cancelled work ends on its own, quietly.
+            _ = StopViewModelsAsync();
         };
         // Ctrl+comma opens Settings from anywhere in the window, before a text box sees the key.
         Navigation.PreviewKeyDown += OnPreviewKeyDown;
@@ -103,14 +103,17 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Call when the exit starts, before its flush and host stop: the window stays open until the exit has run, so
     /// its Closed comes too late. The sidebar, page and detail pane take no more input, so nothing there starts a
-    /// reload, and the view model stops (<see cref="MainViewModel.StopAsync"/>); completes once the work it cancelled
-    /// has ended.
+    /// reload, and both view models stop (<see cref="MainViewModel.StopAsync"/>, <see cref="ListsViewModel.StopAsync"/>);
+    /// completes once the work they cancelled has ended.
     /// </summary>
     public Task PrepareForExitAsync()
     {
         Navigation.IsEnabled = false;
-        return ViewModel.StopAsync();
+        return StopViewModelsAsync();
     }
+
+    // The page's view model and the sidebar's Lists; both stops are idempotent.
+    private Task StopViewModelsAsync() => Task.WhenAll(ViewModel.StopAsync(), Lists?.StopAsync() ?? Task.CompletedTask);
 
     // Opens at the default size (the shell then restores a saved layout), never smaller than the minimum.
     private void SetDefaultSize()

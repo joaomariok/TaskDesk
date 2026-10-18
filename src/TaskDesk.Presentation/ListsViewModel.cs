@@ -55,7 +55,21 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
     /// </summary>
     public event EventHandler? ListEdited;
 
-    public async Task LoadAsync(CancellationToken cancellationToken = default)
+    // The load and the commands stop with the view model (see StopAsync).
+    private readonly ViewModelLifetime _lifetime = new();
+
+    /// <summary>
+    /// Stops the view model's work: from now on the load and the commands do nothing, and work still running is
+    /// cancelled and ends quietly. Idempotent; the stop itself happens before this returns, and the task completes
+    /// once the cancelled work has ended, however it ended.
+    /// </summary>
+    public Task StopAsync() => _lifetime.StopAsync();
+
+    /// <summary>Loads the Lists with their open-Task counts; does nothing once stopped.</summary>
+    public Task LoadAsync(CancellationToken cancellationToken = default)
+        => _lifetime.RunAsync(ReloadAsync, cancellationToken);
+
+    private async Task ReloadAsync(CancellationToken cancellationToken)
     {
         var summaries = await listService.GetListsAsync(cancellationToken);
         Lists.Clear();
@@ -67,17 +81,17 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
 
     [RelayCommand(CanExecute = nameof(CanCreateList))]
     private Task CreateListAsync(CancellationToken cancellationToken)
-        => GuardedAsync(async () =>
+        => GuardedAsync(() => _lifetime.RunAsync(async token =>
         {
             if (!CanCreateList())
             {
                 return;
             }
 
-            await listService.CreateListAsync(NewListName, cancellationToken);
+            await listService.CreateListAsync(NewListName, token);
             NewListName = "";
-            await LoadAsync(cancellationToken);
-        });
+            await ReloadAsync(token);
+        }, cancellationToken));
 
     [RelayCommand]
     private Task RenameAsync(ListItemViewModel? item, CancellationToken cancellationToken)
@@ -89,22 +103,25 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
                 return;
             }
 
-            await listService.RenameListAsync(item.Id, name, cancellationToken);
-            await LoadAsync(cancellationToken);
-            ListEdited?.Invoke(this, EventArgs.Empty);
+            // The dialog stays outside the lifetime, so a stop never waits on the owner.
+            await _lifetime.RunAsync(async token =>
+            {
+                await listService.RenameListAsync(item.Id, name, token);
+                await ReloadAsync(token);
+                ListEdited?.Invoke(this, EventArgs.Empty);
+            }, cancellationToken);
         });
 
     /// <param name="item">The List to colour.</param>
     /// <param name="colorHex">#RRGGBB, or empty/null to clear the colour.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     public Task SetColorAsync(ListItemViewModel item, string? colorHex, CancellationToken cancellationToken = default)
-        => GuardedAsync(async () =>
+        => GuardedAsync(() => _lifetime.RunAsync(async token =>
         {
-            await listService.SetListColorAsync(
-                item.Id, string.IsNullOrEmpty(colorHex) ? null : colorHex, cancellationToken);
-            await LoadAsync(cancellationToken);
+            await listService.SetListColorAsync(item.Id, string.IsNullOrEmpty(colorHex) ? null : colorHex, token);
+            await ReloadAsync(token);
             ListEdited?.Invoke(this, EventArgs.Empty);
-        });
+        }, cancellationToken));
 
     [RelayCommand]
     private Task DeleteAsync(ListItemViewModel? item, CancellationToken cancellationToken)
@@ -115,9 +132,13 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
                 return;
             }
 
-            await listService.DeleteListAsync(item.Id, cancellationToken);
-            await LoadAsync(cancellationToken);
-            ListEdited?.Invoke(this, EventArgs.Empty);
+            // The dialog stays outside the lifetime, so a stop never waits on the owner.
+            await _lifetime.RunAsync(async token =>
+            {
+                await listService.DeleteListAsync(item.Id, token);
+                await ReloadAsync(token);
+                ListEdited?.Invoke(this, EventArgs.Empty);
+            }, cancellationToken);
         });
 
     /// <summary>The List with this id, or the Default List when there is none (or the id is null).</summary>
@@ -129,7 +150,7 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
     /// last) and saves the new order. Its own gap (its index or the one after) and a gap out of range change nothing.
     /// </summary>
     public Task MoveToGapAsync(ListItemViewModel item, int gap, CancellationToken cancellationToken = default)
-        => GuardedAsync(async () =>
+        => GuardedAsync(() => _lifetime.RunAsync(async token =>
         {
             var from = Lists.IndexOf(item);
             if (from < 0 || gap < 0 || gap > Lists.Count || gap == from || gap == from + 1)
@@ -141,14 +162,20 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
             ids.RemoveAt(from);
             ids.Insert(gap > from ? gap - 1 : gap, item.Id);
 
-            await listService.ReorderListsAsync(ids, cancellationToken);
-            await LoadAsync(cancellationToken);
-        });
+            await listService.ReorderListsAsync(ids, token);
+            await ReloadAsync(token);
+        }, cancellationToken));
 
     private bool CanCreateList() => ListName.IsValid(NewListName);
 
+    // Shows a rejected edit as the error; once stopped, a command asks nothing and changes nothing.
     private async Task GuardedAsync(Func<Task> action)
     {
+        if (_lifetime.IsStopped)
+        {
+            return;
+        }
+
         ErrorMessage = null;
         try
         {

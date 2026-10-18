@@ -165,6 +165,62 @@ public sealed partial class MainWindowTests
         }
     }
 
+    [UITestMethod]
+    public Task Closing_the_main_window_stops_its_view_models_and_the_sidebar_Lists()
+        => AssertStopsBothAsync(window =>
+        {
+            window.Close();
+            return Task.CompletedTask;
+        });
+
+    [UITestMethod]
+    public Task Preparing_the_main_window_for_the_exit_stops_its_view_models_and_the_sidebar_Lists()
+        => AssertStopsBothAsync(window => window.PrepareForExitAsync());
+
+    // Opens the window with its sidebar Lists, stops it the given way, then adds a Task and a List to the database:
+    // a stopped view model loads neither.
+    private async Task AssertStopsBothAsync(Func<MainWindow, Task> stop)
+    {
+        var ct = TestContext.CancellationToken;
+        using var db = new TempDatabase();
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
+        var inbox = (await db.QueryAsync(c => c.Lists)).Single().Id;
+        var viewModel = new MainViewModel(
+            db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock, listService: db.Get<IListService>());
+        var lists = new ListsViewModel(db.Get<IListService>(), new NoListDialogs());
+
+        var window = new MainWindow(viewModel, lists);
+        try
+        {
+            window.Activate();
+            await viewModel.LoadAsync(ct);
+            await lists.LoadAsync(ct);
+            var shownLists = lists.Lists.Select(l => l.Name).ToList();
+
+            await stop(window);
+            await db.AddTaskAsync(inbox, "Book flights", completed: false);
+            await db.Get<IListService>().CreateListAsync("Work", ct);
+            await viewModel.ApplySearchCommand.ExecuteAsync(null);
+            await lists.LoadAsync(ct);
+
+            Assert.AreEqual(0, viewModel.Tasks.Count, "The main view model reloaded after the stop.");
+            CollectionAssert.AreEqual(
+                shownLists, lists.Lists.Select(l => l.Name).ToList(), "The sidebar Lists reloaded after the stop.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // The sidebar asks nothing in these tests.
+    private sealed class NoListDialogs : IListDialogs
+    {
+        public Task<bool> ConfirmDeleteAsync(string listName, int taskCount) => Task.FromResult(false);
+
+        public Task<string?> PromptNameAsync(string currentName) => Task.FromResult<string?>(null);
+    }
+
     [LibraryImport("user32.dll")]
     private static partial uint GetDpiForWindow(nint hwnd);
 }
