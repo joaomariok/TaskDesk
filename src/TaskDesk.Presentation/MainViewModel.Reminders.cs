@@ -11,15 +11,21 @@ public sealed partial class MainViewModel
 {
     /// <summary>The local date of the selected Task's Reminder; null when it has none.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDetailReminder))]
     private DateTime? _detailReminderDate;
 
+    /// <summary>The Reminder time only applies once the Task has a Reminder date, so the pane enables it then.</summary>
+    public bool HasDetailReminder => DetailReminderDate is not null;
+
     /// <summary>
-    /// The local time of the selected Task's Reminder as "H:mm" text. Left empty with a date, the Reminder
-    /// fires at the "Default reminder time" setting (<see cref="ReminderCalculator.DefaultReminderTime"/> when
-    /// no settings are available).
+    /// The local time of the selected Task's Reminder as a time of day, bindable to a time picker's selected
+    /// time; null without a Reminder date. A date-only Reminder shows the "Default reminder time" setting
+    /// (<see cref="ReminderCalculator.DefaultReminderTime"/> when no settings are available), which is the time
+    /// it fires at.
     /// </summary>
     [ObservableProperty]
-    private string _detailReminderTime = "";
+    [NotifyCanExecuteChangedFor(nameof(ClearDetailReminderTimeCommand))]
+    private TimeSpan? _detailReminderTime;
 
     /// <summary>"Snoozed until ..." in local time for the selected Task; null when it is not snoozed.</summary>
     [ObservableProperty]
@@ -48,12 +54,12 @@ public sealed partial class MainViewModel
         {
             var (date, time) = ReminderCalculator.ToLocal(reminderUtc, _clock.LocalTimeZone);
             DetailReminderDate = date.ToDateTime(TimeOnly.MinValue);
-            DetailReminderTime = FormatTime(time);
+            DetailReminderTime = time.ToTimeSpan();
         }
         else
         {
             DetailReminderDate = null;
-            DetailReminderTime = "";
+            DetailReminderTime = null;
         }
 
         LoadSnoozeDetail(task);
@@ -132,18 +138,27 @@ public sealed partial class MainViewModel
             return;
         }
 
-        if (value is null && DetailReminderTime.Length > 0)
+        if (value is null && DetailReminderTime is not null)
         {
             // Clearing the date clears the whole Reminder.
             _loadingDetail = true;
-            DetailReminderTime = "";
+            DetailReminderTime = null;
             _loadingDetail = false;
         }
 
         ScheduleReminderSave();
     }
 
-    partial void OnDetailReminderTimeChanged(string value) => ScheduleReminderSave();
+    partial void OnDetailReminderTimeChanged(TimeSpan? value) => ScheduleReminderSave();
+
+    /// <summary>
+    /// Clears the Reminder time (the pane's "Clear Reminder time" button): the Reminder falls back to the
+    /// default Reminder time, which the pane then shows.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanClearDetailReminderTime))]
+    private void ClearDetailReminderTime() => DetailReminderTime = null;
+
+    private bool CanClearDetailReminderTime() => DetailReminderTime is not null;
 
     private void ScheduleReminderSave()
     {
@@ -152,32 +167,19 @@ public sealed partial class MainViewModel
             return;
         }
 
-        TimeOnly? time = null;
-        var text = DetailReminderTime?.Trim() ?? "";
-        if (text.Length > 0)
-        {
-            if (!TimeOnly.TryParseExact(
-                    text, ["H:mm", "HH:mm"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
-            {
-                ShowFieldError(ErrorPlace.Reminder, "Enter the Reminder time as HH:mm, for example 14:30.");
-                return;
-            }
-
-            time = parsed;
-        }
-
+        TimeOnly? time = DetailReminderTime is { } picked ? TimeOnly.FromTimeSpan(picked) : null;
         DateTime? reminderUtc = null;
-        if (DetailReminderDate is { } picked)
+        if (DetailReminderDate is { } day)
         {
             // Read on every save, so a change in Settings applies without a restart.
             var defaultTime = DefaultReminderTime();
             reminderUtc = ReminderCalculator.ToUtc(
-                DateOnly.FromDateTime(picked), time, _clock.LocalTimeZone, defaultTime);
+                DateOnly.FromDateTime(day), time, _clock.LocalTimeZone, defaultTime);
             if (time is null)
             {
                 // Show the time a date-only Reminder fires at.
                 _loadingDetail = true;
-                DetailReminderTime = FormatTime(defaultTime);
+                DetailReminderTime = defaultTime.ToTimeSpan();
                 _loadingDetail = false;
             }
         }

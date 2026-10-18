@@ -227,21 +227,33 @@
                                Text="{x:Bind ViewModel.DueError, Mode=OneWay}"
                                Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.DueError), Mode=OneWay, FallbackValue=Collapsed}" />
 
-                    <!-- Reminder: a calendar date and an optional time; an empty time fires at 09:00. -->
+                    <!-- Reminder: a calendar date, then an optional time picked once the date is set; without a time
+                         the picker shows the default Reminder time. -->
                     <TextBlock Text="Reminder" Style="{StaticResource FieldLabel}" />
-                    <Grid Margin="{StaticResource FieldMargin}" ColumnSpacing="6">
+                    <CalendarDatePicker x:Name="ReminderDatePicker" HorizontalAlignment="Stretch"
+                                        Margin="{StaticResource FieldMargin}"
+                                        AutomationProperties.Name="Reminder date"
+                                        Date="{x:Bind local:DetailPane.ToPickerDate(ViewModel.DetailReminderDate), BindBack=SetReminderDate, Mode=TwoWay, FallbackValue={x:Null}}" />
+                    <TextBlock Text="Reminder time" Style="{StaticResource FieldLabel}" />
+                    <Grid Margin="{StaticResource FieldMargin}" ColumnSpacing="4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="72" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <CalendarDatePicker x:Name="ReminderDatePicker" HorizontalAlignment="Stretch"
-                                            AutomationProperties.Name="Reminder date"
-                                            Date="{x:Bind local:DetailPane.ToPickerDate(ViewModel.DetailReminderDate), BindBack=SetReminderDate, Mode=TwoWay, FallbackValue={x:Null}}" />
-                        <TextBox x:Name="ReminderTimeBox" Grid.Column="1" MaxLength="5" PlaceholderText="09:00"
-                                 AutomationProperties.Name="Reminder time"
-                                 AutomationProperties.HelpText="Time as HH:mm; empty means 09:00"
-                                 ToolTipService.ToolTip="Reminder time as HH:mm (empty means 09:00)"
-                                 Text="{x:Bind ViewModel.DetailReminderTime, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                        <TimePicker x:Name="ReminderTimePicker" HorizontalAlignment="Stretch" MinWidth="0"
+                                    MinuteIncrement="1"
+                                    AutomationProperties.Name="Reminder time"
+                                    AutomationProperties.AutomationId="ReminderTimePicker"
+                                    AutomationProperties.HelpText="Needs a Reminder date; clearing it uses the default Reminder time"
+                                    IsEnabled="{x:Bind ViewModel.HasDetailReminder, Mode=OneWay}"
+                                    SelectedTime="{x:Bind ViewModel.DetailReminderTime, Mode=TwoWay}" />
+                        <Button x:Name="ClearReminderTimeButton" Grid.Column="1" Style="{StaticResource SmallIconButton}"
+                                ToolTipService.ToolTip="Clear Reminder time"
+                                AutomationProperties.Name="Clear Reminder time"
+                                AutomationProperties.AutomationId="ClearReminderTimeButton"
+                                Command="{x:Bind ViewModel.ClearDetailReminderTimeCommand, Mode=OneTime}">
+                            <FontIcon Glyph="&#xE711;" FontSize="12" />
+                        </Button>
                     </Grid>
                     <TextBlock x:Name="ReminderErrorText" Style="{StaticResource FieldErrorText}"
                                Text="{x:Bind ViewModel.ReminderError, Mode=OneWay}"

@@ -140,7 +140,7 @@ public class ReminderViewModelTests
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
         Assert.Equal(new DateTime(2026, 10, 20), s.Vm.DetailReminderDate);
-        Assert.Equal("22:15", s.Vm.DetailReminderTime);
+        Assert.Equal(new TimeSpan(22, 15, 0), s.Vm.DetailReminderTime);
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public class ReminderViewModelTests
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
         Assert.Null(s.Vm.DetailReminderDate);
-        Assert.Equal("", s.Vm.DetailReminderTime);
+        Assert.Null(s.Vm.DetailReminderTime);
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public class ReminderViewModelTests
         await s.Vm.PendingSave;
 
         Assert.Equal([(s.Tasks.All[0].Id, (DateTime?)Utc(22, 12))], s.Reminders.SetCalls);
-        Assert.Equal("09:00", s.Vm.DetailReminderTime);
+        Assert.Equal(new TimeSpan(9, 0, 0), s.Vm.DetailReminderTime);
         Assert.Null(s.Tasks.All[0].DueDate);
         Assert.Null(s.Vm.ErrorMessage);
     }
@@ -196,7 +196,7 @@ public class ReminderViewModelTests
         await vm.PendingSave;
 
         Assert.Equal(Utc(22, 10, 30), reminders.SetCalls[^1].ReminderUtc);
-        Assert.Equal("07:30", vm.DetailReminderTime);
+        Assert.Equal(new TimeSpan(7, 30, 0), vm.DetailReminderTime);
 
         // Changed in Settings while the app runs: the next date-only Reminder uses it, no restart needed.
         settings.Current = settings.Current with { DefaultReminderTime = new TimeOnly(18, 15) };
@@ -205,7 +205,7 @@ public class ReminderViewModelTests
         await vm.PendingSave;
 
         Assert.Equal(Utc(23, 21, 15), reminders.SetCalls[^1].ReminderUtc);
-        Assert.Equal("18:15", vm.DetailReminderTime);
+        Assert.Equal(new TimeSpan(18, 15, 0), vm.DetailReminderTime);
     }
 
     [Fact]
@@ -215,29 +215,11 @@ public class ReminderViewModelTests
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
         s.Vm.DetailReminderDate = new DateTime(2026, 10, 22);
-        s.Vm.DetailReminderTime = "14:30";
+        s.Vm.DetailReminderTime = new TimeSpan(14, 30, 0);
         await s.Vm.PendingSave;
 
         Assert.Equal(Utc(22, 17, 30), s.Reminders.SetCalls[^1].ReminderUtc);
         Assert.Equal(Utc(22, 17, 30), s.Tasks.All[0].ReminderUtc);
-    }
-
-    [Theory]
-    [InlineData("25:00")]
-    [InlineData("noon")]
-    public async Task An_invalid_Reminder_time_is_reported_and_not_saved(string text)
-    {
-        var s = await StartAsync("a");
-        s.Vm.SelectedTask = s.Vm.Tasks[0];
-        s.Vm.DetailReminderDate = new DateTime(2026, 10, 22);
-        await s.Vm.PendingSave;
-        var saves = s.Reminders.SetCalls.Count;
-
-        s.Vm.DetailReminderTime = text;
-        await s.Vm.PendingSave;
-
-        Assert.Equal(saves, s.Reminders.SetCalls.Count);
-        Assert.NotNull(s.Vm.ErrorMessage);
     }
 
     [Fact]
@@ -246,7 +228,7 @@ public class ReminderViewModelTests
         var s = await StartAsync("a");
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        s.Vm.DetailReminderTime = "14:30";
+        s.Vm.DetailReminderTime = new TimeSpan(14, 30, 0);
         await s.Vm.PendingSave;
 
         Assert.Empty(s.Reminders.SetCalls);
@@ -254,17 +236,50 @@ public class ReminderViewModelTests
     }
 
     [Fact]
-    public async Task A_rejected_Reminder_time_is_shown_under_the_Reminder_field()
+    public async Task A_rejected_Reminder_time_without_a_date_is_shown_under_the_Reminder_field()
     {
         var s = await StartAsync("a");
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        s.Vm.DetailReminderTime = "noon";
+        s.Vm.DetailReminderTime = new TimeSpan(14, 30, 0);
         await s.Vm.PendingSave;
 
-        Assert.Equal("Enter the Reminder time as HH:mm, for example 14:30.", s.Vm.ReminderError);
+        Assert.Equal("A Reminder time needs a Reminder date.", s.Vm.ReminderError);
         Assert.Null(s.Vm.DueError);
         Assert.Null(s.Vm.GeneralError);
+    }
+
+    [Fact]
+    public async Task Clearing_the_Reminder_time_falls_back_to_the_default_Reminder_time()
+    {
+        var s = await StartAsync("a");
+        await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(22, 17, 30), Ct);
+        await s.Vm.LoadAsync(Ct);
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        Assert.True(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+
+        s.Vm.ClearDetailReminderTimeCommand.Execute(null);
+        await s.Vm.PendingSave;
+
+        Assert.Equal(Utc(22, 12), s.Reminders.SetCalls[^1].ReminderUtc);
+        Assert.Equal(new TimeSpan(9, 0, 0), s.Vm.DetailReminderTime);
+        Assert.Equal(new DateTime(2026, 10, 22), s.Vm.DetailReminderDate);
+    }
+
+    [Fact]
+    public async Task The_clear_Reminder_time_command_needs_a_time()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+
+        s.Vm.DetailReminderDate = new DateTime(2026, 10, 22);
+        await s.Vm.PendingSave;
+        Assert.True(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+
+        s.Vm.DetailReminderDate = null;
+        await s.Vm.PendingSave;
+        Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
     }
 
     [Fact]
@@ -278,7 +293,7 @@ public class ReminderViewModelTests
         s.Vm.DetailReminderDate = null;
         await s.Vm.PendingSave;
 
-        Assert.Equal("", s.Vm.DetailReminderTime);
+        Assert.Null(s.Vm.DetailReminderTime);
         Assert.Null(s.Reminders.SetCalls[^1].ReminderUtc);
         Assert.Null(s.Tasks.All[0].ReminderUtc);
     }
@@ -292,7 +307,7 @@ public class ReminderViewModelTests
         await s.Vm.LoadAsync(Ct);
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        s.Vm.DetailReminderTime = "15:00";
+        s.Vm.DetailReminderTime = new TimeSpan(15, 0, 0);
         await s.Vm.PendingSave;
 
         Assert.Null(s.Tasks.All[0].ReminderFiredUtc);
@@ -505,7 +520,7 @@ public class ReminderViewModelTests
         await s.Vm.LoadAsync(Ct);
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        s.Vm.DetailReminderTime = "15:00";
+        s.Vm.DetailReminderTime = new TimeSpan(15, 0, 0);
         await s.Vm.PendingSave;
 
         Assert.Null(s.Tasks.All[0].SnoozedUntilUtc);

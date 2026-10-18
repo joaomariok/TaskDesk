@@ -109,7 +109,7 @@ public sealed class DetailPaneSectionsTests
     }
 
     [UITestMethod]
-    public async Task A_Reminder_set_in_the_pane_is_saved_and_its_time_box_hints_the_default()
+    public async Task A_Reminder_set_in_the_pane_is_saved_and_clearing_its_date_clears_it()
     {
         using var db = await DatabaseAsync();
         await AddAsync(db, "Call the bank");
@@ -117,17 +117,16 @@ public sealed class DetailPaneSectionsTests
         try
         {
             var pane = await OpenPaneAsync(window, "Call the bank");
-            var time = VisualTree.Find<TextBox>(pane, "ReminderTimeBox");
+            var time = VisualTree.Find<TimePicker>(pane, "ReminderTimePicker");
             Assert.AreEqual("Reminder time", AutomationProperties.GetName(time));
-            Assert.AreEqual("09:00", time.PlaceholderText);
-            StringAssert.Contains(AutomationProperties.GetHelpText(time), "HH:mm");
+            Assert.IsNull(time.SelectedTime);
 
             var picker = Named<CalendarDatePicker>(pane, "Reminder date");
             picker.Date = new DateTimeOffset(new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Local));
-            time.Focus(FocusState.Programmatic);
-            time.Text = "14:30";
-            Named<TextBox>(pane, "New subtask title").Focus(FocusState.Programmatic);
-            await UiWait.UntilAsync(() => viewModel.DetailReminderTime == "14:30", () => "The time was not taken.", Ct);
+            await UiWait.UntilAsync(() => time.IsEnabled, () => "Picking a Reminder date did not enable the time.", Ct);
+            time.SelectedTime = new TimeSpan(14, 30, 0);
+            await UiWait.UntilAsync(() => viewModel.DetailReminderTime == new TimeSpan(14, 30, 0),
+                () => "The time was not taken.", Ct);
             await viewModel.FlushPendingSaveAsync();
 
             var saved = (await db.QueryAsync(c => c.Tasks)).Single();
@@ -144,7 +143,7 @@ public sealed class DetailPaneSectionsTests
     }
 
     [UITestMethod]
-    public async Task A_Reminder_time_error_shows_right_under_the_Reminder_field_above_the_Priority_label()
+    public async Task A_Reminder_time_without_a_date_error_shows_right_under_the_Reminder_field_above_the_Priority_label()
     {
         using var db = await DatabaseAsync();
         await AddAsync(db, "Call the bank");
@@ -153,11 +152,11 @@ public sealed class DetailPaneSectionsTests
         {
             var pane = await OpenPaneAsync(window, "Call the bank");
 
-            viewModel.DetailReminderTime = "noon";
+            viewModel.DetailReminderTime = new TimeSpan(14, 30, 0);
             pane.UpdateLayout();
 
-            var error = ShownText(pane, "Enter the Reminder time as HH:mm, for example 14:30.");
-            var picker = Named<CalendarDatePicker>(pane, "Reminder date");
+            var error = ShownText(pane, "A Reminder time needs a Reminder date.");
+            var picker = VisualTree.Find<TimePicker>(pane, "ReminderTimePicker");
             Assert.IsTrue(Top(error, pane) >= Bottom(picker, pane) - 0.5, "The error is above the Reminder field.");
             Assert.IsTrue(Bottom(error, pane) <= Top(Label(pane, "Priority"), pane) + 0.5,
                 "The error is below the Priority label.");
