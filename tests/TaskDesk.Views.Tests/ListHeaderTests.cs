@@ -243,6 +243,38 @@ public sealed class ListHeaderTests
         }
     }
 
+    // A List name too long for the row stays on one line and ends with an ellipsis, so the row keeps its 32 px and
+    // the command bar stays in view before the search box.
+    [UITestMethod]
+    public async Task A_long_List_name_ends_the_heading_with_an_ellipsis_on_one_line()
+    {
+        using var db = await DatabaseAsync();
+        var list = await db.Get<IListService>().CreateListAsync(
+            "A very long List name that should trim with an ellipsis in the heading", Ct);
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            await viewModel.ShowListAsync(list.Id, Ct);
+            var heading = VisualTree.Find<TextBlock>(window.View, "PageHeading");
+            await UiWait.UntilAsync(() => heading.Text == list.Name, () => $"The heading read '{heading.Text}'.", Ct);
+            window.View.UpdateLayout();
+            var bar = VisualTree.Find<CommandBar>(window.View, "HeadingCommands");
+            var search = VisualTree.Find<TextBox>(window.View, "SearchBox");
+            var row = (FrameworkElement)VisualTreeHelper.GetParent(search);
+            Rect Bounds(FrameworkElement e) =>
+                e.TransformToVisual(window.View).TransformBounds(new Rect(0, 0, e.ActualWidth, e.ActualHeight));
+
+            Assert.IsTrue(heading.IsTextTrimmed, "The long heading does not end with an ellipsis.");
+            Assert.IsLessThanOrEqualTo(32.5, row.ActualHeight, $"The heading row is {row.ActualHeight} px tall.");
+            Assert.IsLessThanOrEqualTo(Bounds(search).Left + 0.5, Bounds(bar).Right, "The command bar runs into search.");
+            Assert.IsGreaterThan(0, bar.ActualWidth, "The command bar is pushed out of view.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     // Fourteen Tags in a narrow window cannot share one line with the other Filters: like the WPF app, the bar wraps them.
     [UITestMethod]
     public async Task Tag_chips_that_do_not_fit_on_one_line_wrap_inside_the_Filter_bar()

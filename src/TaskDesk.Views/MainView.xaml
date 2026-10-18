@@ -41,8 +41,9 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+                    <!-- Fluent's subtitle style wraps; the heading stays on one line and ends with an ellipsis. -->
                     <TextBlock x:Name="PageHeading" Style="{StaticResource SubtitleText}" VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                                AutomationProperties.AutomationId="PageHeading"
                                Text="{x:Bind ViewModel.PageHeading, Mode=OneWay}"
                                ToolTipService.ToolTip="{x:Bind ViewModel.PageHeading, Mode=OneWay}" />
