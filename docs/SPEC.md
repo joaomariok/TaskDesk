@@ -348,7 +348,7 @@ One scrolling page in the Windows 11 Settings style. Settings are grouped under 
 - **Appearance:** Theme: System / Light / Dark
 - **Startup and tray:** Start with Windows (on by default on first run); Close button behavior: hide to tray (default) / exit
 - **Quick add:** Global hotkey: capture box ("press a key combination") + "Disable". When the hotkey cannot be registered (for example, another app owns it), the reason shows as a warning bar inside this group, directly under the setting.
-- **Reminders:** Default reminder time for date-only reminders (default 09:00)
+- **Reminders:** Default reminder time for date-only reminders (default 09:00), picked with the native time picker (minute steps of 1, system 12/24-hour clock); it always has a value and saves as soon as it changes
 - **Data:** "Open data folder", "Export to JSON…" / "Export to CSV…", "Import…", "Back up now". Import asks Merge or Replace in the shared Fluent dialog, with Replace's warning explicit. The outcome of each action shows under its card.
 - **About:** version; data folder path and log folder path, each with a "Copy" button that puts the exact path on the clipboard
 

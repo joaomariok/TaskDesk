@@ -75,18 +75,15 @@
                      Message="{x:Bind ViewModel.HotkeyError, Mode=OneWay}" />
 
             <TextBlock Text="Reminders" Style="{StaticResource SettingsGroupHeading}" />
-            <ctk:SettingsCard Header="Default reminder time" Description="Used for date-only reminders, as HH:mm.">
+            <ctk:SettingsCard Header="Default reminder time" Description="Used for date-only reminders.">
                 <ctk:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE823;" />
                 </ctk:SettingsCard.HeaderIcon>
-                <TextBox Width="80"
-                         AutomationProperties.Name="Default reminder time"
-                         Text="{x:Bind ViewModel.DefaultReminderTimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <TimePicker MinWidth="0" MinuteIncrement="1"
+                            AutomationProperties.Name="Default reminder time"
+                            AutomationProperties.AutomationId="DefaultReminderTimePicker"
+                            SelectedTime="{x:Bind ViewModel.DefaultReminderTime, Mode=TwoWay}" />
             </ctk:SettingsCard>
-            <TextBlock Text="Enter a time such as 09:00."
-                       Style="{StaticResource SettingsStatusText}"
-                       Foreground="{ThemeResource OverdueBrush}"
-                       Visibility="{x:Bind local:SettingsView.ShownWhenFalse(ViewModel.IsReminderTimeValid), Mode=OneWay, FallbackValue=Visible}" />
 
             <TextBlock Text="Data" Style="{StaticResource SettingsGroupHeading}" />
             <ctk:SettingsCard Header="Data folder" Description="{x:Bind ViewModel.DataFolder, Mode=OneTime}">

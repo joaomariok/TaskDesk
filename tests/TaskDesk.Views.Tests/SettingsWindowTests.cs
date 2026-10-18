@@ -66,7 +66,7 @@ public sealed class SettingsWindowTests
             CollectionAssert.Contains(VisualTree.Descendants(closeBox).OfType<TextBlock>().Select(t => t.Text).ToList(), "HideToTray");
             Assert.IsNotNull(Named<ToggleSwitch>(window, "Start with Windows"));
             Assert.IsNotNull(Named<TextBox>(window, "Global hotkey (press a key combination)"));
-            Assert.IsNotNull(Named<TextBox>(window, "Default reminder time"));
+            Assert.IsNotNull(Named<TimePicker>(window, "Default reminder time"));
             foreach (var button in new[]
                      {
                          "Open data folder", "Copy data folder path", "Copy log folder path", "Export everything to JSON",
@@ -97,7 +97,7 @@ public sealed class SettingsWindowTests
             Assert.IsTrue(_store.Current.StartWithWindows);
             Assert.AreEqual("\"C:\\TaskDesk\\TaskDesk.exe\" --minimized", _runKey.GetValue(AutoStartService.ValueName));
 
-            Named<TextBox>(window, "Default reminder time").Text = "08:30";
+            Named<TimePicker>(window, "Default reminder time").SelectedTime = new TimeSpan(8, 30, 0);
             await UiWait.UntilAsync(() => _store.Current.DefaultReminderTime == new TimeOnly(8, 30),
                 () => $"The reminder time saved is {_store.Current.DefaultReminderTime}.", ct);
 
@@ -111,20 +111,18 @@ public sealed class SettingsWindowTests
     }
 
     [UITestMethod]
-    public async Task An_invalid_reminder_time_says_so_and_keeps_the_saved_one()
+    public async Task The_default_reminder_time_picker_shows_the_saved_time_in_one_minute_steps()
     {
         var ct = TestContext.CancellationToken;
+        _store.Current = _store.Current with { DefaultReminderTime = new TimeOnly(7, 5) };
         using var hotkeys = NewHotkeys();
         var window = await OpenAsync(NewViewModel(new ThemeService(), hotkeys), ct);
         try
         {
-            var hint = VisualTree.Descendants(window.View).OfType<TextBlock>().Single(t => t.Text == "Enter a time such as 09:00.");
-            Assert.AreEqual(Visibility.Collapsed, hint.Visibility);
-
-            Named<TextBox>(window, "Default reminder time").Text = "9 o'clock";
-
-            await UiWait.UntilAsync(() => hint.Visibility == Visibility.Visible, () => "The hint did not show.", ct);
-            Assert.AreEqual(new ShellSettings().DefaultReminderTime, _store.Current.DefaultReminderTime);
+            var picker = Named<TimePicker>(window, "Default reminder time");
+            Assert.AreEqual(new TimeSpan(7, 5, 0), picker.SelectedTime);
+            Assert.AreEqual(1, picker.MinuteIncrement);
+            Assert.AreEqual("DefaultReminderTimePicker", AutomationProperties.GetAutomationId(picker));
         }
         finally
         {

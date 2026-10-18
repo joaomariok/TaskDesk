@@ -1,4 +1,3 @@
-using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TaskDesk.Core.Backups;
@@ -65,7 +64,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _theme = settings.Theme;
         _startWithWindows = settings.StartWithWindows;
         _closeBehavior = settings.CloseBehavior;
-        _defaultReminderTimeText = FormatTime(settings.DefaultReminderTime);
+        _defaultReminderTime = settings.DefaultReminderTime.ToTimeSpan();
         _hotkeyText = FormatHotkey(settings.Hotkey);
         _hotkeyError = hotkeys.Error;
         _loading = false;
@@ -87,12 +86,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private CloseBehavior _closeBehavior;
 
+    /// <summary>The time a date-only Reminder fires, bound to the time picker; always has a value.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsReminderTimeValid))]
-    private string _defaultReminderTimeText;
-
-    /// <summary>False while the text is not a valid HH:mm time; the last valid value stays saved.</summary>
-    public bool IsReminderTimeValid => TryParseTime(DefaultReminderTimeText, out _);
+    private TimeSpan _defaultReminderTime;
 
     /// <summary>The global quick-add shortcut as text, or "Disabled".</summary>
     [ObservableProperty]
@@ -298,18 +294,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    partial void OnDefaultReminderTimeTextChanged(string value)
+    partial void OnDefaultReminderTimeChanged(TimeSpan value)
     {
-        if (!_loading && TryParseTime(value, out var time))
+        if (!_loading)
         {
-            _store.Save(_store.Load() with { DefaultReminderTime = time });
+            _store.Save(_store.Load() with { DefaultReminderTime = TimeOnly.FromTimeSpan(value) });
         }
     }
 
     private static string FormatHotkey(Hotkey? hotkey) => hotkey?.ToString() ?? "Disabled";
-
-    private static string FormatTime(TimeOnly time) => time.ToString("HH:mm", CultureInfo.InvariantCulture);
-
-    private static bool TryParseTime(string? text, out TimeOnly time) =>
-        TimeOnly.TryParseExact(text?.Trim(), ["H:mm", "HH:mm"], CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
 }

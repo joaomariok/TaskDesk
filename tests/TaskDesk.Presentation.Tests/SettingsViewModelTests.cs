@@ -101,7 +101,7 @@ public sealed class SettingsViewModelTests
         Assert.Equal(ThemeChoice.Dark, vm.Theme);
         Assert.False(vm.StartWithWindows);
         Assert.Equal(CloseBehavior.Exit, vm.CloseBehavior);
-        Assert.Equal("08:15", vm.DefaultReminderTimeText);
+        Assert.Equal(new TimeSpan(8, 15, 0), vm.DefaultReminderTime);
         Assert.Equal(0, _store.Saves);
         Assert.Empty(_theme.Applied);
         Assert.Empty(_runKey.Values);
@@ -141,16 +141,12 @@ public sealed class SettingsViewModelTests
     }
 
     [Fact]
-    public void Valid_reminder_time_is_saved_and_invalid_is_not()
+    public void Picking_a_default_reminder_time_saves_it_at_once()
     {
         var vm = Create();
 
-        vm.DefaultReminderTimeText = "7:05";
-        Assert.Equal(new TimeOnly(7, 5), _store.Current.DefaultReminderTime);
-        Assert.True(vm.IsReminderTimeValid);
+        vm.DefaultReminderTime = new TimeSpan(7, 5, 0);
 
-        vm.DefaultReminderTimeText = "banana";
-        Assert.False(vm.IsReminderTimeValid);
         Assert.Equal(new TimeOnly(7, 5), _store.Current.DefaultReminderTime);
     }
 

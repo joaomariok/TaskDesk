@@ -42,8 +42,6 @@ public sealed partial class SettingsView : UserControl
 
     public static Visibility ShownWhenText(string? text) => HasText(text) ? Visibility.Visible : Visibility.Collapsed;
 
-    public static Visibility ShownWhenFalse(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
-
     public static string VersionText(string version) => string.Format(CultureInfo.InvariantCulture, "Version {0}", version);
 
     private void OnHotkeyKeyDown(object sender, KeyRoutedEventArgs e) =>
