@@ -127,7 +127,12 @@ public sealed class CommandControlLookTests
             .CreateDbContextAsync();
         context.Tasks.Add(new TaskItem
         {
-            Id = id, ListId = listId, Title = title, DueDate = due, CreatedUtc = now, UpdatedUtc = now,
+            Id = id,
+            ListId = listId,
+            Title = title,
+            DueDate = due,
+            CreatedUtc = now,
+            UpdatedUtc = now,
         });
         await context.SaveChangesAsync();
         return id;

@@ -373,8 +373,11 @@ public sealed class DetailPaneSectionsTests
     {
         var panel = new WrapPanel
         {
-            HorizontalSpacing = 4, VerticalSpacing = 4, Width = 120,
-            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+            HorizontalSpacing = 4,
+            VerticalSpacing = 4,
+            Width = 120,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
         };
         for (var i = 0; i < 3; i++)
         {

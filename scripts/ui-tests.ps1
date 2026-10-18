@@ -4,14 +4,17 @@
 # Each test uses a fresh temp data folder (sandbox mode: no Run key, no notification registration).
 #   -Publish <dir>  test TaskDesk.App.exe in a publish folder instead of the Debug build
 #   -Class <name>   run one test class, for example NavigationTests
-#   -Method <name>  run the tests whose method name matches, with * as a wildcard, for example *Ctrl_comma*
+#   -Method <name>  run the tests whose method name matches, with * as a wildcard at the start or end, for example
+#                   *Ctrl_comma*, Ctrl_comma_opens_Settings_and_closing_it_closes_the_window or Class.Method
 # Before the run it stops TaskDesk.App processes left over from earlier UI runs
 # (identified by running from this repo's bin folder, or from -Publish; the TASKDESK_DATA_DIR environment cannot be read
 # from another process) and warns about any other running one without touching it.
 # It keeps the display awake while it runs, so the idle timeout cannot lock the session mid-run, and refuses to start
 # on a locked desktop. Each failed test is rerun once: a pass prints FLAKE: <test>, a second failure FAILED: <test>.
-# Exit codes: 0 all passed first time; 5 only flakes (every failure passed on rerun); 6 the desktop is locked;
-# any other value is the test run's own exit code.
+# If the desktop locks mid-run, AppSession fails each launch at once with DESKTOP LOCKED: and the run stops there,
+# without reruns.
+# Exit codes: 0 all passed first time; 5 only flakes (every failure passed on rerun); 6 the desktop was locked before
+# or during the run; any other value is the test run's own exit code.
 param(
     [string]$Publish,
     [string]$Class,
@@ -97,9 +100,19 @@ try {
 
     $runArgs = @('run', '--project', 'tests/TaskDesk.UiTests', '--no-build', '--')
     if ($Class) { $runArgs += @('-class', "TaskDesk.UiTests.$Class") }
-    if ($Method) { $runArgs += @('-method', ($Method.Contains('.') ? $Method : "*.$Method")) }
+    # The runner matches the fully qualified name, with * only at the start and end: a bare or Class.Method name
+    # gets a leading *. so it matches in any namespace; one starting with * or TaskDesk. is passed as is.
+    if ($Method) {
+        $passAsIs = $Method.StartsWith('*') -or $Method.StartsWith('TaskDesk.')
+        $runArgs += @('-method', ($passAsIs ? $Method : "*.$Method"))
+    }
     & dotnet @runArgs | Tee-Object -Variable runOutput
     $code = $LASTEXITCODE
+    # The lock screen covers every window, so reruns would only fail again; AppSession marks those failures.
+    if ($code -ne 0 -and @($runOutput | Where-Object { "$_" -match 'DESKTOP LOCKED' }).Count -gt 0) {
+        Write-Host 'UI TESTS STOPPED: the desktop locked during the run; unlock it and rerun.'
+        exit 6
+    }
     # "    TaskDesk.UiTests.Class.Method [FAIL]"; a theory's arguments follow the method name in parentheses.
     $failedTests = @($runOutput | ForEach-Object { if ("$_" -match '^\s*(TaskDesk\.UiTests\.[\w.]+).*\[FAIL\]') { $Matches[1] } } |
         Select-Object -Unique)

@@ -38,7 +38,9 @@ public static class SampleDataGenerator
 
         var tags = TagNames.Select(name => new Tag
         {
-            Id = Guid.CreateVersion7(), Name = name, NormalizedName = TagName.Normalize(name),
+            Id = Guid.CreateVersion7(),
+            Name = name,
+            NormalizedName = TagName.Normalize(name),
         }).ToList();
         context.Tags.AddRange(tags);
 
@@ -70,7 +72,10 @@ public static class SampleDataGenerator
                 {
                     task.Subtasks.Add(new Subtask
                     {
-                        Id = Guid.CreateVersion7(), Title = $"Step {s + 1}", IsCompleted = s == 0, SortOrder = s + 1,
+                        Id = Guid.CreateVersion7(),
+                        Title = $"Step {s + 1}",
+                        IsCompleted = s == 0,
+                        SortOrder = s + 1,
                     });
                 }
             }

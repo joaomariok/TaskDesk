@@ -46,6 +46,13 @@ public sealed class AppSession : IDisposable
     /// <param name="closeBehavior">The <c>closeBehavior</c> setting: Exit (the default here) or HideToTray.</param>
     public static AppSession Start(string theme = "System", string globalHotkey = "", string closeBehavior = "Exit")
     {
+        // On a locked desktop the lock screen covers the window and every launch would time out; fail at once.
+        if (IsDesktopLocked())
+        {
+            throw new InvalidOperationException(
+                $"{DesktopLockedPrefix} the input desktop is not the user's; unlock it and rerun the UI tests.");
+        }
+
         var dataDirectory = Path.Combine(Path.GetTempPath(), "TaskDesk-uitest-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dataDirectory);
         // By default closing the window exits (so layout and pending edits are flushed); no first-close hint, and by
@@ -632,6 +639,51 @@ public sealed class AppSession : IDisposable
     [DllImport("user32.dll")]
     private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
 
+    /// <summary>Starts a failure message caused by a locked desktop; scripts/ui-tests.ps1 stops the run on it.</summary>
+    public const string DesktopLockedPrefix = "DESKTOP LOCKED:";
+
+    /// <summary>
+    /// True while the session does not take input: the input desktop is "Default" while it does, and a locked
+    /// session switches it to Winlogon, which a normal process cannot open.
+    /// </summary>
+    public static bool IsDesktopLocked()
+    {
+        var desktop = OpenInputDesktop(0, false, DesktopReadObjects);
+        if (desktop == IntPtr.Zero)
+        {
+            return true;
+        }
+
+        try
+        {
+            var name = new char[256];
+            if (!GetUserObjectInformationW(desktop, UoiName, name, name.Length * sizeof(char), out _))
+            {
+                return true;
+            }
+
+            return new string(name).TrimEnd('\0') != "Default";
+        }
+        finally
+        {
+            CloseDesktop(desktop);
+        }
+    }
+
+    private const uint DesktopReadObjects = 0x0001;
+    private const int UoiName = 2;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr OpenInputDesktop(uint flags, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint access);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseDesktop(IntPtr desktop);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetUserObjectInformationW(IntPtr obj, int index, [Out] char[] info, int length, out int needed);
+
     private void Launch()
     {
         var start = new ProcessStartInfo(AppPath()) { UseShellExecute = false };
@@ -652,7 +704,9 @@ public sealed class AppSession : IDisposable
         var bounds = Window.BoundingRectangle;
         var titleBar = new Point(bounds.Left + bounds.Width / 2, bounds.Top + 16);
         WaitUntil(() => GetAncestor(WindowFromPoint(titleBar), GaRoot) == handle,
-            () => $"Another window covers TaskDesk's title bar at {titleBar}.");
+            () => IsDesktopLocked()
+                ? $"{DesktopLockedPrefix} the lock screen covers TaskDesk's title bar at {titleBar}."
+                : $"Another window covers TaskDesk's title bar at {titleBar}.");
         Mouse.Click(titleBar);
         // The window shows before its first load finishes; quick add is enabled once it has.
         WaitUntil(() => Find(Ids.QuickAddBox).IsEnabled, () => "Quick add never became ready.");

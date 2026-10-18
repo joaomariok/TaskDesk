@@ -29,7 +29,10 @@ public sealed class ExportServiceTests
 
         var work = new TaskList
         {
-            Id = WorkListId, Name = "Work", ColorHex = "#3366FF", SortOrder = 1,
+            Id = WorkListId,
+            Name = "Work",
+            ColorHex = "#3366FF",
+            SortOrder = 1,
             CreatedUtc = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc),
         };
         var tag = new Tag { Id = WorkTagId, Name = "work", NormalizedName = "WORK", ColorHex = "#3366FF" };

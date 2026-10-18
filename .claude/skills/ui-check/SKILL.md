@@ -26,7 +26,8 @@ Run `pwsh scripts/ui-tests.ps1` and judge it by the exit code. It reruns each fa
    - text hard to read against its background, or a colour that ignores the theme (a light patch in Dark, or the reverse);
    - a list that should show content but is empty;
    - an input without a visible label or hint;
-   - rows, columns or splitters out of line with their neighbours.
+   - rows, columns or splitters out of line with their neighbours;
+   - controls side by side in one row that differ in height (DESIGN.md, the Default-Size Rule).
 
 ## Report
 

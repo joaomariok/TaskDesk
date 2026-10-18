@@ -29,7 +29,10 @@ public sealed class ImportServiceTests
 
         var work = new TaskList
         {
-            Id = WorkListId, Name = "Work", ColorHex = "#3366FF", SortOrder = 1,
+            Id = WorkListId,
+            Name = "Work",
+            ColorHex = "#3366FF",
+            SortOrder = 1,
             CreatedUtc = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc),
         };
         var tag = new Tag { Id = WorkTagId, Name = "work", NormalizedName = "WORK", ColorHex = "#3366FF" };
@@ -190,8 +193,12 @@ public sealed class ImportServiceTests
         var localTag = new Tag { Id = Guid.CreateVersion7(), Name = "Work", NormalizedName = "WORK" };
         var clash = new TaskItem
         {
-            Id = DoneId, ListId = caixa.Id, Title = "local version", SortOrder = 1,
-            CreatedUtc = caixa.CreatedUtc, UpdatedUtc = caixa.CreatedUtc,
+            Id = DoneId,
+            ListId = caixa.Id,
+            Title = "local version",
+            SortOrder = 1,
+            CreatedUtc = caixa.CreatedUtc,
+            UpdatedUtc = caixa.CreatedUtc,
         };
         context.AddRange(localWork, localTag, clash);
         await context.SaveChangesAsync(Ct);

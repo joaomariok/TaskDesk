@@ -267,7 +267,10 @@ public class ListsViewModelTests
 
         private static TaskList Copy(TaskList l) => new()
         {
-            Id = l.Id, Name = l.Name, ColorHex = l.ColorHex, IsDefault = l.IsDefault,
+            Id = l.Id,
+            Name = l.Name,
+            ColorHex = l.ColorHex,
+            IsDefault = l.IsDefault,
         };
     }
 }

@@ -1,8 +1,8 @@
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
-using TrayMessageWindow = H.NotifyIcon.Core.MessageWindow;
 using Microsoft.UI.Dispatching;
 using TaskDesk.Core.Shell;
+using TrayMessageWindow = H.NotifyIcon.Core.MessageWindow;
 
 namespace TaskDesk.App.Shell;
 

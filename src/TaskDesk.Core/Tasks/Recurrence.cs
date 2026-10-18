@@ -93,7 +93,10 @@ public sealed record Recurrence
 
     public static Recurrence Yearly(int month, int dayOfMonth, int interval = 1) => new()
     {
-        Frequency = RecurrenceFrequency.Yearly, Interval = interval, Month = month, DayOfMonth = dayOfMonth,
+        Frequency = RecurrenceFrequency.Yearly,
+        Interval = interval,
+        Month = month,
+        DayOfMonth = dayOfMonth,
     };
 
     /// <summary>Checks that the fields are consistent with the Frequency.</summary>

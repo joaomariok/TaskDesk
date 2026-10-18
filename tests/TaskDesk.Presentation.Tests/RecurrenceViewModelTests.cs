@@ -227,7 +227,8 @@ public class RecurrenceViewModelTests
         var search = new FakeSearchService(plain.Service);
         var vm = new MainViewModel(
             plain.Service, new FakeTagService(plain.Service), new FakeTimeProvider(), searchService: search,
-            recurrenceService: plain.Recurrence, occurrenceDialogs: plain.Dialogs) { SearchText = searchText };
+            recurrenceService: plain.Recurrence, occurrenceDialogs: plain.Dialogs)
+        { SearchText = searchText };
         await vm.ApplySearchCommand.ExecuteAsync(null);
         return (plain with { Vm = vm }, search);
     }

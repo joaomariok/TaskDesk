@@ -80,7 +80,9 @@ public sealed class JsonExportFormatTests
     {
         var yearly = new TaskItem
         {
-            Id = Guid.NewGuid(), DueDate = new DateOnly(2026, 3, 14), Recurrence = Recurrence.Yearly(3, 14),
+            Id = Guid.NewGuid(),
+            DueDate = new DateOnly(2026, 3, 14),
+            Recurrence = Recurrence.Yearly(3, 14),
         };
         var plain = new TaskItem { Id = Guid.NewGuid() };
         var data = new ExportData([], [], [yearly, plain]);

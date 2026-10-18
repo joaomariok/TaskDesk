@@ -4,7 +4,7 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
 
 ## Orchestrator steps
 
-1. Start from a clean checkout: commit pending work first, including untracked `.impeccable/critique/` snapshots, which are tracked. Create the integration branch from `main` and note its tip commit. Every brief names this tip as `<BASE>`.
+1. Start from a clean checkout: commit pending work first, including untracked `.impeccable/critique/` snapshots, which are tracked. Create the integration branch from `main` and note its tip commit. Every brief names this tip as `<BASE>`. When the spec builds on work not yet on `main`, create it from that work's tip instead.
 2. Read the spec issue and its tickets (see `issue-tracker.md`). Split them into tickets that can run in parallel and tickets that must wait for an earlier one.
 3. Launch implementers for ready tickets, within the **Concurrency** limits below, each in its own worktree. Set `model` explicitly. Brief each with the **Implementer brief** below, plus its ticket number, `<BASE>`, and the scratchpad subfolder it owns.
    - If the launch fails with "core.worktree redirect", the session's working directory has become lowercase `d:`. Return to `D:\GIT\TaskDesk` and retry.

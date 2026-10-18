@@ -76,7 +76,7 @@ public sealed class SettingsViewModelTests
         Assert.Contains("disk full", vm.BackupStatus);
     }
 
-    private const string Exe =@"C:\TaskDesk\TaskDesk.exe";
+    private const string Exe = @"C:\TaskDesk\TaskDesk.exe";
     private readonly FakeStore _store = new();
     private readonly FakeRunKey _runKey = new();
     private readonly FakeTheme _theme = new();

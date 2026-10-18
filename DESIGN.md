@@ -186,6 +186,8 @@ The layout responds to the width you actually use, mid-size and popped in and ou
 
 Spacing sits on a 4 px rhythm: 4, 8, 12, 16 and 24 px. Fields in a form are stacked with their label above (4 px gap) and 12 px between fields. Dialogs, the quick-add card and the Settings page use 24 px outer padding; the detail pane uses 16 px.
 
+**The Default-Size Rule.** Controls keep Fluent's default sizes: no padding, height or template-margin override unless this file names one. Controls side by side in a row then share one height (a button, a toggle, a text box and a drop-down are all 32 px); a command bar keeps its own default height.
+
 **The On-Demand Rule.** The list owns the window. The detail pane opens on a click, Enter, F2 or a notification; it stays closed when the user closes it, and arrow keys only move the selection.
 
 ## Elevation & Depth

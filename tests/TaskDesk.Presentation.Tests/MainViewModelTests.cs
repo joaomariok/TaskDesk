@@ -570,7 +570,10 @@ public class MainViewModelTests
         {
             var task = new TaskItem
             {
-                Id = Guid.NewGuid(), ListId = listId, Title = TaskTitle.Normalize(title), DueDate = dueDate,
+                Id = Guid.NewGuid(),
+                ListId = listId,
+                Title = TaskTitle.Normalize(title),
+                DueDate = dueDate,
                 SortOrder = _nextOrder++,
             };
             _tasks.Add(task);
