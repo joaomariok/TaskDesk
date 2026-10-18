@@ -6,7 +6,7 @@ namespace TaskDesk.Views;
 
 /// <summary>
 /// Lays its children out left to right at their own widths and starts a new line when the next one does not fit
-/// (the detail pane's Tag chips). WinUI has no wrap panel of its own.
+/// (the Filter bar and the detail pane's Tag chips). WinUI has no wrap panel of its own.
 /// </summary>
 public sealed partial class WrapPanel : Panel
 {

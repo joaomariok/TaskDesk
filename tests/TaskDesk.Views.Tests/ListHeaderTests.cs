@@ -13,6 +13,7 @@ using TaskDesk.Core.Tasks;
 using TaskDesk.Data;
 using TaskDesk.Data.Tests;
 using TaskDesk.Presentation;
+using Windows.Foundation;
 using Windows.System;
 
 namespace TaskDesk.Views.Tests;
@@ -128,6 +129,65 @@ public sealed class ListHeaderTests
             Toggle(filter);
             Assert.AreEqual(Visibility.Visible, bar.Visibility, "The Filter bar hid while a Filter is on.");
             Assert.IsTrue(filter.IsChecked, "Filter was released while a Filter is on.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // Fourteen Tags in a narrow window cannot share one line with the other Filters: like the WPF app, the bar wraps them.
+    [UITestMethod]
+    public async Task Tag_chips_that_do_not_fit_on_one_line_wrap_inside_the_Filter_bar()
+    {
+        using var db = await DatabaseAsync();
+        string[] names =
+        [
+            "call", "errand", "family", "finance", "garden", "health", "home", "idea", "money", "read", "travel",
+            "urgent", "waiting", "work",
+        ];
+        foreach (var name in names)
+        {
+            await db.Get<ITagService>().CreateTagAsync(name, Ct);
+        }
+
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var content = (FrameworkElement)window.Content;
+            var scale = content.XamlRoot.RasterizationScale;
+            window.AppWindow.ResizeClient(new Windows.Graphics.SizeInt32(
+                (int)Math.Round(800 * scale), (int)Math.Round(600 * scale)));
+            await UiWait.UntilAsync(() => Math.Abs(content.ActualWidth - 800) < 1,
+                () => $"The content is {content.ActualWidth} px wide, not 800.", Ct);
+            await viewModel.LoadAsync(Ct);
+            viewModel.ToggleFilterBarCommand.Execute(null);
+            var bar = VisualTree.Find<FrameworkElement>(window.View, "FilterBar");
+            List<ToggleButton> Chips() =>
+            [
+                .. VisualTree.Descendants(bar).OfType<ToggleButton>()
+                    .Where(b => AutomationProperties.GetName(b).StartsWith('#') && b.ActualWidth > 0),
+            ];
+            await UiWait.UntilAsync(() => Chips().Count == names.Length,
+                () => $"{Chips().Count} of {names.Length} Tag chips show.", Ct);
+            window.View.UpdateLayout();
+
+            var barRight = bar.TransformToVisual(window.View).TransformPoint(new Point(bar.ActualWidth, 0)).X;
+            Assert.IsLessThanOrEqualTo(window.View.ActualWidth + 0.5, barRight, "The Filter bar runs past the page.");
+            var tops = new HashSet<double>();
+            foreach (var chip in Chips())
+            {
+                var at = chip.TransformToVisual(bar).TransformPoint(new Point(0, 0));
+                var name = AutomationProperties.GetName(chip);
+                Assert.IsGreaterThanOrEqualTo(-0.5, at.X, $"'{name}' starts left of the Filter bar.");
+                Assert.IsLessThanOrEqualTo(bar.ActualWidth + 0.5, at.X + chip.ActualWidth,
+                    $"'{name}' ends at {at.X + chip.ActualWidth}, past the Filter bar's right edge at {bar.ActualWidth}.");
+                Assert.IsLessThanOrEqualTo(bar.ActualHeight + 0.5, at.Y + chip.ActualHeight,
+                    $"'{name}' ends below the Filter bar.");
+                tops.Add(Math.Round(at.Y));
+            }
+
+            Assert.IsGreaterThan(1, tops.Count, "The Tag chips sit on one line.");
         }
         finally
         {

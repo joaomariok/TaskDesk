@@ -86,9 +86,11 @@
                          Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          TextChanged="OnSearchTextChanged" />
             </Grid>
-            <StackPanel x:Name="FilterBar" Orientation="Horizontal" Spacing="6"
-                        AutomationProperties.Name="Filters" AutomationProperties.AutomationId="FilterBar"
-                        Visibility="{x:Bind ViewModel.IsFilterBarShown, Mode=OneWay}">
+            <!-- Wraps like the WPF Filter bar: the Tag chips, as one block, go to the next line when they do not
+                 fit after the other Filters, and wrap among themselves within the bar's width. -->
+            <local:WrapPanel x:Name="FilterBar" HorizontalSpacing="6" VerticalSpacing="6"
+                             AutomationProperties.Name="Filters" AutomationProperties.AutomationId="FilterBar"
+                             Visibility="{x:Bind ViewModel.IsFilterBarShown, Mode=OneWay}">
                 <ComboBox x:Name="PriorityFilterBox" Width="170"
                           AutomationProperties.Name="Priority filter"
                           SelectionChanged="OnPriorityFilterChanged" />
@@ -103,7 +105,7 @@
                 <ItemsControl ItemsSource="{x:Bind ViewModel.FilterTagChips, Mode=OneTime}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" Spacing="6" />
+                            <local:WrapPanel HorizontalSpacing="6" VerticalSpacing="6" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
@@ -120,7 +122,7 @@
                 <Button Content="Clear filters" Padding="8,2"
                         Command="{x:Bind ViewModel.ClearAllFiltersCommand, Mode=OneTime}"
                         Visibility="{x:Bind ViewModel.HasFilter, Mode=OneWay}" />
-            </StackPanel>
+            </local:WrapPanel>
             <TextBox x:Name="QuickAddBox"
                      AutomationProperties.AutomationId="QuickAddBox"
                      AutomationProperties.Name="Quick add"
