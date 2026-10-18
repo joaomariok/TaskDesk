@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -106,6 +107,79 @@ public sealed class ReminderActivationTests
         }
     }
 
+    [UITestMethod]
+    public async Task Mark_done_from_the_toast_that_launched_the_app_is_kept_when_the_exit_starts()
+    {
+        using var db = await SystemHooksTests.DatabaseAsync();
+        var taskId = await SystemHooksTests.AddAsync(db, "Call the bank");
+        var (window, shellWindow, router) = await OpenAsync(db);
+        try
+        {
+            using var exitStarted = new CancellationTokenSource();
+            await exitStarted.CancelAsync();
+
+            await router.HandleAsync(new NotificationActivation(taskId, ReminderAction.MarkDone), exitStarted.Token);
+
+            var task = (await db.QueryAsync(c => c.Tasks.Where(t => t.Id == taskId))).Single();
+            Assert.IsTrue(task.IsCompleted, "The exit dropped the Mark done the toast asked for.");
+            Assert.AreEqual(0, shellWindow.Shown);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Opening_a_toast_as_the_exit_starts_shows_nothing_and_logs_no_error()
+    {
+        using var db = await SystemHooksTests.DatabaseAsync();
+        await SystemHooksTests.AddAsync(db, "Book dentist");
+        var taskId = await SystemHooksTests.AddAsync(db, "Call the bank");
+        var log = new RecordingLogger<ReminderActivationRouter>();
+        var (window, shellWindow, router) = await OpenAsync(db, log);
+        try
+        {
+            window.ViewModel.SearchText = "dentist";
+            await window.ViewModel.ApplySearchCommand.ExecuteAsync(null);
+            using var exitStarted = new CancellationTokenSource();
+            await exitStarted.CancelAsync();
+
+            // A Task the search hides: opening it reloads the page, which the exit cancels.
+            await router.HandleAsync(new NotificationActivation(taskId, ReminderAction.Open), exitStarted.Token);
+
+            Assert.AreEqual(0, shellWindow.Shown, "The window came back during the exit.");
+            CollectionAssert.DoesNotContain(log.Levels, LogLevel.Error, "The exit's cancellation was logged as an error.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task A_toast_clicked_in_the_running_app_after_the_exit_started_leaves_the_window_hidden()
+    {
+        using var db = await SystemHooksTests.DatabaseAsync();
+        var taskId = await SystemHooksTests.AddAsync(db, "Call the bank");
+        using var exitStarted = new CancellationTokenSource();
+        await exitStarted.CancelAsync();
+        var (window, shellWindow, router) = await OpenAsync(db, exitStarted: exitStarted.Token);
+        try
+        {
+            router.Route(new NotificationActivation(taskId, ReminderAction.Open));
+
+            // The Task is in the current view, so the activation selects it at once; it runs before this check.
+            await UiWait.UntilAsync(() => window.ViewModel.DetailTask?.Title == "Call the bank",
+                () => "The activation never ran.", Ct);
+            Assert.AreEqual(0, shellWindow.Shown, "The window came back during the exit.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private async Task AssertPaneShowsAsync(MainWindow window, FakeMainWindow shellWindow, string title)
     {
         var pane = window.Details.Pane;
@@ -117,7 +191,7 @@ public sealed class ReminderActivationTests
     }
 
     private async Task<(MainWindow Window, FakeMainWindow ShellWindow, ReminderActivationRouter Router)> OpenAsync(
-        TempDatabase db)
+        TempDatabase db, ILogger<ReminderActivationRouter>? logger = null, CancellationToken exitStarted = default)
     {
         var viewModel = new MainViewModel(
             db.Get<ITaskService>(), db.Get<Core.Tags.ITagService>(), db.Clock,
@@ -139,7 +213,7 @@ public sealed class ReminderActivationTests
             var shellWindow = new FakeMainWindow();
             var router = new ReminderActivationRouter(
                 window.DispatcherQueue, new ReminderActivationHandler(viewModel, shellWindow),
-                NullLogger<ReminderActivationRouter>.Instance);
+                logger ?? NullLogger<ReminderActivationRouter>.Instance, exitStarted);
             return (window, shellWindow, router);
         }
         catch
@@ -147,6 +221,20 @@ public sealed class ReminderActivationTests
             window.Close();
             throw;
         }
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<LogLevel> Levels { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Levels.Add(logLevel);
     }
 
     private sealed class FakeMainWindow : IMainWindow

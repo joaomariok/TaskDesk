@@ -484,6 +484,53 @@ public sealed class ListHeaderTests
     }
 
     [UITestMethod]
+    public async Task Closing_the_window_cancels_the_search_still_loading()
+    {
+        using var db = await DatabaseAsync();
+        var search = new HeldSearch();
+        var viewModel = new MainViewModel(
+            db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock,
+            dueService: db.Get<IDueService>(), searchService: search, listService: db.Get<IListService>());
+        var window = new MainWindow(viewModel);
+        try
+        {
+            window.Activate();
+            await UiWait.UntilAsync(() => window.View.IsLoaded, () => "The main view never loaded.", Ct);
+            await viewModel.LoadAsync(Ct);
+            VisualTree.Find<TextBox>(window.View, "SearchBox").Text = "pay";
+            // Typing paused: the search started and now waits on the database.
+            await UiWait.UntilAsync(() => search.Started, () => "The search never started.", Ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+
+        Assert.IsTrue(search.Cancelled, "The search still loading went on after its window closed.");
+        var run = viewModel.ApplySearchCommand.ExecutionTask!;
+        await UiWait.UntilAsync(() => run.IsCompleted, () => "The cancelled search never ended.", Ct);
+        Assert.IsTrue(run.IsCompletedSuccessfully, $"The cancelled search ended {run.Status}, which the app reports as a crash.");
+    }
+
+    // A search that waits on the database until it is cancelled.
+    private sealed class HeldSearch : ITaskSearchService
+    {
+        private CancellationToken _token;
+
+        public bool Started { get; private set; }
+
+        public bool Cancelled => _token.IsCancellationRequested;
+
+        public async Task<IReadOnlyList<TaskItem>> SearchAsync(TaskSearchQuery query, CancellationToken cancellationToken = default)
+        {
+            Started = true;
+            _token = cancellationToken;
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return [];
+        }
+    }
+
+    [UITestMethod]
     public async Task Load_more_completed_shows_on_the_Completed_view_while_more_pages_remain()
     {
         using var db = await DatabaseAsync();

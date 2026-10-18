@@ -108,7 +108,8 @@ public partial class App : Application
         builder.Services.AddSingleton(sp => new ReminderActivationRouter(
             sp.GetRequiredService<MainWindow>().DispatcherQueue,
             sp.GetRequiredService<ReminderActivationHandler>(),
-            sp.GetRequiredService<ILogger<ReminderActivationRouter>>()));
+            sp.GetRequiredService<ILogger<ReminderActivationRouter>>(),
+            sp.GetRequiredService<ShellController>().ExitStarted));
         builder.Services.AddSingleton<IRunKey, RegistryRunKey>();
         builder.Services.AddSingleton<AutoStartService>();
         builder.Services.AddSingleton<IShellSettingsStore>(_ => new JsonShellSettingsStore(paths.SettingsFile));
@@ -246,13 +247,13 @@ public partial class App : Application
             }
         });
 
-        // The launch's activation and the Reminder checks run only while no exit has started: the exit disposes
-        // what they use. The Reminder checks run on start, every 30 s, on every Task change and on resume from
-        // sleep (SPEC 7.4).
+        // The launch's activation and the Reminder checks start only while no exit has started: the exit disposes
+        // what they use, and it waits for the activation, so a Mark done or Snooze from the toast is kept. The
+        // Reminder checks run on start, every 30 s, on every Task change and on resume from sleep (SPEC 7.4).
         await shell.LaunchAsync(
             minimized,
             exePath,
-            launch is null ? null : cancellationToken => activations.HandleAsync(launch, cancellationToken),
+            launch is null ? null : exitStarted => activations.HandleAsync(launch, exitStarted),
             () => _ = reminders.StartAsync());
     }
 

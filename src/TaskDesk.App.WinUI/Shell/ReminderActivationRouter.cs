@@ -10,21 +10,35 @@ namespace TaskDesk.App.Shell;
 /// toast or tray balloon in the running app, the toast that launched it, and a later launch from a toast that the
 /// single-instance pipe forwards (on a background thread). A failed action is logged, never thrown.
 /// </summary>
+/// <param name="shellExitStarted">
+/// <see cref="ShellController.ExitStarted"/>: an activation that arrives in the running app stops showing the window
+/// once the exit has started.
+/// </param>
 internal sealed class ReminderActivationRouter(
-    DispatcherQueue dispatcher, ReminderActivationHandler handler, ILogger<ReminderActivationRouter> logger)
+    DispatcherQueue dispatcher,
+    ReminderActivationHandler handler,
+    ILogger<ReminderActivationRouter> logger,
+    CancellationToken shellExitStarted = default)
 {
     /// <summary>Hands <paramref name="notifications"/>' clicks to <see cref="Route"/>.</summary>
     public void Attach(INotificationService notifications) => notifications.Activated += Route;
 
     /// <summary>Queues the activation on the UI thread; callable from any thread.</summary>
-    public void Route(NotificationActivation activation) => dispatcher.TryEnqueue(() => _ = HandleAsync(activation));
+    public void Route(NotificationActivation activation) =>
+        dispatcher.TryEnqueue(() => _ = HandleAsync(activation, shellExitStarted));
 
     /// <summary>Acts on the activation; call on the UI thread.</summary>
-    public async Task HandleAsync(NotificationActivation activation, CancellationToken cancellationToken = default)
+    /// <param name="activation">The notification click.</param>
+    /// <param name="exitStarted">Cancelled when the exit starts (see <see cref="ReminderActivationHandler.HandleAsync"/>).</param>
+    public async Task HandleAsync(NotificationActivation activation, CancellationToken exitStarted = default)
     {
         try
         {
-            await handler.HandleAsync(activation, cancellationToken);
+            await handler.HandleAsync(activation, exitStarted);
+        }
+        catch (OperationCanceledException) when (exitStarted.IsCancellationRequested)
+        {
+            logger.LogDebug("A Reminder notification's Open stopped for the exit");
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

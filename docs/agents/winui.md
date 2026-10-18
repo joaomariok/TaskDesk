@@ -28,8 +28,8 @@ Async work a view starts (timers, handlers, loads) ends with its window: stop ti
 
 What the gate cannot drive in-process. Run each after changing the code it names.
 
-- Mixed-DPI restore (`Shell/WindowLayoutService.cs`): on a desk with monitors at two scales (say 100 % and 150 %), put the main window on the monitor at the other scale than the primary, resize it, exit from the tray and start again with `pwsh scripts/run-sandbox.ps1 -WinUI`. It opens on that monitor at the same position and physical size. Repeat with the window on the primary monitor.
-- Exit during start-up (`App.OnLaunched`, `ShellController.LaunchAsync`), once toasts are registered (after the swap, #68; sandbox mode shows balloons only): click a Reminder toast's Open while TaskDesk is not running, and choose Exit from the tray as soon as it appears. The app ends, no TaskDesk process is left, and the day's log has no "Unhandled UI exception".
+- Mixed-DPI restore (`Shell/WindowLayoutService.cs`): on a desk with monitors at two scales (say 100 % and 150 %), put the main window on the monitor at the other scale than the primary, resize it, exit from the tray and start again with `pwsh scripts/run-sandbox.ps1 -WinUI`. It opens on that monitor at the same position and physical size, and the day's log has no "never took its monitor's scale" warning. Repeat with the window on the primary monitor, then once with the window maximized.
+- Exit during start-up (`App.OnLaunched`, `ShellController.LaunchAsync`), once toasts are registered (after the swap, #68; sandbox mode shows balloons only): click a Reminder toast's Open while TaskDesk is not running, and choose Exit from the tray as soon as it appears. The app ends, no TaskDesk process is left, and the day's log has no "Unhandled UI exception". Repeat with Mark done: the Task is completed at the next start.
 
 ## Gotchas
 

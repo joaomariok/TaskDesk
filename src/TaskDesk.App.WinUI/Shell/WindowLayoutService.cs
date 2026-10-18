@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using TaskDesk.Core.Shell;
@@ -13,7 +14,7 @@ namespace TaskDesk.App.Shell;
 /// (<see cref="WindowLayoutCalculator.ToLayout"/>, <see cref="WindowLayoutCalculator.Place"/>).
 /// The sidebar's and the detail pane's widths are restored and saved with it (<see cref="PaneLayout"/>).
 /// </summary>
-internal sealed class WindowLayoutService(IShellSettingsStore store)
+internal sealed class WindowLayoutService(IShellSettingsStore store, ILogger<WindowLayoutService> logger)
 {
     // The last size and position the window had while neither minimized nor maximized.
     private RectInt32? _normalBounds;
@@ -27,7 +28,13 @@ internal sealed class WindowLayoutService(IShellSettingsStore store)
         if (saved is not null)
         {
             var monitors = Monitors();
-            MoveAndResize(appWindow, WindowLayoutCalculator.Place(saved, monitors, WindowScale.OfSystem()), monitors);
+            var bounds = WindowLayoutCalculator.Place(saved, monitors, WindowScale.OfSystem());
+            if (!MoveAndResize(appWindow, bounds, monitors))
+            {
+                logger.LogDebug("The window is hidden at another scale than its monitor's; its size is set again once shown");
+                FinishWhenShown(window, bounds);
+            }
+
             if (saved.Maximized && appWindow.Presenter is OverlappedPresenter presenter)
             {
                 presenter.Maximize();
@@ -59,23 +66,58 @@ internal sealed class WindowLayoutService(IShellSettingsStore store)
     }
 
     // Moving the window onto a monitor at another scale changes its DPI, and Windows rescales it as it does
-    // (WindowLayoutCalculator.RestoreMoves): it first moves onto that monitor, then, once GetDpiForWindow reports the
-    // monitor's DPI, to the bounds. Should the DPI change not have arrived during the first move, the moves are worked
-    // out again from the DPI the window has then; the last move always goes to the bounds.
-    private static void MoveAndResize(AppWindow appWindow, PixelRect bounds, IReadOnlyList<MonitorArea> monitors)
+    // (WindowLayoutCalculator.RestoreMoves): it first moves onto that monitor, then to the bounds. Returns whether
+    // the window then has the monitor's DPI (GetDpiForWindow); a hidden window may get it only once shown, and
+    // Windows then rescales it away from the bounds.
+    private static bool MoveAndResize(AppWindow appWindow, PixelRect bounds, IReadOnlyList<MonitorArea> monitors)
     {
         var hwnd = Win32Interop.GetWindowFromWindowId(appWindow.Id);
-        for (var attempt = 0; attempt < 2; attempt++)
+        foreach (var move in WindowLayoutCalculator.RestoreMoves(bounds, monitors, WindowScale.OfWindowHandle(hwnd)))
         {
-            var moves = WindowLayoutCalculator.RestoreMoves(bounds, monitors, WindowScale.OfWindowHandle(hwnd));
-            appWindow.MoveAndResize(ToRect(moves[0]));
-            if (moves.Count == 1)
+            appWindow.MoveAndResize(ToRect(move));
+        }
+
+        return WindowLayoutCalculator.HasMonitorScale(bounds, monitors, WindowScale.OfWindowHandle(hwnd));
+    }
+
+    // Once the window is first shown and its DPI change has run (queued after the show), puts it at the bounds again
+    // at the DPI it has now. A maximized window is restored for the move, so its restored size is right.
+    private void FinishWhenShown(MainWindow window, PixelRect bounds)
+    {
+        void OnChanged(AppWindow sender, AppWindowChangedEventArgs change)
+        {
+            if (!change.DidVisibilityChange || !sender.IsVisible)
             {
                 return;
             }
+
+            sender.Changed -= OnChanged;
+            window.DispatcherQueue.TryEnqueue(() =>
+            {
+                var appWindow = window.AppWindow;
+                var hwnd = Win32Interop.GetWindowFromWindowId(appWindow.Id);
+                var scale = WindowScale.OfWindowHandle(hwnd);
+                if (!WindowLayoutCalculator.HasMonitorScale(bounds, Monitors(), scale))
+                {
+                    logger.LogWarning(
+                        "The window never took its monitor's scale (it is at {Scale}); its restored size may be off", scale);
+                    return;
+                }
+
+                if (appWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized } maximized)
+                {
+                    maximized.Restore();
+                    appWindow.MoveAndResize(ToRect(bounds));
+                    maximized.Maximize();
+                }
+                else
+                {
+                    appWindow.MoveAndResize(ToRect(bounds));
+                }
+            });
         }
 
-        appWindow.MoveAndResize(ToRect(bounds));
+        window.AppWindow.Changed += OnChanged;
     }
 
     private static RectInt32 ToRect(PixelRect rect) => new(rect.Left, rect.Top, rect.Width, rect.Height);

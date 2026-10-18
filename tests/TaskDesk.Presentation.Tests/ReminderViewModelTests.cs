@@ -454,6 +454,23 @@ public class ReminderViewModelTests
         Assert.Equal(1, window.FocusCount);
     }
 
+    [Fact]
+    public async Task Opening_a_notification_once_the_exit_started_leaves_the_window_hidden()
+    {
+        var s = await StartAsync("a");
+        var window = new FakeWindow();
+        using var exitStarted = new CancellationTokenSource();
+        await exitStarted.CancelAsync();
+        var handler = new ReminderActivationHandler(s.Vm, window);
+
+        // A cancelled load may throw or return; either way the window stays hidden.
+        await Record.ExceptionAsync(() =>
+            handler.HandleAsync(new NotificationActivation(s.Tasks.All[0].Id, ReminderAction.Open), exitStarted.Token));
+        await Record.ExceptionAsync(() => handler.HandleAsync(NotificationActivation.OpenToday, exitStarted.Token));
+
+        Assert.Equal(0, window.FocusCount);
+    }
+
     // ---- Snooze in the detail pane ----
 
     [Fact]

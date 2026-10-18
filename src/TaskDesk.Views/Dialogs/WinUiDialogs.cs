@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using TaskDesk.Core.Export;
 using TaskDesk.Core.Import;
 using TaskDesk.Presentation;
@@ -10,10 +11,17 @@ namespace TaskDesk.Views.Dialogs;
 /// The WinUI implementation of the Presentation dialog interfaces: confirmations and choices on the one
 /// <see cref="DialogService"/>, with the WPF app's texts, and the Windows file pickers on the owner window.
 /// </summary>
-public sealed class WinUiDialogs(DialogService dialogs) : IListDialogs, IOccurrenceDialogs, IImportDialogs, IExportDialogs
+/// <param name="dialogs">The dialog service every dialog opens through.</param>
+/// <param name="pickImportFile">
+/// Asks for the JSON file to import on the given window; the Windows file picker unless a test passes its own.
+/// </param>
+public sealed class WinUiDialogs(DialogService dialogs, Func<Window, Task<string?>>? pickImportFile = null)
+    : IListDialogs, IOccurrenceDialogs, IImportDialogs, IExportDialogs
 {
+    private readonly Func<Window, Task<string?>> _pickImportFile = pickImportFile ?? PickJsonFileAsync;
+
     // The import under way: its file picker starts it, and its Merge/Replace choice and Replace confirmation open on
-    // the window the picker opened on. Only the import's own steps read or replace it.
+    // the window the picker opened on. Only the import's own steps read or replace it, and its last step clears it.
     private DialogFlow? _import;
 
     public Task<bool> ConfirmDeleteAsync(string listName, int taskCount)
@@ -52,34 +60,80 @@ public sealed class WinUiDialogs(DialogService dialogs) : IListDialogs, IOccurre
             + "Merge: add the lists, tags and tasks that are not here yet. Nothing here is changed or deleted.\n\n"
             + "Replace: delete ALL current lists, tags and tasks and use the file's data instead. "
             + "A backup is taken first.";
-        var result = await ImportFlow().ShowAsync(new DialogRequest("Import", body, ["Merge", "Replace everything…"]));
-        return result.ChoiceIndex switch
+        var flow = ImportFlow();
+        ImportMode? mode = null;
+        try
         {
-            0 => ImportMode.Merge,
-            1 => ImportMode.Replace,
-            _ => null,
-        };
+            var result = await flow.ShowAsync(new DialogRequest("Import", body, ["Merge", "Replace everything…"]));
+            mode = result.ChoiceIndex switch
+            {
+                0 => ImportMode.Merge,
+                1 => ImportMode.Replace,
+                _ => null,
+            };
+            return mode;
+        }
+        finally
+        {
+            // Only Replace has a further step: its confirmation.
+            if (mode != ImportMode.Replace)
+            {
+                EndImport(flow);
+            }
+        }
     }
 
-    public Task<bool> ConfirmReplaceAsync()
+    public async Task<bool> ConfirmReplaceAsync()
     {
         const string body =
             "Replace deletes all your current lists, tags and tasks and replaces them with the file's data.\n\n"
             + "A backup of the current data is saved in the backups folder first.\n\nReplace everything now?";
-        return ImportFlow().ConfirmAsync("Replace all data", body, "Replace everything", destructive: true);
+        var flow = ImportFlow();
+        try
+        {
+            return await flow.ConfirmAsync("Replace all data", body, "Replace everything", destructive: true);
+        }
+        finally
+        {
+            EndImport(flow);
+        }
     }
 
     public async Task<string?> PickImportPathAsync()
     {
+        var flow = _import = dialogs.BeginFlow();
+        string? path = null;
+        try
+        {
+            path = await flow.ShowOnOwnerAsync(_pickImportFile);
+            return path;
+        }
+        finally
+        {
+            if (path is null)
+            {
+                EndImport(flow);
+            }
+        }
+    }
+
+    // The import has no further step: let its window go, so a closed Settings window is not kept alive. A later
+    // import that has started meanwhile keeps its own flow.
+    private void EndImport(DialogFlow flow)
+    {
+        if (ReferenceEquals(_import, flow))
+        {
+            _import = null;
+        }
+    }
+
+    private static async Task<string?> PickJsonFileAsync(Window owner)
+    {
         var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
         picker.FileTypeFilter.Add(".json");
-        _import = dialogs.BeginFlow();
-        return await _import.ShowOnOwnerAsync(async owner =>
-        {
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(owner));
-            var file = await picker.PickSingleFileAsync();
-            return file?.Path;
-        });
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(owner));
+        var file = await picker.PickSingleFileAsync();
+        return file?.Path;
     }
 
     // A step asked for without the import's file picker first opens on the active window.

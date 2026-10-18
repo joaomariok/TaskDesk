@@ -109,10 +109,7 @@ public static class WindowLayoutCalculator
     /// <param name="windowScale">The window's scale now (its DPI / 96).</param>
     public static IReadOnlyList<PixelRect> RestoreMoves(PixelRect bounds, IReadOnlyList<MonitorArea> monitors, double windowScale)
     {
-        RequireMonitors(monitors);
-        RequireScale(windowScale);
-        var monitor = Best(bounds.Left, bounds.Top, bounds.Width, bounds.Height, monitors, m => AsDip(m.Bounds));
-        RequireScale(monitor.Scale);
+        var monitor = MonitorOf(bounds, monitors, windowScale);
         if (monitor.Scale == windowScale)
         {
             return [bounds];
@@ -125,6 +122,23 @@ public static class WindowLayoutCalculator
             Height = Math.Max(1, ToPhysical(bounds.Height, shrink)),
         };
         return [staging, bounds];
+    }
+
+    /// <summary>
+    /// True when the window's scale is that of the monitor holding most of <paramref name="bounds"/>: its DPI change
+    /// has arrived, and a move to the bounds lands with no rescale left. A hidden window may get it only once shown.
+    /// </summary>
+    /// <param name="windowScale">The window's scale now (its DPI / 96).</param>
+    public static bool HasMonitorScale(PixelRect bounds, IReadOnlyList<MonitorArea> monitors, double windowScale) =>
+        MonitorOf(bounds, monitors, windowScale).Scale == windowScale;
+
+    private static MonitorArea MonitorOf(PixelRect bounds, IReadOnlyList<MonitorArea> monitors, double windowScale)
+    {
+        RequireMonitors(monitors);
+        RequireScale(windowScale);
+        var monitor = Best(bounds.Left, bounds.Top, bounds.Width, bounds.Height, monitors, m => AsDip(m.Bounds));
+        RequireScale(monitor.Scale);
+        return monitor;
     }
 
     private readonly record struct DipRect(double Left, double Top, double Width, double Height);

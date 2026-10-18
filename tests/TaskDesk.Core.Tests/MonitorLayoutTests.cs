@@ -192,6 +192,27 @@ public sealed class MonitorLayoutTests
         Assert.True(expected.SequenceEqual(moves), $"{monitor}: expected {string.Join(", ", expected)}, got {string.Join(", ", moves)}");
     }
 
+    // Whether the window has the DPI of the monitor holding most of its bounds, so a move to them lands as is.
+    public static TheoryData<string, PixelRect, double, bool> MonitorScaleArrived => new()
+    {
+        { "secondary, window at 150 %", new PixelRect(2000, 150, 1500, 1050), 1.5, true },
+        { "secondary, window still at 100 %", new PixelRect(2000, 150, 1500, 1050), 1.0, false },
+        { "primary, window at 100 %", new PixelRect(100, 50, 1000, 700), 1.0, true },
+        { "primary, window still at 150 %", new PixelRect(100, 50, 1000, 700), 1.5, false },
+        // 1000 of its 1500 px on the secondary monitor: that monitor's scale counts.
+        { "straddling, mostly secondary", new PixelRect(1420, 150, 1500, 1050), 1.5, true },
+    };
+
+    [Theory]
+    [MemberData(nameof(MonitorScaleArrived))]
+    public void A_window_has_its_monitor_s_scale_once_its_DPI_matches_the_monitor_holding_most_of_its_bounds(
+        string monitor, PixelRect bounds, double windowScale, bool expected)
+    {
+        Assert.True(
+            expected == WindowLayoutCalculator.HasMonitorScale(bounds, Desk, windowScale),
+            $"{monitor}: expected {expected}");
+    }
+
     [Fact]
     public void Restore_moves_need_a_monitor()
     {

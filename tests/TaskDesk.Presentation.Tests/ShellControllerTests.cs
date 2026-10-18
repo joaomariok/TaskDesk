@@ -518,6 +518,8 @@ public sealed class ShellControllerTests
         Assert.True(activationToken.IsCancellationRequested);
         acting.SetResult();
         await launch;
+        // The exit waited for the activation, so it may finish just after the launch does.
+        await controller.ExitAsync();
 
         Assert.Equal(0, running);
         Assert.Equal(1, _lifetime.ShutdownCount);
@@ -545,8 +547,93 @@ public sealed class ShellControllerTests
             () => { },
             TestContext.Current.CancellationToken);
 
-        await controller.ExitAsync();
+        // The exit waits for the activation before its steps, so the activation ends before the exit is awaited.
+        var exit = controller.ExitAsync();
         acting.SetResult();
+        await exit;
+        await launch;
+
+        Assert.True(ran);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task An_exit_started_while_the_launch_activation_runs_waits_for_it_before_the_exit_steps()
+    {
+        var controller = Create();
+        var acting = new TaskCompletionSource();
+        var steps = new List<string>();
+        controller.AddExitStep(() =>
+        {
+            steps.Add("flush");
+            return Task.CompletedTask;
+        });
+        var launch = controller.LaunchAsync(
+            minimized: true,
+            Exe,
+            async _ =>
+            {
+                // A toast's Mark done: its write must land before the flush and the host stop.
+                await acting.Task;
+                steps.Add("activation");
+            },
+            () => steps.Add("running"),
+            TestContext.Current.CancellationToken);
+
+        var exit = controller.ExitAsync();
+        Assert.Empty(steps);
+        Assert.Equal(0, _lifetime.ShutdownCount);
+
+        acting.SetResult();
+        await exit;
+        await launch;
+
+        Assert.Equal(["activation", "flush"], steps);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task A_failing_launch_activation_still_starts_the_background_work()
+    {
+        var controller = Create();
+        var running = 0;
+
+        var launched = await controller.LaunchAsync(
+            minimized: false,
+            Exe,
+            _ => throw new InvalidOperationException("boom"),
+            () => running++,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(launched);
+        Assert.Equal(1, running);
+    }
+
+    [Fact]
+    public async Task A_launch_activation_that_fails_while_the_exit_waits_for_it_does_not_stop_the_exit()
+    {
+        var controller = Create();
+        var acting = new TaskCompletionSource();
+        var ran = false;
+        controller.AddExitStep(() =>
+        {
+            ran = true;
+            return Task.CompletedTask;
+        });
+        var launch = controller.LaunchAsync(
+            minimized: true,
+            Exe,
+            async _ =>
+            {
+                await acting.Task;
+                throw new InvalidOperationException("boom");
+            },
+            () => { },
+            TestContext.Current.CancellationToken);
+
+        var exit = controller.ExitAsync();
+        acting.SetResult();
+        await exit;
         await launch;
 
         Assert.True(ran);

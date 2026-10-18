@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using TaskDesk.Core.Import;
@@ -126,5 +127,60 @@ public sealed class WinUiDialogsTests
         Assert.AreEqual(ContentDialogButton.Close, dialog.DefaultButton);
         DialogHost.Press(dialog, "PrimaryButton");
         Assert.IsTrue(await confirmed);
+    }
+
+    [UITestMethod]
+    public async Task An_import_keeps_its_steps_on_the_picker_s_window_and_lets_it_go_when_it_ends()
+    {
+        var ct = TestContext.CancellationToken;
+        using var settings = await DialogHost.OpenAsync(ct);
+        using var main = await DialogHost.OpenAsync(ct);
+        var active = settings.Window;
+        var pickedOn = new List<Window>();
+        const string file = @"C:\exports\taskdesk.json";
+        IImportDialogs dialogs = new WinUiDialogs(new DialogService(() => active), owner =>
+        {
+            pickedOn.Add(owner);
+            return Task.FromResult<string?>(file);
+        });
+        try
+        {
+            // Replace, then Cancel on its confirmation; the owner clicks the main window after picking the file.
+            Assert.AreEqual(file, await dialogs.PickImportPathAsync());
+            active = main.Window;
+            var mode = dialogs.ChooseImportModeAsync(file);
+            DialogHost.Press(await DialogHost.OpenDialogAsync(settings.Window.Content.XamlRoot, ct), "SecondaryButton");
+            Assert.AreEqual(ImportMode.Replace, await mode);
+            var confirmed = dialogs.ConfirmReplaceAsync();
+            DialogHost.Press(await DialogHost.OpenDialogAsync(settings.Window.Content.XamlRoot, ct), "CloseButton");
+            Assert.IsFalse(await confirmed);
+            await AssertImportEndedAsync(dialogs, main, file, ct);
+
+            // Merge ends the import at the mode choice.
+            active = settings.Window;
+            Assert.AreEqual(file, await dialogs.PickImportPathAsync());
+            active = main.Window;
+            mode = dialogs.ChooseImportModeAsync(file);
+            DialogHost.Press(await DialogHost.OpenDialogAsync(settings.Window.Content.XamlRoot, ct), "PrimaryButton");
+            Assert.AreEqual(ImportMode.Merge, await mode);
+            await AssertImportEndedAsync(dialogs, main, file, ct);
+
+            CollectionAssert.AreEqual(new[] { settings.Window, settings.Window }, pickedOn);
+        }
+        finally
+        {
+            DialogHost.OpenDialog(settings.Window.Content.XamlRoot)?.Hide();
+            DialogHost.OpenDialog(main.Window.Content.XamlRoot)?.Hide();
+        }
+    }
+
+    // Once an import has ended it holds no window: a step asked for on its own opens on the window active now.
+    private static async Task AssertImportEndedAsync(
+        IImportDialogs dialogs, DialogHost active, string file, CancellationToken ct)
+    {
+        await Task.Delay(100, ct); // the closed dialog leaves its window's popup layer
+        var stray = dialogs.ChooseImportModeAsync(file);
+        DialogHost.Press(await DialogHost.OpenDialogAsync(active.Window.Content.XamlRoot, ct), "CloseButton");
+        Assert.IsNull(await stray);
     }
 }

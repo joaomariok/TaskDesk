@@ -130,9 +130,22 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// <summary>Reloads the current view with the search text and filters (call after typing pauses).</summary>
+    /// <summary>
+    /// Reloads the current view with the search text and filters (call after typing pauses). A search cancelled
+    /// through the command (its window closed) ends quietly.
+    /// </summary>
     [RelayCommand]
-    private Task ApplySearchAsync(CancellationToken cancellationToken) => LoadAsync(cancellationToken);
+    private async Task ApplySearchAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await LoadAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Nothing to show: the page that asked for it is gone.
+        }
+    }
 
     /// <summary>Clears the search text (the Esc shortcut) and restores the view. Filter chips stay.</summary>
     [RelayCommand]
