@@ -59,9 +59,10 @@ public sealed partial class MainWindow : Window
         {
             // A closed window has no handle or size to measure.
             _closed = true;
-            // The page's Unloaded comes after Close returns; a search left waiting would tick in between, and one
-            // still loading would go on, reading a database the caller may already have let go of.
-            View.CancelPendingSearch();
+            // Stops the view model's deferred work now: the stop latches and cancels before it returns, so a text
+            // change delivered after Closed or a tick already queued starts nothing, and a search still loading stops
+            // before the caller lets the database go. Not awaited: the cancelled work ends on its own, quietly.
+            _ = ViewModel.StopAsync();
         };
         // Ctrl+comma opens Settings from anywhere in the window, before a text box sees the key.
         Navigation.PreviewKeyDown += OnPreviewKeyDown;
@@ -102,13 +103,13 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Call when the exit starts, before its flush and host stop: the window stays open until the exit has run, so
     /// its Closed comes too late. The sidebar, page and detail pane take no more input, so nothing there starts a
-    /// reload, and the page's search stops; completes once a cancelled search has ended
-    /// (see <see cref="MainView.StopSearchingAsync"/>).
+    /// reload, and the view model stops (<see cref="MainViewModel.StopAsync"/>); completes once the work it cancelled
+    /// has ended.
     /// </summary>
     public Task PrepareForExitAsync()
     {
         Navigation.IsEnabled = false;
-        return View.StopSearchingAsync();
+        return ViewModel.StopAsync();
     }
 
     // Opens at the default size (the shell then restores a saved layout), never smaller than the minimum.

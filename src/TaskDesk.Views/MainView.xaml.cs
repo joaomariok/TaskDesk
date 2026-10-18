@@ -10,7 +10,6 @@ using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
 using Windows.System;
-using DispatcherQueueTimer = Microsoft.UI.Dispatching.DispatcherQueueTimer;
 
 namespace TaskDesk.Views;
 
@@ -25,13 +24,8 @@ public sealed partial class MainView : UserControl
     private const string ListMenuId = "ListMenuButton";
     private const string ListMenuName = "List settings";
 
-    // Search reloads once typing pauses, so each keystroke does not query the database.
-    private static readonly TimeSpan SearchDelay = TimeSpan.FromMilliseconds(250);
-
     private static readonly string[] PriorityChoices = ["Any priority", "Low or higher", "Medium or higher", "High"];
 
-    private DispatcherQueueTimer? _searchTimer;
-    private bool _searchStopped;
     private bool _syncingPriorityFilter;
 
     public MainView(MainViewModel viewModel)
@@ -50,37 +44,6 @@ public sealed partial class MainView : UserControl
         _syncingPriorityFilter = false;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         viewModel.FocusQuickAddRequested += (_, _) => FocusQuickAdd();
-        // A search still waiting for typing to pause, or still loading, is dropped with the page: run after its
-        // window closed, the reload would query a database the shell may already have let go of. MainWindow also
-        // drops it as it closes, since Unloaded comes only after Close has returned.
-        Unloaded += (_, _) => CancelPendingSearch();
-    }
-
-    /// <summary>True while a search waits for typing to pause before it reloads the page.</summary>
-    public bool IsSearchPending => _searchTimer?.IsRunning == true;
-
-    /// <summary>
-    /// Drops a search still waiting for typing to pause, so it never reloads the page, and cancels one still loading.
-    /// </summary>
-    public void CancelPendingSearch()
-    {
-        _searchTimer?.Stop();
-        ViewModel.ApplySearchCommand.Cancel();
-    }
-
-    /// <summary>
-    /// Drops the search waiting or still loading (<see cref="CancelPendingSearch"/>), and from now on typing in the
-    /// search box starts none: the exit is under way, and a reload would query a host being stopped. Completes once
-    /// the cancelled search has ended, however it ended.
-    /// </summary>
-    public async Task StopSearchingAsync()
-    {
-        _searchStopped = true;
-        CancelPendingSearch();
-        if (ViewModel.ApplySearchCommand.ExecutionTask is { } search)
-        {
-            await search.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
-        }
     }
 
     /// <summary>The Overdue, open and "Completed (N)" Task lists and the Undo bar.</summary>
@@ -175,25 +138,6 @@ public sealed partial class MainView : UserControl
     }
 
     // ---- Search and Filters ----
-
-    private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (_searchStopped)
-        {
-            return;
-        }
-
-        if (_searchTimer is null)
-        {
-            _searchTimer = DispatcherQueue.CreateTimer();
-            _searchTimer.Interval = SearchDelay;
-            _searchTimer.IsRepeating = false;
-            _searchTimer.Tick += (_, _) => ViewModel.ApplySearchCommand.Execute(null);
-        }
-
-        _searchTimer.Stop();
-        _searchTimer.Start();
-    }
 
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnPriorityFilterChanged(object sender, SelectionChangedEventArgs e)

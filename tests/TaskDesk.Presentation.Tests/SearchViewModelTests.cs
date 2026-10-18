@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
 using FakeTagService = TaskDesk.Presentation.Tests.MainViewModelTests.FakeTagService;
@@ -44,26 +45,29 @@ public class SearchViewModelTests
     }
 
     [Fact]
-    public async Task A_search_cancelled_while_loading_ends_quietly_when_its_database_is_then_gone()
+    public async Task A_search_the_stop_cancelled_while_loading_ends_quietly_when_its_database_is_then_gone()
     {
         var search = new DisposedOnReleaseSearchService();
         var service = new FakeTaskService();
-        var vm = new MainViewModel(service, new FakeTagService(service), searchService: search);
+        // A fake clock, so the search the typing queued never runs on its own.
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider(), searchService: search);
         vm.SearchText = "milk";
 
         var run = vm.ApplySearchCommand.ExecuteAsync(null);
-        vm.ApplySearchCommand.Cancel();
+        var stop = vm.StopAsync();
         search.Release();
 
         await run;
+        await stop;
     }
 
     [Fact]
-    public async Task A_search_whose_database_is_gone_still_fails_when_nothing_cancelled_it()
+    public async Task A_search_whose_database_is_gone_still_fails_when_nothing_stopped_it()
     {
         var search = new DisposedOnReleaseSearchService();
         var service = new FakeTaskService();
-        var vm = new MainViewModel(service, new FakeTagService(service), searchService: search);
+        // A fake clock, so the search the typing queued never runs on its own.
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider(), searchService: search);
         vm.SearchText = "milk";
 
         var run = vm.ApplySearchCommand.ExecuteAsync(null);

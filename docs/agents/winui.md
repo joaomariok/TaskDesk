@@ -23,7 +23,12 @@ TaskDesk is a WinUI 3 app (ADR `docs/adr/0004-port-to-winui.md`). The WPF app it
 
 ## Lifetime
 
-Async work a view starts (timers, handlers, loads) ends with its window: stop timers on `Unloaded` and also when the window closes (WinUI raises `Unloaded` only after `Close` has returned, tens to hundreds of milliseconds later), and start loads from events, never from constructor-time property sets. Tests dispose `TempDatabase` right after closing the window, and an orphaned load then throws in an `async void` handler and kills the whole test host (0xC000027B). Run the whole `TaskDesk.Views.Tests` project before reporting.
+Deferred work belongs to the view model, not the view: a view starts no timers of its own, and its window ends that work when it goes.
+
+- A view model runs its deferred work through `ViewModelLifetime` (Presentation). Its `StopAsync()` latches once: after it no job starts, and a job it cancelled ends quietly, also with `ObjectDisposedException` from a database already let go of. Before the stop every failure surfaces. The stop is idempotent and completes once the cancelled jobs have ended.
+- So far this covers the search. `MainViewModel` owns its debounce on the injected `TimeProvider` and posts the tick back to the UI thread, as the due refresh does. A `SearchText` change queues the search; the view model's own clears (opening a List, opening a Task from a Reminder, Clear search) load at once and drop it. A queued search, its tick and `ApplySearchCommand` do nothing after `MainViewModel.StopAsync()`.
+- The window stops its view model on `Closed` (not awaited: the latch and cancel are synchronous) and at the exit (`PrepareForExitAsync` awaits it). WinUI raises `TextChanged` and `Unloaded` after `Close` has returned, so a view's own handlers cannot be the stop.
+- Start loads from events, never from constructor-time property sets. Tests dispose `TempDatabase` right after closing the window, and orphaned work then throws in an `async void` handler and kills the whole test host (0xC000027B). Drive a debounce with the database's fake clock (`db.Clock.Advance(MainViewModel.SearchDelay)`), not a real-time wait. Run the whole `TaskDesk.Views.Tests` project before reporting.
 
 ## Manual checks
 

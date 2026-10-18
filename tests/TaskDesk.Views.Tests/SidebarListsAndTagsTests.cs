@@ -399,6 +399,8 @@ public sealed class SidebarListsAndTagsTests
             Assert.AreEqual("Work", (listsList.SelectedItem as ListItemViewModel)?.Name, "Work's page selects Work.");
 
             viewModel.SearchText = "report";
+            // The search runs once typing pauses, on the view model's clock.
+            db.Clock.Advance(MainViewModel.SearchDelay);
             await UiWait.UntilAsync(() => Titles(viewModel).SequenceEqual(["Write report"]),
                 () => $"The search shows [{string.Join(", ", Titles(viewModel))}].", ct);
 

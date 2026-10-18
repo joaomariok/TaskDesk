@@ -222,7 +222,7 @@ public sealed partial class MainViewModel
         var row = _all.Find(r => r.Id == taskId);
         if (row is null)
         {
-            SearchText = "";
+            ClearSearchText();
             MinPriorityFilter = null;
             HasDueFilter = false;
             HasReminderFilter = false;

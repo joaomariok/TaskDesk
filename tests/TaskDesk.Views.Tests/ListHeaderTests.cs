@@ -477,7 +477,7 @@ public sealed class ListHeaderTests
 
             Assert.IsTrue(view.TryShortcut(VirtualKey.F, VirtualKeyModifiers.Control));
             await WaitForFocusAsync(search);
-            search.Text = "alpha";
+            await TypeSearchAsync(db, view, "alpha");
             await WaitForRowsAsync(view, "Alpha report");
 
             Assert.IsTrue(view.TryShortcut(VirtualKey.Escape, VirtualKeyModifiers.None));
@@ -588,7 +588,7 @@ public sealed class ListHeaderTests
             await WaitForRowsAsync(view, "Pay rent");
             Assert.AreEqual(Visibility.Collapsed, state.Visibility, "The empty state shows beside Tasks.");
 
-            VisualTree.Find<TextBox>(view, "SearchBox").Text = "zebra";
+            await TypeSearchAsync(db, view, "zebra");
             var text = VisualTree.Find<TextBlock>(view, "EmptyMessage");
             await UiWait.UntilAsync(() => text.Text == "No Tasks match 'zebra'",
                 () => $"The empty state read '{text.Text}'.", Ct);
@@ -632,12 +632,44 @@ public sealed class ListHeaderTests
         }
 
         // The search would reload over the database the closed window no longer owns.
-        await Task.Delay(TimeSpan.FromMilliseconds(750), Ct);
+        db.Clock.Advance(MainViewModel.SearchDelay);
+        await Task.Yield();
         Assert.AreEqual(0, reloads, "The search reloaded the page after its window closed.");
     }
 
     [UITestMethod]
-    public async Task Closing_the_window_drops_the_search_that_Clear_search_left_waiting()
+    public async Task Typing_in_the_search_box_after_the_window_closed_starts_no_search()
+    {
+        using var db = await DatabaseAsync();
+        var search = new CountingSearch(db.Get<ITaskSearchService>());
+        var viewModel = new MainViewModel(
+            db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock,
+            dueService: db.Get<IDueService>(), searchService: search, listService: db.Get<IListService>());
+        var window = new MainWindow(viewModel);
+        window.Activate();
+        await UiWait.UntilAsync(() => window.View.IsLoaded, () => "The main view never loaded.", Ct);
+        await viewModel.LoadAsync(Ct);
+
+        // The CI crash route: TextBox raises TextChanged later, so a change made just before Close is delivered
+        // after Closed (and before Unloaded); the search delay then runs out.
+        var box = VisualTree.Find<TextBox>(window.View, "SearchBox");
+        bool? pendingOnDelivery = null;
+        box.TextChanged += (_, _) => pendingOnDelivery = viewModel.IsSearchPending;
+        box.Text = "pay";
+        window.Close();
+        await UiWait.UntilAsync(() => pendingOnDelivery is not null, () => "The text change was never delivered.", Ct);
+        db.Clock.Advance(MainViewModel.SearchDelay);
+        // A tick posted to the UI thread runs before this continuation.
+        await Task.Yield();
+
+        Assert.IsFalse(pendingOnDelivery, "The text change delivered after Closed left a search waiting.");
+        Assert.IsNull(viewModel.ApplySearchCommand.ExecutionTask, "A search started after the window closed.");
+        Assert.AreEqual(0, search.Searches, "A search ran after the window closed.");
+        Assert.IsFalse(viewModel.IsSearchPending, "A search waits to run after the window closed.");
+    }
+
+    [UITestMethod]
+    public async Task Clear_search_leaves_no_search_waiting_to_reload_after_the_window_closed()
     {
         using var db = await DatabaseAsync();
         await AddAsync(db, "Pay rent");
@@ -647,10 +679,8 @@ public sealed class ListHeaderTests
             await viewModel.LoadAsync(Ct);
             viewModel.SearchText = "zebra";
             await viewModel.ApplySearchCommand.ExecuteAsync(null);
-            // Clear search empties the search box, and its TextChanged waits for typing to pause like a keystroke.
+            // Clear search empties the search box and reloads at once, so it drops the search the change queued.
             await viewModel.ClearSearchCommand.ExecuteAsync(null);
-            await UiWait.UntilAsync(() => window.View.IsSearchPending,
-                () => "Clearing the search left no search waiting.", Ct);
         }
         finally
         {
@@ -658,7 +688,7 @@ public sealed class ListHeaderTests
         }
 
         // Unloaded comes only after Close returns, once the caller may have let the database go.
-        Assert.IsFalse(window.View.IsSearchPending, "A search still waits to reload after the window closed.");
+        Assert.IsFalse(viewModel.IsSearchPending, "A search still waits to reload after the window closed.");
     }
 
     [UITestMethod]
@@ -675,7 +705,7 @@ public sealed class ListHeaderTests
             window.Activate();
             await UiWait.UntilAsync(() => window.View.IsLoaded, () => "The main view never loaded.", Ct);
             await viewModel.LoadAsync(Ct);
-            VisualTree.Find<TextBox>(window.View, "SearchBox").Text = "pay";
+            await TypeSearchAsync(db, window.View, "pay");
             // Typing paused: the search started and now waits on the database.
             await UiWait.UntilAsync(() => search.Started, () => "The search never started.", Ct);
         }
@@ -709,15 +739,16 @@ public sealed class ListHeaderTests
             await viewModel.LoadAsync(Ct);
             var searchBox = VisualTree.Find<TextBox>(window.View, "SearchBox");
             searchBox.Text = "pay";
-            await UiWait.UntilAsync(() => window.View.IsSearchPending, () => "Typing left no search waiting.", Ct);
+            await UiWait.UntilAsync(() => viewModel.IsSearchPending, () => "Typing left no search waiting.", Ct);
 
             // The exit starts while the window stays open: the flush and the host stop come next.
             await window.PrepareForExitAsync();
-            Assert.IsFalse(window.View.IsSearchPending, "A search still waits to reload as the exit starts.");
+            Assert.IsFalse(viewModel.IsSearchPending, "A search still waits to reload as the exit starts.");
             // Typing during the exit would otherwise reload over a host being stopped.
             searchBox.Text = "pay rent";
-            Assert.IsFalse(window.View.IsSearchPending, "Typing during the exit left a search waiting.");
-            await Task.Delay(TimeSpan.FromMilliseconds(750), Ct);
+            Assert.IsFalse(viewModel.IsSearchPending, "Typing during the exit left a search waiting.");
+            db.Clock.Advance(MainViewModel.SearchDelay);
+            await Task.Yield();
             Assert.AreEqual(0, reloads, "The search reloaded the page during the exit.");
         }
         finally
@@ -740,7 +771,7 @@ public sealed class ListHeaderTests
             window.Activate();
             await UiWait.UntilAsync(() => window.View.IsLoaded, () => "The main view never loaded.", Ct);
             await viewModel.LoadAsync(Ct);
-            VisualTree.Find<TextBox>(window.View, "SearchBox").Text = "pay";
+            await TypeSearchAsync(db, window.View, "pay");
             await UiWait.UntilAsync(() => search.Started, () => "The search never started.", Ct);
 
             await window.PrepareForExitAsync();
@@ -770,7 +801,7 @@ public sealed class ListHeaderTests
             window.Activate();
             await UiWait.UntilAsync(() => window.View.IsLoaded, () => "The main view never loaded.", Ct);
             await viewModel.LoadAsync(Ct);
-            VisualTree.Find<TextBox>(window.View, "SearchBox").Text = "pay";
+            await TypeSearchAsync(db, window.View, "pay");
             await UiWait.UntilAsync(() => search.Started, () => "The search never started.", Ct);
 
             var preparing = window.PrepareForExitAsync();
@@ -836,6 +867,18 @@ public sealed class ListHeaderTests
             await Release.Task;
             cancellationToken.ThrowIfCancellationRequested();
             return [];
+        }
+    }
+
+    // Counts the searches that reach the database.
+    private sealed class CountingSearch(ITaskSearchService inner) : ITaskSearchService
+    {
+        public int Searches { get; private set; }
+
+        public Task<IReadOnlyList<TaskItem>> SearchAsync(TaskSearchQuery query, CancellationToken cancellationToken = default)
+        {
+            Searches++;
+            return inner.SearchAsync(query, cancellationToken);
         }
     }
 
@@ -967,6 +1010,14 @@ public sealed class ListHeaderTests
         return UiWait.UntilAsync(() => RowNames(list).SequenceEqual(titles),
             () => $"OpenTaskList: expected [{string.Join(", ", titles)}], was [{string.Join(", ", RowNames(list))}]"
                 + $" (Tasks [{string.Join(", ", view.ViewModel.Tasks.Select(t => t.Title))}], search '{view.ViewModel.SearchText}', error '{view.ViewModel.ErrorMessage}').", Ct);
+    }
+
+    // Types into the search box, then lets the search delay run out on the database's clock.
+    private async Task TypeSearchAsync(TempDatabase db, MainView view, string text)
+    {
+        VisualTree.Find<TextBox>(view, "SearchBox").Text = text;
+        await UiWait.UntilAsync(() => view.ViewModel.IsSearchPending, () => $"Typing '{text}' left no search waiting.", Ct);
+        db.Clock.Advance(MainViewModel.SearchDelay);
     }
 
     private async Task<(MainWindow Window, MainViewModel ViewModel)> OpenAsync(TempDatabase db)

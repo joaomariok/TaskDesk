@@ -171,7 +171,7 @@ public sealed partial class MainViewModel(
     /// <summary>Shows a List's page. Opening a List ends the search; Filters stay on.</summary>
     public Task ShowListAsync(Guid listId, CancellationToken cancellationToken = default)
     {
-        SearchText = "";
+        ClearSearchText();
         return ShowAsync(new TaskListPage.ListPage(listId), cancellationToken);
     }
 

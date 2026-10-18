@@ -12,6 +12,33 @@ public sealed record FilterTagChip(Tag Tag, bool IsSelected);
 // Search (Ctrl+F) and filter chips. They narrow the current view; clearing them restores it.
 public sealed partial class MainViewModel
 {
+    /// <summary>How long the search waits for typing to pause before it reloads the page.</summary>
+    public static readonly TimeSpan SearchDelay = TimeSpan.FromMilliseconds(250);
+
+    // Searches and reloads stop with the view model (see StopAsync).
+    private readonly ViewModelLifetime _lifetime = new();
+
+    private ITimer? _searchTimer;
+
+    // Each queued search takes a version; a tick that was already posted runs only if no later queue or drop
+    // came after it.
+    private int _searchVersion;
+
+    /// <summary>True while a search waits for typing to pause before it reloads the page.</summary>
+    public bool IsSearchPending => _searchTimer is not null;
+
+    /// <summary>
+    /// Stops the view model's deferred work: from now on nothing starts, and work still running is cancelled and
+    /// ends quietly. For now that is the search, waiting or loading. Idempotent; the stop itself happens before
+    /// this returns, and the task completes once the cancelled work has ended, however it ended.
+    /// </summary>
+    public Task StopAsync()
+    {
+        var stopping = _lifetime.StopAsync();
+        DropQueuedSearch();
+        return stopping;
+    }
+
     /// <summary>The search text, matched against titles, notes and Subtask titles of the current view.</summary>
     [ObservableProperty]
     private string _searchText = "";
@@ -68,6 +95,58 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(IsNarrowed));
         UpdateReorderEnabled();
         NotifyPageStateChanged();
+        QueueSearch();
+    }
+
+    // Each keystroke restarts the wait, so the search reloads once typing pauses.
+    private void QueueSearch()
+    {
+        if (_lifetime.IsStopped)
+        {
+            return;
+        }
+
+        _uiContext ??= SynchronizationContext.Current; // the UI thread in the app; none in tests
+        _searchTimer?.Dispose();
+        var version = ++_searchVersion;
+        _searchTimer = _clock.CreateTimer(_ => OnSearchTimer(version), null, SearchDelay, Timeout.InfiniteTimeSpan);
+    }
+
+    private void OnSearchTimer(int version)
+    {
+        if (_uiContext is { } context)
+        {
+            context.Post(_ => RunQueuedSearch(version), null);
+        }
+        else
+        {
+            RunQueuedSearch(version);
+        }
+    }
+
+    private void RunQueuedSearch(int version)
+    {
+        if (version != _searchVersion || _lifetime.IsStopped)
+        {
+            return; // dropped, restarted by more typing, or the view model has stopped
+        }
+
+        DropQueuedSearch();
+        ApplySearchCommand.Execute(null);
+    }
+
+    // The view model's own clears of the search text load straight away, so the search they queued is dropped.
+    private void ClearSearchText()
+    {
+        SearchText = "";
+        DropQueuedSearch();
+    }
+
+    private void DropQueuedSearch()
+    {
+        _searchVersion++;
+        _searchTimer?.Dispose();
+        _searchTimer = null;
     }
 
     partial void OnMinPriorityFilterChanged(Priority? value) => OnFilterStateChanged();
@@ -132,23 +211,12 @@ public sealed partial class MainViewModel
     }
 
     /// <summary>
-    /// Reloads the current view with the search text and filters (call after typing pauses). A search cancelled
-    /// through the command (its window closed) ends quietly, also when the database it was reading has been let go
-    /// of meanwhile.
+    /// Reloads the current view with the search text and filters (runs once typing pauses). Does nothing once the
+    /// view model has stopped; a search the stop cancelled ends quietly, also when the database it was reading has
+    /// been let go of meanwhile.
     /// </summary>
     [RelayCommand]
-    private async Task ApplySearchAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await LoadAsync(cancellationToken);
-        }
-        catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException
-            && cancellationToken.IsCancellationRequested)
-        {
-            // Nothing to show: the page that asked for it is gone.
-        }
-    }
+    private Task ApplySearchAsync(CancellationToken cancellationToken) => _lifetime.RunAsync(LoadAsync, cancellationToken);
 
     /// <summary>Clears the search text (the Esc shortcut) and restores the view. Filter chips stay.</summary>
     [RelayCommand]
@@ -159,7 +227,7 @@ public sealed partial class MainViewModel
             return;
         }
 
-        SearchText = "";
+        ClearSearchText();
         await LoadAsync(cancellationToken);
     }
 

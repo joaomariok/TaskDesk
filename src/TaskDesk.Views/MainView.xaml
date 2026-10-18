@@ -86,8 +86,7 @@
                          AutomationProperties.AutomationId="SearchBox"
                          ToolTipService.ToolTip="Search (Ctrl+F). Esc clears."
                          PlaceholderText="{x:Bind ViewModel.SearchScope, Mode=OneWay}"
-                         Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                         TextChanged="OnSearchTextChanged" />
+                         Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
             </Grid>
             <!-- Wraps like the WPF Filter bar: the Tag chips, as one block, go to the next line when they do not
                  fit after the other Filters, and wrap among themselves within the bar's width. -->
