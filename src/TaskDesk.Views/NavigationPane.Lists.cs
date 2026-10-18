@@ -66,10 +66,12 @@ public sealed partial class NavigationPane
 
     /// <summary>
     /// Drops <paramref name="dragged"/> into the gap <paramref name="gap"/> (0 is before the first List, the number
-    /// of Lists after the last) through the Lists' reorder use case. Its own gap, above or below it, does nothing.
+    /// of Lists after the last) through the Lists' reorder use case, and hides the insertion line. Its own gap,
+    /// above or below it, moves nothing.
     /// </summary>
     public async Task DropListAsync(ListItemViewModel dragged, int gap)
     {
+        HideInsertionLine();
         if (Lists is not null)
         {
             await Lists.MoveToGapAsync(dragged, gap);
@@ -93,6 +95,25 @@ public sealed partial class NavigationPane
         return ListsList.Items.Count;
     }
 
+    /// <summary>
+    /// The drag left the spot at <paramref name="position"/> (relative to the Lists list). Moving between rows
+    /// leaves a row too, so the line hides only once the position is outside the Lists.
+    /// </summary>
+    public void LeaveListDrag(Windows.Foundation.Point position)
+    {
+        if (position.X < 0 || position.Y < 0 || position.X >= ListsList.ActualWidth || position.Y >= ListsList.ActualHeight)
+        {
+            HideInsertionLine();
+        }
+    }
+
+    /// <summary>The List drag completed or was cancelled: the line hides.</summary>
+    public void EndListDrag()
+    {
+        _dragged = null;
+        HideInsertionLine();
+    }
+
     // The top and height of row i in the Lists list, or null while it has no container.
     private (double Top, double Height)? RowBounds(int index)
     {
@@ -105,8 +126,11 @@ public sealed partial class NavigationPane
         return (top, container.ActualHeight);
     }
 
-    // The insertion line sits on the gap: at the top of the row after it, or at the bottom of the last row.
-    private void ShowInsertionLine(int gap)
+    /// <summary>
+    /// Shows the insertion line on the gap <paramref name="gap"/> while a List is dragged: at the top of the row
+    /// after it, or at the bottom of the last row.
+    /// </summary>
+    public void ShowListDropGap(int gap)
     {
         var count = ListsList.Items.Count;
         var y = gap < count ? RowBounds(gap)?.Top
@@ -408,7 +432,7 @@ public sealed partial class NavigationPane
         e.Handled = true;
         if (_dragged is not null)
         {
-            ShowInsertionLine(GapAt(e.GetPosition(ListsList)));
+            ShowListDropGap(GapAt(e.GetPosition(ListsList)));
         }
         else
         {
@@ -416,32 +440,23 @@ public sealed partial class NavigationPane
         }
     }
 
-    // Moving between rows raises a row's DragLeave too, which bubbles here: hide only once the pointer has left
-    // the Lists.
-    private void OnListDragLeave(object sender, DragEventArgs e)
-    {
-        var position = e.GetPosition(ListsList);
-        if (position.X < 0 || position.Y < 0 || position.X >= ListsList.ActualWidth || position.Y >= ListsList.ActualHeight)
-        {
-            HideInsertionLine();
-        }
-    }
+    // Moving between rows raises a row's DragLeave too, which bubbles here.
+    private void OnListDragLeave(object sender, DragEventArgs e) => LeaveListDrag(e.GetPosition(ListsList));
 
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnListDrop(object sender, DragEventArgs e)
     {
         var dragged = _dragged;
         _dragged = null;
-        HideInsertionLine();
         if (dragged is not null)
         {
             await DropListAsync(dragged, GapAt(e.GetPosition(ListsList)));
         }
+        else
+        {
+            HideInsertionLine();
+        }
     }
 
-    private void OnListDragCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
-    {
-        _dragged = null;
-        HideInsertionLine();
-    }
+    private void OnListDragCompleted(ListViewBase sender, DragItemsCompletedEventArgs args) => EndListDrag();
 }

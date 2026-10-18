@@ -21,7 +21,8 @@ namespace TaskDesk.Views.Tests;
 /// <summary>
 /// The Lists and Tags under the Smart Views: one scroll area with the Lists (colour dot or hollow ring, open count),
 /// "+ New List" and the Tags; the rail's List initials in their colour ring; the context menu's Rename, Colour and
-/// Delete through the dialogs; a Tag filtering the page; and the order a drag leaves saved.
+/// Delete through the dialogs; a Tag filtering the page; the order a drag leaves saved and the insertion line that
+/// shows its gap.
 /// </summary>
 [TestClass]
 public sealed class SidebarListsAndTagsTests
@@ -576,6 +577,96 @@ public sealed class SidebarListsAndTagsTests
         }
     }
 
+    [UITestMethod]
+    public async Task While_a_List_is_dragged_the_insertion_line_sits_on_the_gap_at_a_rows_top_or_under_the_last_row()
+    {
+        var ct = TestContext.CancellationToken;
+        using var db = new TempDatabase();
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
+        foreach (var name in new[] { "A", "B" })
+        {
+            await db.Get<IListService>().CreateListAsync(name, ct);
+        }
+
+        var (window, _, lists) = NewWindow(db);
+        try
+        {
+            window.Activate();
+            await lists.LoadAsync(ct);
+            await RowsAsync(window, "ListsList", 3);
+            var line = VisualTree.Find<Rectangle>(window.Navigation, "ListInsertionLine");
+            Assert.IsFalse(IsShown(line), "No line before a drag.");
+
+            foreach (var rail in new[] { false, true })
+            {
+                window.Navigation.SetRail(rail);
+                var id = rail ? "RailListsList" : "ListsList";
+                var rows = await RowsAsync(window, id, 3);
+                var list = VisualTree.Find<ListView>(window.Navigation, "ListsList");
+
+                for (var gap = 0; gap <= rows.Count; gap++)
+                {
+                    var expected = gap < rows.Count
+                        ? TopOf(rows[gap], list)
+                        : TopOf(rows[^1], list) + rows[^1].ActualHeight;
+                    window.Navigation.ShowListDropGap(gap);
+                    await UiWait.UntilAsync(
+                        () => IsShown(line) && Math.Abs(LineMiddle(line, list) - expected) <= 1.5,
+                        () => $"{id} gap {gap}: line shown {IsShown(line)} at {LineMiddle(line, list)}, expected {expected}.", ct);
+                }
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task The_insertion_line_hides_after_a_drop_when_the_drag_ends_and_when_the_drag_leaves_the_Lists()
+    {
+        var ct = TestContext.CancellationToken;
+        using var db = new TempDatabase();
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
+        foreach (var name in new[] { "A", "B" })
+        {
+            await db.Get<IListService>().CreateListAsync(name, ct);
+        }
+
+        var (window, _, lists) = NewWindow(db);
+        try
+        {
+            window.Activate();
+            await lists.LoadAsync(ct);
+            await RowsAsync(window, "ListsList", 3);
+            var line = VisualTree.Find<Rectangle>(window.Navigation, "ListInsertionLine");
+            var list = VisualTree.Find<ListView>(window.Navigation, "ListsList");
+
+            window.Navigation.ShowListDropGap(1);
+            Assert.IsTrue(IsShown(line), "Shown during the drag.");
+            await window.Navigation.DropListAsync(lists.Lists[2], 1);
+            Assert.IsFalse(IsShown(line), "Hidden after a drop.");
+
+            // The drop reloads the Lists; the line needs their rows back to find a gap.
+            await RowsAsync(window, "ListsList", 3);
+            window.Navigation.ShowListDropGap(2);
+            Assert.IsTrue(IsShown(line), "Shown again during the next drag.");
+            window.Navigation.EndListDrag();
+            Assert.IsFalse(IsShown(line), "Hidden when the drag completes or is cancelled.");
+
+            window.Navigation.ShowListDropGap(2);
+            Assert.IsTrue(IsShown(line), "Shown again during the next drag.");
+            window.Navigation.LeaveListDrag(new Windows.Foundation.Point(20, list.ActualHeight / 2));
+            Assert.IsTrue(IsShown(line), "Leaving one row for another inside the Lists keeps the line.");
+            window.Navigation.LeaveListDrag(new Windows.Foundation.Point(20, list.ActualHeight + 10));
+            Assert.IsFalse(IsShown(line), "Hidden once the drag leaves the Lists.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private (MainWindow Window, MainViewModel ViewModel, ListsViewModel Lists) NewWindow(TempDatabase db)
     {
         MainWindow? window = null;
@@ -665,6 +756,9 @@ public sealed class SidebarListsAndTagsTests
 
     private static double LeftOf(UIElement element, UIElement root) =>
         element.TransformToVisual(root).TransformPoint(new Windows.Foundation.Point(0, 0)).X;
+
+    // The line's vertical middle relative to the Lists list (it straddles the gap).
+    private static double LineMiddle(Rectangle line, UIElement list) => TopOf(line, list) + line.ActualHeight / 2;
 
     private static Color Colour(Brush brush) => ((SolidColorBrush)brush).Color;
 
