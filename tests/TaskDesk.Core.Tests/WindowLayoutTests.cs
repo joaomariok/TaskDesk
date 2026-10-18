@@ -34,19 +34,19 @@ public sealed class WindowLayoutTests
     public void Without_a_saved_layout_the_panes_have_their_default_widths()
     {
         Assert.Equal(180, PaneLayout.WidthOf(null, PaneLayout.Navigation));
-        Assert.Equal(260, PaneLayout.WidthOf(null, PaneLayout.Detail));
-        Assert.Equal(260, PaneLayout.WidthOf(new WindowLayout(0, 0, 1000, 700), PaneLayout.Detail));
+        Assert.Equal(320, PaneLayout.WidthOf(null, PaneLayout.Detail));
+        Assert.Equal(320, PaneLayout.WidthOf(new WindowLayout(0, 0, 1000, 700), PaneLayout.Detail));
     }
 
     [Theory]
     [InlineData(PaneLayout.Navigation, 250, 250)]  // in range
     [InlineData(PaneLayout.Navigation, 50, 140)]   // below the minimum
     [InlineData(PaneLayout.Navigation, 900, 400)]  // above the maximum
-    [InlineData(PaneLayout.Detail, 300, 300)]
-    [InlineData(PaneLayout.Detail, 100, 220)]
+    [InlineData(PaneLayout.Detail, 300, 320)]
+    [InlineData(PaneLayout.Detail, 100, 320)]
     [InlineData(PaneLayout.Detail, 2000, 600)]
-    [InlineData(PaneLayout.Detail, 0, 260)]        // nothing usable saved: the default
-    [InlineData(PaneLayout.Detail, -5, 260)]
+    [InlineData(PaneLayout.Detail, 0, 320)]        // nothing usable saved: the default
+    [InlineData(PaneLayout.Detail, -5, 320)]
     public void A_saved_width_is_restored_within_the_pane_limits(string pane, double saved, double expected)
     {
         var layout = new WindowLayout(0, 0, 1000, 700, PaneWidths: new Dictionary<string, double> { [pane] = saved });

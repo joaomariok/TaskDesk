@@ -61,6 +61,42 @@ public sealed class DetailPaneTests
     }
 
     [UITestMethod]
+    public async Task The_docked_pane_is_wide_enough_for_its_time_pickers()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Book dentist", due: new DateOnly(2030, 10, 25));
+        var (window, _) = await OpenAsync(db, width: 1240);
+        try
+        {
+            await SelectAsync(window, "Book dentist");
+            var pane = window.Details.Pane;
+            await UiWait.UntilAsync(() => pane.Visibility == Visibility.Visible && pane.ActualWidth > 0,
+                () => "Selecting the Task did not show the docked pane.", Ct);
+            window.Content.UpdateLayout();
+
+            Assert.IsTrue(pane.ActualWidth >= PaneLayout.DetailOverlayMinWidth - 0.5,
+                $"The docked pane is {pane.ActualWidth} px wide, narrower than the overlaid pane.");
+            foreach (var pickerName in new[] { "DueTimePicker", "ReminderTimePicker" })
+            {
+                var picker = VisualTree.Find<TimePicker>(pane, pickerName);
+                foreach (var part in new[] { "HourTextBlock", "MinuteTextBlock" })
+                {
+                    // Measured without a limit, the text's own width; clipped when its slot is narrower. The
+                    // measure rounds up to whole pixels, so 1 px is rounding, not a clipped letter.
+                    var text = VisualTree.Find<TextBlock>(picker, part);
+                    text.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+                    Assert.IsTrue(text.DesiredSize.Width <= text.ActualWidth + 1,
+                        $"{pickerName}'s '{text.Text}' needs {text.DesiredSize.Width} px but has {text.ActualWidth}.");
+                }
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
     public async Task The_pane_keeps_the_automation_ids_and_names_the_UI_tests_use()
     {
         using var db = await DatabaseAsync();

@@ -19,7 +19,8 @@ public static class PaneLayout
     public const string Detail = "detail";
 
     public static readonly PaneLimits NavigationLimits = new(Default: 180, Min: 140, Max: 400);
-    public static readonly PaneLimits DetailLimits = new(Default: 260, Min: 220, Max: 600);
+    // Never narrower than the overlaid pane: below 320 px the time pickers clip their hour and minute.
+    public static readonly PaneLimits DetailLimits = new(Default: DetailOverlayMinWidth, Min: DetailOverlayMinWidth, Max: 600);
 
     /// <summary>The window width below which the sidebar shows as the icon rail.</summary>
     public const double RailBelowWidth = 900;
