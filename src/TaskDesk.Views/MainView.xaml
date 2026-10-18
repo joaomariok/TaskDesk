@@ -53,14 +53,6 @@
                                 Background="Transparent" DefaultLabelPosition="Right" IsDynamicOverflowEnabled="False"
                                 OverflowButtonVisibility="{x:Bind local:MainView.ListOverflow(ViewModel.IsListPage), Mode=OneWay, FallbackValue=Collapsed}"
                                 Loaded="OnHeadingCommandsLoaded">
-                        <!-- Compact: Fluent's CommandBar is 48 px tall; these template resources fit it, the Filter
-                             button (icon, label on its right) and the "⋯" button into the 32 px of a text box. -->
-                        <CommandBar.Resources>
-                            <x:Double x:Key="AppBarThemeCompactHeight">32</x:Double>
-                            <Thickness x:Key="AppBarButtonContentViewboxMargin">12,8,0,8</Thickness>
-                            <Thickness x:Key="AppBarToggleButtonTextLabelOnRightMargin">8,8,12,8</Thickness>
-                            <Thickness x:Key="CommandBarMoreButtonMargin">14,14,14,0</Thickness>
-                        </CommandBar.Resources>
                         <local:CommandAppBarToggleButton x:Name="FilterButton" Label="Filter"
                                                          AutomationProperties.Name="Filter"
                                                          AutomationProperties.AutomationId="FilterButton"

@@ -178,10 +178,10 @@ public sealed class ListHeaderTests
         }
     }
 
-    // At the narrowest window (800 px with its frame) the heading row keeps the 32 px of a text box: the compact
-    // command bar sits right after the heading, and the search box, as tall as quick add, is centred in the row.
+    // At the narrowest window (800 px with its frame) the heading row is as tall as Fluent's command bar at its
+    // default size: the bar sits right after the heading, and the search box, as tall as quick add, is centred in the row.
     [UITestMethod]
-    public async Task The_heading_row_is_32_px_with_its_commands_right_after_the_heading_and_search_centred()
+    public async Task The_heading_row_fits_its_command_bar_with_its_commands_right_after_the_heading_and_search_centred()
     {
         using var db = await DatabaseAsync();
         var (window, viewModel) = await OpenAsync(db);
@@ -209,10 +209,10 @@ public sealed class ListHeaderTests
             Rect Bounds(FrameworkElement e) =>
                 e.TransformToVisual(window.View).TransformBounds(new Rect(0, 0, e.ActualWidth, e.ActualHeight));
 
-            Assert.IsLessThanOrEqualTo(32.5, row.ActualHeight, $"The heading row is {row.ActualHeight} px tall.");
-            Assert.IsLessThanOrEqualTo(32.5, bar.ActualHeight, $"The command bar is {bar.ActualHeight} px tall.");
-            Assert.IsLessThanOrEqualTo(32.5, filter.ActualHeight, $"Filter is {filter.ActualHeight} px tall.");
-            Assert.IsLessThanOrEqualTo(32.5, more.ActualHeight, $"List settings is {more.ActualHeight} px tall.");
+            Assert.AreEqual(bar.ActualHeight, row.ActualHeight, 0.5,
+                $"The heading row is {row.ActualHeight} px tall, its command bar {bar.ActualHeight} px.");
+            Assert.IsLessThanOrEqualTo(bar.ActualHeight + 0.5, filter.ActualHeight, $"Filter is {filter.ActualHeight} px tall.");
+            Assert.IsLessThanOrEqualTo(bar.ActualHeight + 0.5, more.ActualHeight, $"List settings is {more.ActualHeight} px tall.");
 
             var label = VisualTree.Descendants(filter).OfType<TextBlock>().Single(t => t.Name == "TextLabel");
             var icon = VisualTree.Descendants(filter).OfType<FrameworkElement>().Single(e => e.Name == "ContentViewbox");
@@ -243,7 +243,7 @@ public sealed class ListHeaderTests
         }
     }
 
-    // A List name too long for the row stays on one line and ends with an ellipsis, so the row keeps its 32 px and
+    // A List name too long for the row stays on one line and ends with an ellipsis, so the row keeps its height and
     // the command bar stays in view before the search box.
     [UITestMethod]
     public async Task A_long_List_name_ends_the_heading_with_an_ellipsis_on_one_line()
@@ -265,7 +265,8 @@ public sealed class ListHeaderTests
                 e.TransformToVisual(window.View).TransformBounds(new Rect(0, 0, e.ActualWidth, e.ActualHeight));
 
             Assert.IsTrue(heading.IsTextTrimmed, "The long heading does not end with an ellipsis.");
-            Assert.IsLessThanOrEqualTo(32.5, row.ActualHeight, $"The heading row is {row.ActualHeight} px tall.");
+            Assert.AreEqual(bar.ActualHeight, row.ActualHeight, 0.5,
+                $"The heading row is {row.ActualHeight} px tall, its command bar {bar.ActualHeight} px.");
             Assert.IsLessThanOrEqualTo(Bounds(search).Left + 0.5, Bounds(bar).Right, "The command bar runs into search.");
             Assert.IsGreaterThan(0, bar.ActualWidth, "The command bar is pushed out of view.");
         }
