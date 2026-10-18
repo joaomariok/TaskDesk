@@ -438,6 +438,23 @@ public sealed class ShellControllerTests
     }
 
     [Fact]
+    public async Task An_exit_step_added_after_the_exit_started_is_rejected_and_the_exit_still_shuts_down()
+    {
+        var controller = await StartedAsync();
+        var flush = new TaskCompletionSource();
+        controller.AddExitStep(() => flush.Task);
+        var exit = controller.ExitAsync();
+
+        var late = Record.Exception(() => controller.AddExitStep(() => Task.CompletedTask));
+        flush.SetResult();
+        await exit;
+
+        Assert.IsType<InvalidOperationException>(late);
+        Assert.Equal(1, _tray.DisposeCount);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
     public async Task Exit_requested_twice_runs_the_steps_once()
     {
         var controller = await StartedAsync();

@@ -12,7 +12,7 @@ public static class ListColour
     {
         colour = default;
         if (hex is not { Length: 7 } || hex[0] != '#'
-            || !uint.TryParse(hex.AsSpan(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+            || !uint.TryParse(hex.AsSpan(1), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var rgb))
         {
             return false;
         }

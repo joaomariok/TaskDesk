@@ -238,4 +238,91 @@ public sealed class DialogServiceTests
             DialogHost.OpenDialog(main.Window.Content.XamlRoot)?.Hide();
         }
     }
+
+    [UITestMethod]
+    public async Task A_dialog_started_from_another_window_while_a_picker_is_open_opens_on_that_window()
+    {
+        var ct = TestContext.CancellationToken;
+        using var settings = await DialogHost.OpenAsync(ct);
+        using var main = await DialogHost.OpenAsync(ct);
+        var active = settings.Window;
+        var service = new DialogService(() => active);
+        // Settings' Import file picker, still open.
+        var picking = new TaskCompletionSource<string?>();
+        var picker = service.ShowOnOwnerAsync(_ => picking.Task);
+        try
+        {
+            // The owner clicks the main window and deletes a List there.
+            active = main.Window;
+            var confirm = service.ConfirmAsync("Delete list", "Delete the list?", "Delete", destructive: true);
+
+            var (window, dialog) = await OpenDialogOnEitherAsync(settings, main, ct);
+            Assert.AreSame(main.Window, window, "The main window's dialog opened on the Settings window.");
+            DialogHost.Press(dialog, "CloseButton");
+            Assert.IsFalse(await confirm);
+        }
+        finally
+        {
+            picking.TrySetResult(null);
+            await picker;
+            DialogHost.OpenDialog(settings.Window.Content.XamlRoot)?.Hide();
+            DialogHost.OpenDialog(main.Window.Content.XamlRoot)?.Hide();
+        }
+    }
+
+    [UITestMethod]
+    public async Task A_flow_that_ends_inside_another_keeps_the_outer_flow_on_its_window()
+    {
+        var ct = TestContext.CancellationToken;
+        using var settings = await DialogHost.OpenAsync(ct);
+        using var main = await DialogHost.OpenAsync(ct);
+        var active = settings.Window;
+        var service = new DialogService(() => active);
+        var picking = new TaskCompletionSource<string?>();
+        try
+        {
+            // An import: its file picker, then the mode choice straight after it.
+            async Task<DialogResult> Import()
+            {
+                await service.ShowOnOwnerAsync(_ => picking.Task);
+                return await service.ShowAsync(new DialogRequest("Import", "How?", ["Merge", "Replace"]));
+            }
+
+            var import = Import();
+
+            // While the picker is open, a message on the same window opens and closes, and its flow settles.
+            var inner = service.ShowMessageAsync("TaskDesk", "Something to read.");
+            var message = await DialogHost.OpenDialogAsync(settings.Window.Content.XamlRoot, ct);
+            DialogHost.Press(message, "CloseButton");
+            await inner;
+            await Task.Delay(100, ct);
+
+            // The owner clicks the main window, then picks the file.
+            active = main.Window;
+            picking.SetResult("data.json");
+
+            var (window, choice) = await OpenDialogOnEitherAsync(settings, main, ct);
+            Assert.AreSame(settings.Window, window, "The import's next step jumped to the main window.");
+            DialogHost.Press(choice, "PrimaryButton");
+            Assert.AreEqual(0, (await import).ChoiceIndex);
+        }
+        finally
+        {
+            picking.TrySetResult(null);
+            DialogHost.OpenDialog(settings.Window.Content.XamlRoot)?.Hide();
+            DialogHost.OpenDialog(main.Window.Content.XamlRoot)?.Hide();
+        }
+    }
+
+    // The content dialog that opens next, on whichever of the two windows it opens on.
+    private static async Task<(Window Window, ContentDialog Dialog)> OpenDialogOnEitherAsync(
+        DialogHost first, DialogHost second, CancellationToken ct)
+    {
+        Window? window = null;
+        await UiWait.UntilAsync(
+            () => (window = DialogHost.OpenDialog(first.Window.Content.XamlRoot) is not null ? first.Window
+                : DialogHost.OpenDialog(second.Window.Content.XamlRoot) is not null ? second.Window : null) is not null,
+            () => "No content dialog opened on either window.", ct);
+        return (window!, await DialogHost.OpenDialogAsync(window!.Content.XamlRoot, ct));
+    }
 }

@@ -40,20 +40,24 @@ public partial class UnitTestApp : Application
 
     // An exception no test catches (an async void handler that outlives its window, say) ends the host with a bare
     // 0xC000027B and no test name. Write it out first so the gate log names the cause. The exception stays
-    // unhandled: the host still dies and the run still fails.
+    // unhandled: the host still dies and the run still fails. An unobserved task exception does not end the host,
+    // so it is written as a warning.
     private void ReportCrashes()
     {
-        UnhandledException += (_, e) => Report("unhandled XAML exception", e.Exception, e.Message);
+        UnhandledException += (_, e) => Report(Crash, "unhandled XAML exception", e.Exception, e.Message);
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
-            Report("unhandled exception", e.ExceptionObject as Exception, null);
-        TaskScheduler.UnobservedTaskException += (_, e) => Report("unobserved task exception", e.Exception, null);
+            Report(Crash, "unhandled exception", e.ExceptionObject as Exception, null);
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+            Report("TEST HOST WARNING", "unobserved task exception", e.Exception, null);
     }
 
-    private static void Report(string kind, Exception? exception, string? message)
+    private const string Crash = "TEST HOST CRASH";
+
+    private static void Report(string heading, string kind, Exception? exception, string? message)
     {
         lock (CrashLog)
         {
-            CrashLog.WriteLine($"TEST HOST CRASH ({kind}): {exception?.GetType().FullName}: {exception?.Message}");
+            CrashLog.WriteLine($"{heading} ({kind}): {exception?.GetType().FullName}: {exception?.Message}");
             // WinUI's message can carry more than the exception's own (the originating error).
             if (message is { Length: > 0 } && message != exception?.Message)
             {

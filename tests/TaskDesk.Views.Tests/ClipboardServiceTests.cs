@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using TaskDesk.App.Shell;
 
 namespace TaskDesk.Views.Tests;
@@ -55,8 +57,53 @@ public sealed class ClipboardServiceTests
         CollectionAssert.AreEqual(new[] { "Open", "Empty", "SetUnicodeText path", "Close" }, clipboard.Calls);
     }
 
-    private static WinUiClipboardService Service(FakeWin32Clipboard clipboard, Action<TimeSpan>? wait = null) =>
-        new(clipboard, wait ?? (_ => { }));
+    [TestMethod]
+    public void A_copy_the_clipboard_refused_is_logged_as_a_warning()
+    {
+        var log = new RecordingLogger();
+
+        Service(new FakeWin32Clipboard { RefusesText = true }, logger: log).SetText("path");
+
+        CollectionAssert.AreEqual(new[] { LogLevel.Warning }, log.Levels, "A refused copy left no warning.");
+    }
+
+    [TestMethod]
+    public void A_copy_given_up_on_a_held_clipboard_is_logged_as_a_warning()
+    {
+        var log = new RecordingLogger();
+
+        Service(new FakeWin32Clipboard { RefusedOpens = int.MaxValue }, logger: log).SetText("path");
+
+        CollectionAssert.AreEqual(new[] { LogLevel.Warning }, log.Levels, "A missed copy left no warning.");
+    }
+
+    [TestMethod]
+    public void A_copy_that_succeeds_logs_nothing()
+    {
+        var log = new RecordingLogger();
+
+        Service(new FakeWin32Clipboard(), logger: log).SetText("path");
+
+        Assert.IsEmpty(log.Levels);
+    }
+
+    private sealed class RecordingLogger : ILogger
+    {
+        public List<LogLevel> Levels { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Levels.Add(logLevel);
+    }
+
+    private static WinUiClipboardService Service(
+        FakeWin32Clipboard clipboard, Action<TimeSpan>? wait = null, ILogger? logger = null) =>
+        new(clipboard, wait ?? (_ => { }), logger ?? NullLogger.Instance);
 
     private sealed class FakeWin32Clipboard : IWin32Clipboard
     {

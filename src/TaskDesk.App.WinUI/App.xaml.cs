@@ -31,6 +31,10 @@ public partial class App : Application
 {
     private IHost? _host;
 
+    // Resolved once, while the host is alive: the last exit step disposes the host, and an unhandled exception
+    // after that must still reach this logger instead of throwing ObjectDisposedException from the provider.
+    private ILogger<App>? _logger;
+
     public App()
     {
         InitializeComponent();
@@ -38,8 +42,7 @@ public partial class App : Application
         DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
         // Logged, then the app ends (Handled stays false): the WPF app has no DispatcherUnhandledException
         // handler either, so an unhandled UI exception ends it too. The log file sink is unbuffered.
-        UnhandledException += (_, e) =>
-            _host?.Services.GetRequiredService<ILogger<App>>().LogCritical(e.Exception, "Unhandled UI exception");
+        UnhandledException += (_, e) => _logger?.LogCritical(e.Exception, "Unhandled UI exception");
     }
 
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI override with a void signature; start-up failures are not recoverable.")]
@@ -118,7 +121,8 @@ public partial class App : Application
         builder.Services.AddSingleton<HotkeyService>();
         builder.Services.AddTransient<QuickAddViewModel>();
         builder.Services.AddSingleton<IFolderOpener, ExplorerFolderOpener>();
-        builder.Services.AddSingleton<IClipboardService>(_ => new WinUiClipboardService());
+        builder.Services.AddSingleton<IClipboardService>(
+            sp => new WinUiClipboardService(sp.GetRequiredService<ILogger<WinUiClipboardService>>()));
         builder.Services.AddTransient(sp => new SettingsViewModel(
             sp.GetRequiredService<IShellSettingsStore>(),
             sp.GetRequiredService<AutoStartService>(),
@@ -137,8 +141,9 @@ public partial class App : Application
             sp.GetRequiredService<IClipboardService>()));
         _host = builder.Build();
 
-        await _host.StartAsync();
         var logger = _host.Services.GetRequiredService<ILogger<App>>();
+        _logger = logger;
+        await _host.StartAsync();
         logger.LogInformation("Runtime mode: {Mode} (data folder {DataDirectory})", mode, paths.DataDirectory);
         try
         {
@@ -219,15 +224,10 @@ public partial class App : Application
         var minimized = minimizedFlag
             || launch?.Action is ReminderAction.MarkDone or ReminderAction.SnoozeShort or ReminderAction.SnoozeLong;
         var exePath = Environment.ProcessPath ?? throw new InvalidOperationException("No process path.");
-        await shell.StartAsync(minimized, exePath);
-        if (launch is not null)
-        {
-            await activations.HandleAsync(launch);
-        }
 
-        // Checks on start, every 30 s, on every Task change and on resume from sleep (SPEC 7.4).
+        // Every exit step is added here, with no await since the first: from shell.StartAsync on, the tray's
+        // Exit and session end can start the exit, and ShellController rejects a step added after that.
         var reminders = _host.Services.GetRequiredService<ReminderScheduler>();
-        _ = reminders.StartAsync();
         StartSystemHooks(shell, reminders, notifications);
 
         // The last exit step, as the WPF app's OnExit: release the global hotkey, then the shell (tray,
@@ -245,6 +245,15 @@ public partial class App : Application
                 host.Dispose();
             }
         });
+
+        await shell.StartAsync(minimized, exePath);
+        if (launch is not null)
+        {
+            await activations.HandleAsync(launch);
+        }
+
+        // Checks on start, every 30 s, on every Task change and on resume from sleep (SPEC 7.4).
+        _ = reminders.StartAsync();
     }
 
     // Session end and resume from sleep reach top-level windows only, so they get a hidden one of their own.
@@ -328,7 +337,7 @@ public partial class App : Application
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            _host!.Services.GetRequiredService<ILogger<App>>().LogError(ex, "The quick-add card could not open");
+            _logger?.LogError(ex, "The quick-add card could not open");
         }
         finally
         {
@@ -376,7 +385,7 @@ public partial class App : Application
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            _host!.Services.GetRequiredService<ILogger<App>>().LogError(ex, "The Settings window could not open");
+            _logger?.LogError(ex, "The Settings window could not open");
         }
     }
 

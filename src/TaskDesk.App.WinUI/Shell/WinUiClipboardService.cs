@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using TaskDesk.Core.Shell;
 
 namespace TaskDesk.App.Shell;
@@ -7,28 +8,33 @@ namespace TaskDesk.App.Shell;
 /// Puts text on the Windows clipboard for Settings' "Copy path" buttons. Win32, like the WPF app's clipboard: the
 /// WinRT clipboard refuses an app whose window lacks the focus, and the text stays after TaskDesk exits.
 /// </summary>
-internal sealed class WinUiClipboardService(IWin32Clipboard clipboard, Action<TimeSpan> wait) : IClipboardService
+internal sealed class WinUiClipboardService(IWin32Clipboard clipboard, Action<TimeSpan> wait, ILogger logger) : IClipboardService
 {
     private const int OpenAttempts = 5;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(20);
 
-    public WinUiClipboardService()
-        : this(new Win32Clipboard(), Thread.Sleep)
+    public WinUiClipboardService(ILogger<WinUiClipboardService> logger)
+        : this(new Win32Clipboard(), Thread.Sleep, logger)
     {
     }
 
     public void SetText(string text)
     {
-        // Another app may hold the clipboard open for a moment. Copying is a convenience, so a missed copy is not an error.
+        // Another app may hold the clipboard open for a moment. Copying is a convenience, so a missed copy is not an
+        // error the owner sees; it is logged.
         if (!TryOpen())
         {
+            logger.LogWarning("The clipboard stayed held by another app; the text was not copied");
             return;
         }
 
         try
         {
             clipboard.Empty();
-            clipboard.SetUnicodeText(text);
+            if (!clipboard.SetUnicodeText(text))
+            {
+                logger.LogWarning("The clipboard refused the text; it was not copied");
+            }
         }
         finally
         {

@@ -13,9 +13,10 @@ namespace TaskDesk.Views.Dialogs;
 /// <param name="activeWindow">The window the dialog opens on; it must be shown.</param>
 public sealed class DialogService(Func<Window?> activeWindow)
 {
-    // The window of the dialog flow under way, and which dialog of it opened last.
-    private Window? _flowOwner;
-    private int _flowGeneration;
+    // The window of the dialog or picker that closed last, kept only for the step that opens straight after it
+    // (the same operation's next dialog), and which close set it.
+    private Window? _nextStepOwner;
+    private int _closeGeneration;
 
     /// <summary>The <see cref="DialogResult.ChoiceIndex"/> of Cancel and Esc.</summary>
     public const int CancelIndex = -1;
@@ -65,43 +66,44 @@ public sealed class DialogService(Func<Window?> activeWindow)
         !(await ShowAsync(new DialogRequest(title, body, [primaryText]) { IsDestructive = destructive })).IsCancelled;
 
     /// <summary>
-    /// The window dialogs and file pickers open on: the active window, except while a flow of dialogs runs
-    /// (see <see cref="ShowOnOwnerAsync{T}"/>), which keeps the window its first dialog opened on.
+    /// The window dialogs and file pickers open on: the active window, except for the step that opens as soon as
+    /// a dialog or picker closes (see <see cref="ShowOnOwnerAsync{T}"/>), which keeps that one's window.
     /// </summary>
     public Window OwnerWindow() =>
-        _flowOwner ?? activeWindow() ?? throw new InvalidOperationException("No window is shown to open a dialog on.");
+        _nextStepOwner ?? activeWindow() ?? throw new InvalidOperationException("No window is shown to open a dialog on.");
 
     /// <summary>
     /// Shows a dialog or a file picker on <see cref="OwnerWindow"/>. A dialog or picker opened as soon as this
     /// one closes (the next step of the same operation, such as Import's file, then its Merge/Replace choice,
     /// then the Replace confirmation) opens on the same window, even if the owner activated another one meanwhile.
+    /// While this one is open nothing is pinned, so a dialog started from another window opens on that window.
     /// </summary>
     public async Task<T> ShowOnOwnerAsync<T>(Func<Window, Task<T>> show)
     {
         ArgumentNullException.ThrowIfNull(show);
         var owner = OwnerWindow();
-        _flowOwner = owner;
-        var generation = ++_flowGeneration;
         try
         {
             return await show(owner);
         }
         finally
         {
-            // The operation's next step runs before the dispatcher turns to low-priority work, so the flow ends
-            // when no other dialog has opened by then.
-            if (owner.DispatcherQueue?.TryEnqueue(DispatcherQueuePriority.Low, () => EndFlow(generation)) != true)
+            // The operation's next step runs before the dispatcher turns to low-priority work, so the window is
+            // kept until then. A later close (another flow's, or the next step's) replaces it.
+            _nextStepOwner = owner;
+            var generation = ++_closeGeneration;
+            if (owner.DispatcherQueue?.TryEnqueue(DispatcherQueuePriority.Low, () => ForgetNextStepOwner(generation)) != true)
             {
-                EndFlow(generation);
+                ForgetNextStepOwner(generation);
             }
         }
     }
 
-    private void EndFlow(int generation)
+    private void ForgetNextStepOwner(int generation)
     {
-        if (generation == _flowGeneration)
+        if (generation == _closeGeneration)
         {
-            _flowOwner = null;
+            _nextStepOwner = null;
         }
     }
 

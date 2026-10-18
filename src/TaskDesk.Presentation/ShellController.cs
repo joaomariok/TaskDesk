@@ -92,9 +92,18 @@ public sealed class ShellController(
 
     /// <summary>
     /// Adds work that must finish before the app shuts down (for example flushing a pending save, then
-    /// stopping the host). Steps run in the order they were added.
+    /// stopping the host). Steps run in the order they were added. Every step must be added before anything
+    /// can start the exit: a step added once the exit has started is rejected, never silently skipped.
     /// </summary>
-    public void AddExitStep(Func<Task> step) => _exitSteps.Add(step);
+    public void AddExitStep(Func<Task> step)
+    {
+        if (_exiting)
+        {
+            throw new InvalidOperationException("The exit has already started; add exit steps before it can start.");
+        }
+
+        _exitSteps.Add(step);
+    }
 
     /// <summary>Starts the exit without waiting for it; see <see cref="ExitAsync"/>.</summary>
     public void Exit() => _ = ExitAsync();

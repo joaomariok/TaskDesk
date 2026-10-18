@@ -11,8 +11,8 @@ public readonly record struct MonitorArea(PixelRect Bounds, PixelRect WorkArea, 
 
 /// <summary>
 /// Pure window-geometry calculations. The stored <see cref="WindowLayout"/> is in device-independent
-/// pixels (DIPs); a shell that places windows in physical pixels converts at the monitor's scale
-/// (1.0 at 100%, 1.25 at 125%).
+/// pixels (DIPs) as the WPF app writes them; a shell that places windows in physical pixels converts with
+/// <see cref="ToLayout"/> and <see cref="Place"/>.
 /// </summary>
 public static class WindowLayoutCalculator
 {
@@ -51,54 +51,60 @@ public static class WindowLayoutCalculator
         return layout with { Left = left, Top = top, Width = width, Height = height };
     }
 
-    // On a desk of monitors with different scales, each monitor's DIP area keeps its physical origin and shrinks
-    // by its own scale toward it: DIP = origin + (physical - origin) / scale. The DIP areas then lie inside the
-    // physical ones, never overlap, and on one monitor at the origin match the plain conversion (and the WPF app).
+    // The stored layout means what the WPF app writes, so settings.json reads the same in both builds. That app is
+    // system-DPI aware (it has no manifest, and WPF then opts the process in): its DIPs are the coordinates Windows
+    // virtualizes for it, divided by the system scale S (the primary monitor's at sign-in). Windows virtualizes a
+    // monitor whose scale s differs from S about the monitor's own top-left corner O, so a physical point p on it is
+    // stored as O / S + (p - O) / s. On a monitor at the system scale that is the plain p / S.
 
     /// <summary>
-    /// Converts a window's normal bounds (physical pixels) to a layout in DIPs, at the scale of the monitor
-    /// that holds most of the window. <see cref="WindowLayout.PaneWidths"/> is left unset.
+    /// Converts a window's normal bounds (physical pixels) to the layout the WPF app would write for it, on the
+    /// monitor that holds most of the window. <see cref="WindowLayout.PaneWidths"/> is left unset.
     /// </summary>
-    public static WindowLayout ToLayout(PixelRect bounds, bool maximized, IReadOnlyList<MonitorArea> monitors)
+    /// <param name="systemScale">The system scale (the system DPI / 96).</param>
+    public static WindowLayout ToLayout(
+        PixelRect bounds, bool maximized, IReadOnlyList<MonitorArea> monitors, double systemScale)
     {
         RequireMonitors(monitors);
+        RequireScale(systemScale);
         var monitor = Best(bounds.Left, bounds.Top, bounds.Width, bounds.Height, monitors, m => AsDip(m.Bounds));
         RequireScale(monitor.Scale);
         var origin = monitor.Bounds;
         return new WindowLayout(
-            origin.Left + ((bounds.Left - origin.Left) / monitor.Scale),
-            origin.Top + ((bounds.Top - origin.Top) / monitor.Scale),
+            (origin.Left / systemScale) + ((bounds.Left - origin.Left) / monitor.Scale),
+            (origin.Top / systemScale) + ((bounds.Top - origin.Top) / monitor.Scale),
             bounds.Width / monitor.Scale,
             bounds.Height / monitor.Scale,
             maximized);
     }
 
     /// <summary>
-    /// Returns the normal bounds (physical pixels) for a saved layout: on the monitor whose DIP area holds most
-    /// of it (else the nearest one), fitted to that monitor's work area and converted at its scale.
+    /// Returns the normal bounds (physical pixels) for a layout as the WPF app writes it: on the monitor whose area
+    /// in those coordinates holds most of it (else the nearest one), fitted to that monitor's work area.
     /// </summary>
-    public static PixelRect Place(WindowLayout saved, IReadOnlyList<MonitorArea> monitors)
+    /// <param name="systemScale">The system scale (the system DPI / 96).</param>
+    public static PixelRect Place(WindowLayout saved, IReadOnlyList<MonitorArea> monitors, double systemScale)
     {
         RequireMonitors(monitors);
-        var monitor = Best(saved.Left, saved.Top, saved.Width, saved.Height, monitors, DipBounds);
+        RequireScale(systemScale);
+        var monitor = Best(saved.Left, saved.Top, saved.Width, saved.Height, monitors, m => DipArea(m.Bounds, m, systemScale));
         RequireScale(monitor.Scale);
-        var work = DipArea(monitor.WorkArea, monitor);
+        var work = DipArea(monitor.WorkArea, monitor, systemScale);
         var fitted = Fit(saved, work.Left, work.Top, work.Width, work.Height);
         var origin = monitor.Bounds;
         return new PixelRect(
-            origin.Left + ToPhysical(fitted.Left - origin.Left, monitor.Scale),
-            origin.Top + ToPhysical(fitted.Top - origin.Top, monitor.Scale),
+            origin.Left + ToPhysical(fitted.Left - (origin.Left / systemScale), monitor.Scale),
+            origin.Top + ToPhysical(fitted.Top - (origin.Top / systemScale), monitor.Scale),
             ToPhysical(fitted.Width, monitor.Scale),
             ToPhysical(fitted.Height, monitor.Scale));
     }
 
     private readonly record struct DipRect(double Left, double Top, double Width, double Height);
 
-    private static DipRect DipBounds(MonitorArea monitor) => DipArea(monitor.Bounds, monitor);
-
-    private static DipRect DipArea(PixelRect area, MonitorArea monitor) => new(
-        monitor.Bounds.Left + ((area.Left - monitor.Bounds.Left) / monitor.Scale),
-        monitor.Bounds.Top + ((area.Top - monitor.Bounds.Top) / monitor.Scale),
+    // A monitor's area (physical pixels) in the WPF app's coordinates.
+    private static DipRect DipArea(PixelRect area, MonitorArea monitor, double systemScale) => new(
+        (monitor.Bounds.Left / systemScale) + ((area.Left - monitor.Bounds.Left) / monitor.Scale),
+        (monitor.Bounds.Top / systemScale) + ((area.Top - monitor.Bounds.Top) / monitor.Scale),
         area.Width / monitor.Scale,
         area.Height / monitor.Scale);
 

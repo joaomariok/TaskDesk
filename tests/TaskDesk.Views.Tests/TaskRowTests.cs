@@ -63,6 +63,11 @@ public sealed class TaskRowTests
             $"The box spans {at.Y} to {at.Y + box.ActualHeight} px in a {check.ActualHeight} px checkbox.");
         // Fluent's CheckBox otherwise reserves 120 px of width for a label.
         Assert.AreEqual(20, check.ActualWidth, "The checkbox keeps room for a label.");
+        // Nor 32 px of height, so the checkbox is no taller than its box and never makes the row taller than one
+        // compact line (DESIGN.md "Task Row").
+        Assert.IsTrue(check.ActualHeight <= 20, $"The checkbox takes {check.ActualWidth} x {check.ActualHeight} px.");
+        var rowRoot = VisualTree.Find<Grid>(view, "RowRoot");
+        Assert.IsTrue(rowRoot.DesiredSize.Height <= 20, $"The row's content needs {rowRoot.DesiredSize.Height} px of height.");
     }
 
     [UITestMethod]
