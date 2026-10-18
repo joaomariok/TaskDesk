@@ -208,11 +208,12 @@ public sealed class DialogServiceTests
         try
         {
             // An import: the mode choice, then the Replace confirmation straight after it.
+            var flow = service.BeginFlow();
             async Task<bool> Import()
             {
-                var mode = await service.ShowAsync(new DialogRequest("Import", "How?", ["Merge", "Replace"]));
+                var mode = await flow.ShowAsync(new DialogRequest("Import", "How?", ["Merge", "Replace"]));
                 return mode.ChoiceIndex == 1
-                    && await service.ConfirmAsync("Replace all data", "Sure?", "Replace", destructive: true);
+                    && await flow.ConfirmAsync("Replace all data", "Sure?", "Replace", destructive: true);
             }
 
             var import = Import();
@@ -282,10 +283,11 @@ public sealed class DialogServiceTests
         try
         {
             // An import: its file picker, then the mode choice straight after it.
+            var flow = service.BeginFlow();
             async Task<DialogResult> Import()
             {
-                await service.ShowOnOwnerAsync(_ => picking.Task);
-                return await service.ShowAsync(new DialogRequest("Import", "How?", ["Merge", "Replace"]));
+                await flow.ShowOnOwnerAsync(_ => picking.Task);
+                return await flow.ShowAsync(new DialogRequest("Import", "How?", ["Merge", "Replace"]));
             }
 
             var import = Import();
@@ -309,6 +311,52 @@ public sealed class DialogServiceTests
         finally
         {
             picking.TrySetResult(null);
+            DialogHost.OpenDialog(settings.Window.Content.XamlRoot)?.Hide();
+            DialogHost.OpenDialog(main.Window.Content.XamlRoot)?.Hide();
+        }
+    }
+
+    [UITestMethod]
+    public async Task A_flow_keeps_its_window_when_another_window_closes_a_picker_in_the_same_turn()
+    {
+        var ct = TestContext.CancellationToken;
+        using var settings = await DialogHost.OpenAsync(ct);
+        using var main = await DialogHost.OpenAsync(ct);
+        var active = settings.Window;
+        var service = new DialogService(() => active);
+        // Pickers complete the way the Windows ones do: their continuations are queued on the dispatcher.
+        var importPicking = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exportPicking = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            // An import on the Settings window: its file picker, other work, then the mode choice.
+            var flow = service.BeginFlow();
+            async Task<DialogResult> Import()
+            {
+                await flow.ShowOnOwnerAsync(_ => importPicking.Task);
+                await Task.Yield();
+                return await flow.ShowAsync(new DialogRequest("Import", "How?", ["Merge", "Replace"]));
+            }
+
+            var import = Import();
+            // The owner clicks the main window and starts an export there.
+            active = main.Window;
+            var export = service.ShowOnOwnerAsync(_ => exportPicking.Task);
+
+            // Both pickers close in one dispatcher turn, the main window's last.
+            importPicking.SetResult("data.json");
+            exportPicking.SetResult(null);
+            await export;
+
+            var (window, choice) = await OpenDialogOnEitherAsync(settings, main, ct);
+            Assert.AreSame(settings.Window, window, "The import's next step jumped to the main window.");
+            DialogHost.Press(choice, "PrimaryButton");
+            Assert.AreEqual(0, (await import).ChoiceIndex);
+        }
+        finally
+        {
+            importPicking.TrySetResult(null);
+            exportPicking.TrySetResult(null);
             DialogHost.OpenDialog(settings.Window.Content.XamlRoot)?.Hide();
             DialogHost.OpenDialog(main.Window.Content.XamlRoot)?.Hide();
         }

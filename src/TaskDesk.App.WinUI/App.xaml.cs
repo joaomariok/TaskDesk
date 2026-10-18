@@ -246,14 +246,14 @@ public partial class App : Application
             }
         });
 
-        await shell.StartAsync(minimized, exePath);
-        if (launch is not null)
-        {
-            await activations.HandleAsync(launch);
-        }
-
-        // Checks on start, every 30 s, on every Task change and on resume from sleep (SPEC 7.4).
-        _ = reminders.StartAsync();
+        // The launch's activation and the Reminder checks run only while no exit has started: the exit disposes
+        // what they use. The Reminder checks run on start, every 30 s, on every Task change and on resume from
+        // sleep (SPEC 7.4).
+        await shell.LaunchAsync(
+            minimized,
+            exePath,
+            launch is null ? null : cancellationToken => activations.HandleAsync(launch, cancellationToken),
+            () => _ = reminders.StartAsync());
     }
 
     // Session end and resume from sleep reach top-level windows only, so they get a hidden one of their own.

@@ -26,8 +26,8 @@ internal sealed class WindowLayoutService(IShellSettingsStore store)
         window.SetPaneWidths(saved);
         if (saved is not null)
         {
-            var bounds = WindowLayoutCalculator.Place(saved, Monitors(), WindowScale.OfSystem());
-            MoveAndResize(appWindow, new RectInt32(bounds.Left, bounds.Top, bounds.Width, bounds.Height));
+            var monitors = Monitors();
+            MoveAndResize(appWindow, WindowLayoutCalculator.Place(saved, monitors, WindowScale.OfSystem()), monitors);
             if (saved.Maximized && appWindow.Presenter is OverlappedPresenter presenter)
             {
                 presenter.Maximize();
@@ -58,21 +58,27 @@ internal sealed class WindowLayoutService(IShellSettingsStore store)
         });
     }
 
-    // Moving the window onto a monitor at another scale changes its DPI, and Windows' suggested rectangle for that
-    // change rescales the size already given in the target monitor's pixels. Once the window sits on that monitor at
-    // its DPI, the same call lands exactly, so it is repeated until the window has the bounds asked for (a minimum
-    // size may keep it from them; then it stops after a few tries).
-    private static void MoveAndResize(AppWindow appWindow, RectInt32 bounds)
+    // Moving the window onto a monitor at another scale changes its DPI, and Windows rescales it as it does
+    // (WindowLayoutCalculator.RestoreMoves): it first moves onto that monitor, then, once GetDpiForWindow reports the
+    // monitor's DPI, to the bounds. Should the DPI change not have arrived during the first move, the moves are worked
+    // out again from the DPI the window has then; the last move always goes to the bounds.
+    private static void MoveAndResize(AppWindow appWindow, PixelRect bounds, IReadOnlyList<MonitorArea> monitors)
     {
-        for (var attempt = 0; attempt < 3 && !HasBounds(appWindow, bounds); attempt++)
+        var hwnd = Win32Interop.GetWindowFromWindowId(appWindow.Id);
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            appWindow.MoveAndResize(bounds);
+            var moves = WindowLayoutCalculator.RestoreMoves(bounds, monitors, WindowScale.OfWindowHandle(hwnd));
+            appWindow.MoveAndResize(ToRect(moves[0]));
+            if (moves.Count == 1)
+            {
+                return;
+            }
         }
+
+        appWindow.MoveAndResize(ToRect(bounds));
     }
 
-    private static bool HasBounds(AppWindow appWindow, RectInt32 bounds) =>
-        appWindow.Position.X == bounds.X && appWindow.Position.Y == bounds.Y
-        && appWindow.Size.Width == bounds.Width && appWindow.Size.Height == bounds.Height;
+    private static RectInt32 ToRect(PixelRect rect) => new(rect.Left, rect.Top, rect.Width, rect.Height);
 
     private void RememberNormalBounds(AppWindow appWindow)
     {

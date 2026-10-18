@@ -459,6 +459,31 @@ public sealed class ListHeaderTests
     }
 
     [UITestMethod]
+    public async Task Closing_the_window_drops_the_search_that_Clear_search_left_waiting()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Pay rent");
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            viewModel.SearchText = "zebra";
+            await viewModel.ApplySearchCommand.ExecuteAsync(null);
+            // Clear search empties the search box, and its TextChanged waits for typing to pause like a keystroke.
+            await viewModel.ClearSearchCommand.ExecuteAsync(null);
+            await UiWait.UntilAsync(() => window.View.IsSearchPending,
+                () => "Clearing the search left no search waiting.", Ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+
+        // Unloaded comes only after Close returns, once the caller may have let the database go.
+        Assert.IsFalse(window.View.IsSearchPending, "A search still waits to reload after the window closed.");
+    }
+
+    [UITestMethod]
     public async Task Load_more_completed_shows_on_the_Completed_view_while_more_pages_remain()
     {
         using var db = await DatabaseAsync();

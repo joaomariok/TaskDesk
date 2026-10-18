@@ -43,9 +43,16 @@ public sealed partial class MainView : UserControl
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         viewModel.FocusQuickAddRequested += (_, _) => FocusQuickAdd();
         // A search still waiting for typing to pause is dropped with the page: run after its window closed,
-        // the reload would query a database the shell may already have let go of.
-        Unloaded += (_, _) => _searchTimer?.Stop();
+        // the reload would query a database the shell may already have let go of. MainWindow also drops it as it
+        // closes, since Unloaded comes only after Close has returned.
+        Unloaded += (_, _) => CancelPendingSearch();
     }
+
+    /// <summary>True while a search waits for typing to pause before it reloads the page.</summary>
+    public bool IsSearchPending => _searchTimer?.IsRunning == true;
+
+    /// <summary>Drops a search still waiting for typing to pause, so it never reloads the page.</summary>
+    public void CancelPendingSearch() => _searchTimer?.Stop();
 
     /// <summary>The Overdue, open and "Completed (N)" Task lists and the Undo bar.</summary>
     public TaskListView TaskList { get; }

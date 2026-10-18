@@ -163,6 +163,41 @@ public sealed class MonitorLayoutTests
         Assert.Equal(new PixelRect(3800, 340, 1000, 700), placed);
     }
 
+    // Restoring onto a monitor at another scale than the window has now: Windows rescales the window by
+    // (monitor scale / window scale) when its DPI changes. The window first moves onto the monitor at a size that
+    // stays inside the bounds through that rescale, then, at the monitor's DPI, to the bounds (no rescale left).
+    public static TheoryData<string, PixelRect, double, PixelRect[]> RestoreMoves => new()
+    {
+        // Same scale: one move lands.
+        { "secondary, window at 150 %", new PixelRect(2000, 150, 1500, 1050), 1.5,
+            [new PixelRect(2000, 150, 1500, 1050)] },
+        // To 150 % from 100 %: staged at 1500 / 1.5 by 1050 / 1.5, which grows back to the bounds.
+        { "secondary, window at 100 %", new PixelRect(2000, 150, 1500, 1050), 1.0,
+            [new PixelRect(2000, 150, 1000, 700), new PixelRect(2000, 150, 1500, 1050)] },
+        // To 100 % from 150 %: staged at the bounds' size, which shrinks by 1 / 1.5 inside them.
+        { "primary, window at 150 %", new PixelRect(100, 50, 1000, 700), 1.5,
+            [new PixelRect(100, 50, 1000, 700), new PixelRect(100, 50, 1000, 700)] },
+        // To 150 % from 125 %: 1001 * 1.25 / 1.5 = 834.17 and 701 * 1.25 / 1.5 = 584.17, rounded.
+        { "secondary, window at 125 %", new PixelRect(2000, 150, 1001, 701), 1.25,
+            [new PixelRect(2000, 150, 834, 584), new PixelRect(2000, 150, 1001, 701)] },
+    };
+
+    [Theory]
+    [MemberData(nameof(RestoreMoves))]
+    public void A_restore_onto_a_monitor_at_another_scale_first_moves_the_window_onto_it_at_a_size_that_fits(
+        string monitor, PixelRect bounds, double windowScale, PixelRect[] expected)
+    {
+        var moves = WindowLayoutCalculator.RestoreMoves(bounds, Desk, windowScale);
+
+        Assert.True(expected.SequenceEqual(moves), $"{monitor}: expected {string.Join(", ", expected)}, got {string.Join(", ", moves)}");
+    }
+
+    [Fact]
+    public void Restore_moves_need_a_monitor()
+    {
+        Assert.Throws<ArgumentException>(() => WindowLayoutCalculator.RestoreMoves(new PixelRect(0, 0, 800, 500), [], 1.0));
+    }
+
     [Fact]
     public void No_monitor_is_rejected()
     {

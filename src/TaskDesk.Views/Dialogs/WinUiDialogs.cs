@@ -12,6 +12,10 @@ namespace TaskDesk.Views.Dialogs;
 /// </summary>
 public sealed class WinUiDialogs(DialogService dialogs) : IListDialogs, IOccurrenceDialogs, IImportDialogs, IExportDialogs
 {
+    // The import under way: its file picker starts it, and its Merge/Replace choice and Replace confirmation open on
+    // the window the picker opened on. Only the import's own steps read or replace it.
+    private DialogFlow? _import;
+
     public Task<bool> ConfirmDeleteAsync(string listName, int taskCount)
     {
         var body = $"Delete the list \"{listName}\" and all its tasks ({taskCount} open)? This cannot be undone.";
@@ -48,7 +52,7 @@ public sealed class WinUiDialogs(DialogService dialogs) : IListDialogs, IOccurre
             + "Merge: add the lists, tags and tasks that are not here yet. Nothing here is changed or deleted.\n\n"
             + "Replace: delete ALL current lists, tags and tasks and use the file's data instead. "
             + "A backup is taken first.";
-        var result = await dialogs.ShowAsync(new DialogRequest("Import", body, ["Merge", "Replace everything…"]));
+        var result = await ImportFlow().ShowAsync(new DialogRequest("Import", body, ["Merge", "Replace everything…"]));
         return result.ChoiceIndex switch
         {
             0 => ImportMode.Merge,
@@ -62,20 +66,24 @@ public sealed class WinUiDialogs(DialogService dialogs) : IListDialogs, IOccurre
         const string body =
             "Replace deletes all your current lists, tags and tasks and replaces them with the file's data.\n\n"
             + "A backup of the current data is saved in the backups folder first.\n\nReplace everything now?";
-        return dialogs.ConfirmAsync("Replace all data", body, "Replace everything", destructive: true);
+        return ImportFlow().ConfirmAsync("Replace all data", body, "Replace everything", destructive: true);
     }
 
     public async Task<string?> PickImportPathAsync()
     {
         var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
         picker.FileTypeFilter.Add(".json");
-        return await dialogs.ShowOnOwnerAsync(async owner =>
+        _import = dialogs.BeginFlow();
+        return await _import.ShowOnOwnerAsync(async owner =>
         {
             InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(owner));
             var file = await picker.PickSingleFileAsync();
             return file?.Path;
         });
     }
+
+    // A step asked for without the import's file picker first opens on the active window.
+    private DialogFlow ImportFlow() => _import ?? dialogs.BeginFlow();
 
     public async Task<string?> PickExportPathAsync(ExportFormat format, string suggestedFileName)
     {

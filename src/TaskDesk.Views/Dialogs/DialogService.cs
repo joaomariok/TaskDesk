@@ -1,4 +1,3 @@
-using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -13,19 +12,22 @@ namespace TaskDesk.Views.Dialogs;
 /// <param name="activeWindow">The window the dialog opens on; it must be shown.</param>
 public sealed class DialogService(Func<Window?> activeWindow)
 {
-    // The window of the dialog or picker that closed last, kept only for the step that opens straight after it
-    // (the same operation's next dialog), and which close set it.
-    private Window? _nextStepOwner;
-    private int _closeGeneration;
-
     /// <summary>The <see cref="DialogResult.ChoiceIndex"/> of Cancel and Esc.</summary>
     public const int CancelIndex = -1;
 
     /// <summary>The AutomationId the UI tests find a dialog by, kept from the WPF Fluent dialog.</summary>
     public const string AutomationId = "FluentDialog";
 
-    /// <summary>Shows the dialog and returns what the owner chose.</summary>
-    public async Task<DialogResult> ShowAsync(DialogRequest request)
+    /// <summary>
+    /// Starts an operation of several steps (such as Import's file, then its Merge/Replace choice, then the Replace
+    /// confirmation): every step shown through the returned flow opens on the window its first step opened on.
+    /// </summary>
+    public DialogFlow BeginFlow() => new(this);
+
+    /// <summary>Shows the dialog on <see cref="OwnerWindow"/> and returns what the owner chose.</summary>
+    public Task<DialogResult> ShowAsync(DialogRequest request) => ShowAsync(request, OwnerWindow());
+
+    internal async Task<DialogResult> ShowAsync(DialogRequest request, Window owner)
     {
         // A content dialog has three buttons: the primary choice, at most one other, and Cancel.
         if (request.Choices.Count is < 1 or > 2)
@@ -34,7 +36,6 @@ public sealed class DialogService(Func<Window?> activeWindow)
         }
 
         var secondaryIndex = request.Choices.Count == 2 ? 1 - request.PrimaryIndex : CancelIndex;
-        var owner = OwnerWindow();
         var dialog = NewDialog(owner, request.Title, request.Body);
         dialog.PrimaryButtonText = request.Choices[request.PrimaryIndex];
         if (secondaryIndex != CancelIndex)
@@ -62,49 +63,24 @@ public sealed class DialogService(Func<Window?> activeWindow)
     /// <param name="primaryText">The primary action's button text.</param>
     /// <param name="destructive">True when the action destroys data: Cancel is then the Enter default.</param>
     /// <returns>True when the owner chose the primary action.</returns>
-    public async Task<bool> ConfirmAsync(string title, string body, string primaryText, bool destructive = false) =>
-        !(await ShowAsync(new DialogRequest(title, body, [primaryText]) { IsDestructive = destructive })).IsCancelled;
+    public Task<bool> ConfirmAsync(string title, string body, string primaryText, bool destructive = false) =>
+        ConfirmAsync(title, body, primaryText, destructive, OwnerWindow());
+
+    internal async Task<bool> ConfirmAsync(string title, string body, string primaryText, bool destructive, Window owner) =>
+        !(await ShowAsync(new DialogRequest(title, body, [primaryText]) { IsDestructive = destructive }, owner)).IsCancelled;
 
     /// <summary>
-    /// The window dialogs and file pickers open on: the active window, except for the step that opens as soon as
-    /// a dialog or picker closes (see <see cref="ShowOnOwnerAsync{T}"/>), which keeps that one's window.
+    /// The window a dialog or file picker opens on: the active window. The steps of one operation keep the
+    /// window its first step opened on through a <see cref="BeginFlow">flow</see>.
     /// </summary>
     public Window OwnerWindow() =>
-        _nextStepOwner ?? activeWindow() ?? throw new InvalidOperationException("No window is shown to open a dialog on.");
+        activeWindow() ?? throw new InvalidOperationException("No window is shown to open a dialog on.");
 
-    /// <summary>
-    /// Shows a dialog or a file picker on <see cref="OwnerWindow"/>. A dialog or picker opened as soon as this
-    /// one closes (the next step of the same operation, such as Import's file, then its Merge/Replace choice,
-    /// then the Replace confirmation) opens on the same window, even if the owner activated another one meanwhile.
-    /// While this one is open nothing is pinned, so a dialog started from another window opens on that window.
-    /// </summary>
-    public async Task<T> ShowOnOwnerAsync<T>(Func<Window, Task<T>> show)
+    /// <summary>Shows a dialog or a file picker on <see cref="OwnerWindow"/>.</summary>
+    public Task<T> ShowOnOwnerAsync<T>(Func<Window, Task<T>> show)
     {
         ArgumentNullException.ThrowIfNull(show);
-        var owner = OwnerWindow();
-        try
-        {
-            return await show(owner);
-        }
-        finally
-        {
-            // The operation's next step runs before the dispatcher turns to low-priority work, so the window is
-            // kept until then. A later close (another flow's, or the next step's) replaces it.
-            _nextStepOwner = owner;
-            var generation = ++_closeGeneration;
-            if (owner.DispatcherQueue?.TryEnqueue(DispatcherQueuePriority.Low, () => ForgetNextStepOwner(generation)) != true)
-            {
-                ForgetNextStepOwner(generation);
-            }
-        }
-    }
-
-    private void ForgetNextStepOwner(int generation)
-    {
-        if (generation == _closeGeneration)
-        {
-            _nextStepOwner = null;
-        }
+        return show(OwnerWindow());
     }
 
     /// <summary>Shows a message with an OK button only, and returns when the owner closes it.</summary>
@@ -118,11 +94,19 @@ public sealed class DialogService(Func<Window?> activeWindow)
 
     // UI Automation finds the dialog by its AutomationId only once the focus is in it (its default button or its
     // input box), so a key pressed as soon as it is found (Enter, Esc) reaches it, as with the WPF dialog's modal
-    // window. The content dialog shows, and raises Opened, before it moves the focus.
+    // window. The content dialog shows, and raises Opened, before it moves the focus. GettingFocus is raised
+    // synchronously as the focus moves in, so the AutomationId is there by the time anything sees the focus in
+    // the dialog (GotFocus is raised asynchronously, after it).
     private Task<ContentDialogResult> ShowWhenReadyAsync(ContentDialog dialog)
     {
-        dialog.GotFocus += (_, _) => AutomationProperties.SetAutomationId(dialog, AutomationId);
-        return ShowOnOwnerAsync(_ => dialog.ShowAsync().AsTask());
+        dialog.GettingFocus += (_, args) =>
+        {
+            if (!args.Cancel)
+            {
+                AutomationProperties.SetAutomationId(dialog, AutomationId);
+            }
+        };
+        return dialog.ShowAsync().AsTask();
     }
 
     // The dialog sits in the popup layer, outside the window's content, so it takes the theme the theme service

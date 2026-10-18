@@ -19,6 +19,9 @@ public sealed class ShellController(
 
     private readonly ILogger _logger = logger ?? NullLogger<ShellController>.Instance;
     private readonly List<Func<Task>> _exitSteps = [];
+
+    // Never disposed: a launch activation may still read its token after the exit, and it holds no timer.
+    private readonly CancellationTokenSource _exitStarted = new();
     private Task? _exit;
     private bool _exiting;
     private bool _disposed;
@@ -60,6 +63,39 @@ public sealed class ShellController(
         if (!minimized)
         {
             window.ShowAndFocus();
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The end of start-up: <see cref="StartAsync"/>, then the Reminder activation that launched the app, then
+    /// <paramref name="running"/> (work that runs until the exit, such as the Reminder checks). From
+    /// <see cref="StartAsync"/> on, the tray's Exit and session end can start the exit, which disposes what the
+    /// later steps use: the activation gets a token cancelled when the exit starts, and nothing runs after an
+    /// exit has started. Returns false when another instance already runs (see <see cref="StartAsync"/>).
+    /// </summary>
+    public async Task<bool> LaunchAsync(
+        bool minimized,
+        string exePath,
+        Func<CancellationToken, Task>? launchActivation,
+        Action running,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(running);
+        if (!await StartAsync(minimized, exePath, cancellationToken))
+        {
+            return false;
+        }
+
+        if (launchActivation is not null && !_exiting)
+        {
+            await launchActivation(_exitStarted.Token);
+        }
+
+        if (!_exiting)
+        {
+            running();
         }
 
         return true;
@@ -118,6 +154,15 @@ public sealed class ShellController(
     private async Task RunExitAsync()
     {
         _exiting = true;
+        try
+        {
+            await _exitStarted.CancelAsync();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogError(ex, "Cancelling the launch activation failed; exiting anyway");
+        }
+
         foreach (var step in _exitSteps)
         {
             try

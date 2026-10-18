@@ -53,8 +53,14 @@ public sealed partial class MainWindow : Window
                 FollowWindowWidth();
             }
         };
-        // A closed window has no handle or size to measure.
-        Closed += (_, _) => _closed = true;
+        Closed += (_, _) =>
+        {
+            // A closed window has no handle or size to measure.
+            _closed = true;
+            // The page's Unloaded comes after Close returns; a search left waiting would tick in between and
+            // reload from a database the caller may already have let go of.
+            View.CancelPendingSearch();
+        };
         // Ctrl+comma opens Settings from anywhere in the window, before a text box sees the key.
         Navigation.PreviewKeyDown += OnPreviewKeyDown;
         // The quick-add box has the initial focus of the window.

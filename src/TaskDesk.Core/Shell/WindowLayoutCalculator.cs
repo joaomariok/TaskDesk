@@ -99,6 +99,34 @@ public static class WindowLayoutCalculator
             ToPhysical(fitted.Height, monitor.Scale));
     }
 
+    /// <summary>
+    /// The moves (physical pixels) that put a window at its restored <paramref name="bounds"/>. When the window's
+    /// scale differs from that of the monitor holding most of the bounds, moving there changes the window's DPI, and
+    /// Windows rescales it by (monitor scale / window scale) as it does. So the window first moves onto the monitor
+    /// at a size that stays inside the bounds through that rescale; once it has the monitor's DPI, the second move
+    /// lands exactly. On a monitor at the window's own scale one move is enough.
+    /// </summary>
+    /// <param name="windowScale">The window's scale now (its DPI / 96).</param>
+    public static IReadOnlyList<PixelRect> RestoreMoves(PixelRect bounds, IReadOnlyList<MonitorArea> monitors, double windowScale)
+    {
+        RequireMonitors(monitors);
+        RequireScale(windowScale);
+        var monitor = Best(bounds.Left, bounds.Top, bounds.Width, bounds.Height, monitors, m => AsDip(m.Bounds));
+        RequireScale(monitor.Scale);
+        if (monitor.Scale == windowScale)
+        {
+            return [bounds];
+        }
+
+        var shrink = Math.Min(1.0, windowScale / monitor.Scale);
+        var staging = bounds with
+        {
+            Width = Math.Max(1, ToPhysical(bounds.Width, shrink)),
+            Height = Math.Max(1, ToPhysical(bounds.Height, shrink)),
+        };
+        return [staging, bounds];
+    }
+
     private readonly record struct DipRect(double Left, double Top, double Width, double Height);
 
     // A monitor's area (physical pixels) in the WPF app's coordinates.

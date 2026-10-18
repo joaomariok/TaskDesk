@@ -22,7 +22,14 @@ The WinUI 3 port (ADR `docs/adr/0004-port-to-winui.md`) runs beside the WPF app 
 
 ## Lifetime
 
-Async work a view starts (timers, handlers, loads) ends with its window: stop timers on `Unloaded`, and start loads from events, never from constructor-time property sets. Tests dispose `TempDatabase` right after closing the window, and an orphaned load then throws in an `async void` handler and kills the whole test host (0xC000027B). Run the whole `TaskDesk.Views.Tests` project before reporting.
+Async work a view starts (timers, handlers, loads) ends with its window: stop timers on `Unloaded` and also when the window closes (WinUI raises `Unloaded` only after `Close` has returned, tens to hundreds of milliseconds later), and start loads from events, never from constructor-time property sets. Tests dispose `TempDatabase` right after closing the window, and an orphaned load then throws in an `async void` handler and kills the whole test host (0xC000027B). Run the whole `TaskDesk.Views.Tests` project before reporting.
+
+## Manual checks
+
+What the gate cannot drive in-process. Run each after changing the code it names.
+
+- Mixed-DPI restore (`Shell/WindowLayoutService.cs`): on a desk with monitors at two scales (say 100 % and 150 %), put the main window on the monitor at the other scale than the primary, resize it, exit from the tray and start again with `pwsh scripts/run-sandbox.ps1 -WinUI`. It opens on that monitor at the same position and physical size. Repeat with the window on the primary monitor.
+- Exit during start-up (`App.OnLaunched`, `ShellController.LaunchAsync`), once toasts are registered (after the swap, #68; sandbox mode shows balloons only): click a Reminder toast's Open while TaskDesk is not running, and choose Exit from the tray as soon as it appears. The app ends, no TaskDesk process is left, and the day's log has no "Unhandled UI exception".
 
 ## Gotchas
 

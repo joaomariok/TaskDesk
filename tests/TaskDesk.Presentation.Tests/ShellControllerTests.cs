@@ -474,6 +474,108 @@ public sealed class ShellControllerTests
     }
 
     [Fact]
+    public async Task A_launch_starts_the_shell_acts_on_its_activation_then_starts_the_background_work()
+    {
+        var controller = Create();
+        var steps = new List<string>();
+
+        var launched = await controller.LaunchAsync(
+            minimized: false,
+            Exe,
+            cancellationToken =>
+            {
+                steps.Add(cancellationToken.IsCancellationRequested ? "activation (cancelled)" : "activation");
+                return Task.CompletedTask;
+            },
+            () => steps.Add("running"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(launched);
+        Assert.True(_tray.Shown);
+        Assert.Equal(["activation", "running"], steps);
+    }
+
+    [Fact]
+    public async Task An_exit_started_while_the_launch_activation_runs_cancels_it_and_skips_the_background_work()
+    {
+        var controller = Create();
+        var acting = new TaskCompletionSource();
+        var activationToken = CancellationToken.None;
+        var running = 0;
+        var launch = controller.LaunchAsync(
+            minimized: true,
+            Exe,
+            cancellationToken =>
+            {
+                activationToken = cancellationToken;
+                return acting.Task;
+            },
+            () => running++,
+            TestContext.Current.CancellationToken);
+
+        // The tray's Exit, or session end, while the activation still runs.
+        _tray.ClickExit();
+        Assert.True(activationToken.IsCancellationRequested);
+        acting.SetResult();
+        await launch;
+
+        Assert.Equal(0, running);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task A_launch_activation_whose_cancellation_throws_does_not_stop_the_exit()
+    {
+        var controller = Create();
+        var acting = new TaskCompletionSource();
+        var ran = false;
+        controller.AddExitStep(() =>
+        {
+            ran = true;
+            return Task.CompletedTask;
+        });
+        var launch = controller.LaunchAsync(
+            minimized: true,
+            Exe,
+            cancellationToken =>
+            {
+                cancellationToken.Register(() => throw new InvalidOperationException("boom"));
+                return acting.Task;
+            },
+            () => { },
+            TestContext.Current.CancellationToken);
+
+        await controller.ExitAsync();
+        acting.SetResult();
+        await launch;
+
+        Assert.True(ran);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task A_launch_that_finds_another_instance_runs_nothing_else()
+    {
+        _single.IsFirst = false;
+        var controller = Create();
+        var steps = 0;
+
+        var launched = await controller.LaunchAsync(
+            minimized: false,
+            Exe,
+            _ =>
+            {
+                steps++;
+                return Task.CompletedTask;
+            },
+            () => steps++,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(launched);
+        Assert.Equal(0, steps);
+    }
+
+    [Fact]
     public async Task Quick_add_requests_stop_after_dispose()
     {
         var controller = await StartedAsync();

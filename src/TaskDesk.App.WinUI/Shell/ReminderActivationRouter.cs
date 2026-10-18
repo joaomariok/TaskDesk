@@ -20,11 +20,11 @@ internal sealed class ReminderActivationRouter(
     public void Route(NotificationActivation activation) => dispatcher.TryEnqueue(() => _ = HandleAsync(activation));
 
     /// <summary>Acts on the activation; call on the UI thread.</summary>
-    public async Task HandleAsync(NotificationActivation activation)
+    public async Task HandleAsync(NotificationActivation activation, CancellationToken cancellationToken = default)
     {
         try
         {
-            await handler.HandleAsync(activation);
+            await handler.HandleAsync(activation, cancellationToken);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
