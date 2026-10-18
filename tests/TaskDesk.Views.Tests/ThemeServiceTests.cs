@@ -128,6 +128,19 @@ public sealed class ThemeServiceTests
         }
     }
 
+    [UITestMethod]
+    public void Each_switch_is_reported_for_what_XAML_does_not_draw()
+    {
+        var themes = new ThemeService();
+        var applied = new List<ThemeChoice>();
+        themes.Applied += applied.Add;
+
+        themes.Apply(ThemeChoice.Dark);
+        themes.Apply(ThemeChoice.System);
+
+        CollectionAssert.AreEqual(new[] { ThemeChoice.Dark, ThemeChoice.System }, applied);
+    }
+
     private static async Task<MainWindow> OpenMainWindowAsync(TempDatabase db, CancellationToken ct)
     {
         await db.Get<IDatabaseInitializer>().InitializeAsync(ct);

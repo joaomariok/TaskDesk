@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using TaskDesk.App.Shell;
+using TaskDesk.Core.Shell;
 
 namespace TaskDesk.Views.Tests;
 
@@ -40,4 +41,13 @@ public sealed class TrayMenuTests
             new[] { "Open TaskDesk", "Quick add", "Settings", "-", "Exit" },
             menu.Items.Select(i => i is MenuFlyoutItem item ? item.Text : i is MenuFlyoutSeparator ? "-" : "?").ToArray());
     }
+
+    // The native popup menu is drawn by Windows, not XAML: the process's preferred app mode themes it.
+    // uxtheme's PreferredAppMode: 1 AllowDark (follows the Windows app mode), 2 ForceDark, 3 ForceLight.
+    [TestMethod]
+    [DataRow(ThemeChoice.Dark, 2)]
+    [DataRow(ThemeChoice.Light, 3)]
+    [DataRow(ThemeChoice.System, 1)]
+    public void The_native_menu_follows_the_theme_setting(ThemeChoice theme, int preferredAppMode) =>
+        Assert.AreEqual(preferredAppMode, (int)NativeMenuTheme.ModeFor(theme));
 }

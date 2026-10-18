@@ -51,6 +51,7 @@
     <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\NotificationServices.cs" Link="Shell\NotificationServices.cs" />
     <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\ReminderActivationRouter.cs" Link="Shell\ReminderActivationRouter.cs" />
     <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\TrayMenu.cs" Link="Shell\TrayMenu.cs" />
+    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\NativeMenuTheme.cs" Link="Shell\NativeMenuTheme.cs" />
     <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\ActionCommand.cs" Link="Shell\ActionCommand.cs" />
     <Compile Include="..\..\src\TaskDesk.App\Shell\NamedPipeSingleInstance.cs" Link="Shell\NamedPipeSingleInstance.cs" />
     <Compile Include="..\..\src\TaskDesk.App\Notifications\TrayBalloonNotificationService.cs" Link="Notifications\TrayBalloonNotificationService.cs" />

@@ -76,6 +76,14 @@ public sealed partial class DetailPane : UserControl
         }
     }
 
+    /// <summary>
+    /// Raised by the Close button. <see cref="DetailDock"/> closes the pane as Esc does, returning focus to the
+    /// Task's row, which a collapsing pane would otherwise hand to the next focusable element.
+    /// </summary>
+    public event EventHandler? CloseRequested;
+
+    private void OnCloseClick(object sender, RoutedEventArgs e) => CloseRequested?.Invoke(this, EventArgs.Empty);
+
     private void OnMoveSubtaskUpClick(object sender, RoutedEventArgs e) =>
         RunOnItem<SubtaskRowViewModel>(sender, ViewModel.MoveSubtaskUpCommand);
 
@@ -180,7 +188,10 @@ public sealed partial class DetailPane : UserControl
         DetailTitleBox.SelectAll();
     }
 
-    /// <summary>An error text takes room only while it has text.</summary>
+    /// <summary>
+    /// An error text takes room only while it has text. x:Bind never calls a function whose argument is null, so
+    /// each binding's <c>FallbackValue=Collapsed</c> hides a cleared (null) error.
+    /// </summary>
     public static Visibility ShownWithText(string? text) =>
         string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
 
@@ -190,7 +201,8 @@ public sealed partial class DetailPane : UserControl
 
     /// <summary>
     /// The Due date as the calendar picker holds a day: midnight in the local time zone, which is the day it
-    /// shows.
+    /// shows. x:Bind never calls a function whose argument is null, so each binding's <c>FallbackValue={x:Null}</c>
+    /// empties the picker for a Task without that date.
     /// </summary>
     public static DateTimeOffset? ToPickerDate(DateTime? date) =>
         date is { } day ? new DateTimeOffset(DateTime.SpecifyKind(day.Date, DateTimeKind.Local)) : null;

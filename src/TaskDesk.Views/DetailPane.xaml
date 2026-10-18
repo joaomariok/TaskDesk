@@ -93,7 +93,7 @@
                         <Button Grid.Column="1" Style="{StaticResource IconButton}"
                                 ToolTipService.ToolTip="Close (Esc)"
                                 AutomationProperties.Name="Close detail pane"
-                                Command="{x:Bind ViewModel.CloseDetailPaneCommand, Mode=OneTime}">
+                                Click="OnCloseClick">
                             <FontIcon Glyph="&#xE711;" FontSize="12" />
                         </Button>
                     </Grid>
@@ -120,7 +120,7 @@
                     <!-- An error that belongs to no field, such as a failed save: here it is never scrolled away. -->
                     <TextBlock x:Name="GeneralErrorText" Style="{StaticResource FieldErrorText}"
                                Text="{x:Bind ViewModel.GeneralError, Mode=OneWay}"
-                               Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.GeneralError), Mode=OneWay}" />
+                               Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.GeneralError), Mode=OneWay, FallbackValue=Collapsed}" />
                 </StackPanel>
             </Border>
 
@@ -203,7 +203,7 @@
                         <CalendarDatePicker x:Name="DetailDueDatePicker" HorizontalAlignment="Stretch"
                                             AutomationProperties.Name="Due date"
                                             AutomationProperties.AutomationId="DetailDueDatePicker"
-                                            Date="{x:Bind local:DetailPane.ToPickerDate(ViewModel.DetailDueDate), BindBack=SetDueDate, Mode=TwoWay}" />
+                                            Date="{x:Bind local:DetailPane.ToPickerDate(ViewModel.DetailDueDate), BindBack=SetDueDate, Mode=TwoWay, FallbackValue={x:Null}}" />
                         <TextBox x:Name="DueTimeBox" Grid.Column="1" MaxLength="5" PlaceholderText="HH:mm"
                                  AutomationProperties.Name="Due time"
                                  AutomationProperties.HelpText="Time as HH:mm; needs a Due date"
@@ -212,7 +212,7 @@
                     </Grid>
                     <TextBlock x:Name="DueErrorText" Style="{StaticResource FieldErrorText}"
                                Text="{x:Bind ViewModel.DueError, Mode=OneWay}"
-                               Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.DueError), Mode=OneWay}" />
+                               Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.DueError), Mode=OneWay, FallbackValue=Collapsed}" />
 
                     <!-- Reminder: a calendar date and an optional time; an empty time fires at 09:00. -->
                     <TextBlock Text="Reminder" Style="{StaticResource FieldLabel}" />
@@ -223,7 +223,7 @@
                         </Grid.ColumnDefinitions>
                         <CalendarDatePicker x:Name="ReminderDatePicker" HorizontalAlignment="Stretch"
                                             AutomationProperties.Name="Reminder date"
-                                            Date="{x:Bind local:DetailPane.ToPickerDate(ViewModel.DetailReminderDate), BindBack=SetReminderDate, Mode=TwoWay}" />
+                                            Date="{x:Bind local:DetailPane.ToPickerDate(ViewModel.DetailReminderDate), BindBack=SetReminderDate, Mode=TwoWay, FallbackValue={x:Null}}" />
                         <TextBox x:Name="ReminderTimeBox" Grid.Column="1" MaxLength="5" PlaceholderText="09:00"
                                  AutomationProperties.Name="Reminder time"
                                  AutomationProperties.HelpText="Time as HH:mm; empty means 09:00"
@@ -232,7 +232,7 @@
                     </Grid>
                     <TextBlock x:Name="ReminderErrorText" Style="{StaticResource FieldErrorText}"
                                Text="{x:Bind ViewModel.ReminderError, Mode=OneWay}"
-                               Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.ReminderError), Mode=OneWay}" />
+                               Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.ReminderError), Mode=OneWay, FallbackValue=Collapsed}" />
                     <Grid x:Name="SnoozeRow" Margin="{StaticResource FieldMargin}" ColumnSpacing="6"
                           Visibility="{x:Bind ViewModel.HasDetailSnooze, Mode=OneWay}">
                         <Grid.ColumnDefinitions>
@@ -297,14 +297,14 @@
                                 <TextBlock Text="Ends on (optional)" Style="{StaticResource FieldLabel}" />
                                 <CalendarDatePicker HorizontalAlignment="Stretch"
                                                     AutomationProperties.Name="Repeat end date"
-                                                    Date="{x:Bind local:DetailPane.ToPickerDate(Repeat.EndDate), BindBack=SetRepeatEndDate, Mode=TwoWay}" />
+                                                    Date="{x:Bind local:DetailPane.ToPickerDate(Repeat.EndDate), BindBack=SetRepeatEndDate, Mode=TwoWay, FallbackValue={x:Null}}" />
                             </StackPanel>
                         </StackPanel>
                     </StackPanel>
                     <!-- Outside the Repeat section, which hides without a Due date, so "needs a Due date" still shows. -->
                     <TextBlock x:Name="RepeatErrorText" Style="{StaticResource FieldErrorText}"
                                Text="{x:Bind ViewModel.RepeatError, Mode=OneWay}"
-                               Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.RepeatError), Mode=OneWay}" />
+                               Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.RepeatError), Mode=OneWay, FallbackValue=Collapsed}" />
 
                     <!-- Priority -->
                     <TextBlock Text="Priority" Style="{StaticResource FieldLabel}" />

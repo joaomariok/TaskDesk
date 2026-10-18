@@ -13,7 +13,7 @@ namespace TaskDesk.Views;
 /// The main window's page (<see cref="MainView"/>) with the detail pane of the selected Task beside it or over
 /// it. Wider than <see cref="PaneLayout.DetailDockedAboveWidth"/> the pane docks in its own column and the
 /// detail splitter resizes it; otherwise it overlays the page's right side. A click or Enter on a row opens the
-/// pane, F2 opens it on the selected Task, Esc closes it and returns focus to the Task's row.
+/// pane, F2 opens it on the selected Task, Esc or its Close button closes it and returns focus to the Task's row.
 /// </summary>
 public sealed partial class DetailDock : UserControl
 {
@@ -29,6 +29,7 @@ public sealed partial class DetailDock : UserControl
         AutomationProperties.SetAutomationId(Pane, "DetailPane");
         DockRoot.Children.Add(Pane);
         Pane.SizeChanged += (_, e) => RememberDockedWidth(e.NewSize.Width);
+        Pane.CloseRequested += (_, _) => ClosePane();
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         page.TaskList.DetailFocusRequested += (_, _) => Pane.FocusTitle();
@@ -77,14 +78,20 @@ public sealed partial class DetailDock : UserControl
             return true;
         }
 
-        if (key == VirtualKey.Escape && ViewModel.IsDetailPaneVisible && ViewModel.DetailTask is { } row)
+        return key == VirtualKey.Escape && ClosePane();
+    }
+
+    // Closes the shown pane and returns focus to its Task's row (Esc and the Close button).
+    private bool ClosePane()
+    {
+        if (!ViewModel.IsDetailPaneVisible || ViewModel.DetailTask is not { } row)
         {
-            ViewModel.CloseDetailPaneCommand.Execute(null);
-            Page.TaskList.FocusRow(row);
-            return true;
+            return false;
         }
 
-        return false;
+        ViewModel.CloseDetailPaneCommand.Execute(null);
+        Page.TaskList.FocusRow(row);
+        return true;
     }
 
     // Esc bubbles up from the focused element, so an open date picker or dropdown closes first.

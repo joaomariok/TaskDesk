@@ -162,6 +162,112 @@ public sealed class DetailPaneTests
     }
 
     [UITestMethod]
+    public async Task The_date_pickers_show_each_selected_Tasks_own_dates_and_none_it_lacks()
+    {
+        using var db = await DatabaseAsync();
+        var reminder = new DateTime(2030, 10, 24, 9, 0, 0, DateTimeKind.Local).ToUniversalTime();
+        await AddAsync(db, "Dated", due: new DateOnly(2030, 10, 25), reminderUtc: reminder);
+        await AddAsync(db, "Plain");
+        await AddAsync(db, "Due only", due: new DateOnly(2030, 11, 2));
+        var (window, viewModel) = await OpenAsync(db, width: 1200);
+        try
+        {
+            await SelectAsync(window, "Dated");
+            var pane = window.Details.Pane;
+            await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
+            var due = VisualTree.Find<CalendarDatePicker>(pane, "DetailDueDatePicker");
+            var remind = VisualTree.Find<CalendarDatePicker>(pane, "ReminderDatePicker");
+            DateTime? Day(CalendarDatePicker picker) => picker.Date?.ToLocalTime().Date;
+
+            await UiWait.UntilAsync(() => Day(due) == new DateTime(2030, 10, 25) && Day(remind) == new DateTime(2030, 10, 24),
+                () => $"The dated Task shows Due {Day(due)} and Reminder {Day(remind)}.", Ct);
+
+            await SelectAsync(window, "Plain");
+            await UiWait.UntilAsync(() => due.Date is null && remind.Date is null,
+                () => $"A Task without dates shows Due {Day(due)} and Reminder {Day(remind)}.", Ct);
+
+            await SelectAsync(window, "Dated");
+            await UiWait.UntilAsync(() => Day(remind) == new DateTime(2030, 10, 24), () => "The Reminder did not show again.", Ct);
+            await SelectAsync(window, "Due only");
+            await UiWait.UntilAsync(() => Day(due) == new DateTime(2030, 11, 2) && remind.Date is null,
+                () => $"A Task with only a Due date shows Due {Day(due)} and Reminder {Day(remind)}.", Ct);
+
+            await viewModel.FlushPendingSaveAsync();
+            var saved = (await db.QueryAsync(c => c.Tasks)).ToDictionary(t => t.Title);
+            Assert.AreEqual(new DateOnly(2030, 10, 25), saved["Dated"].DueDate, "Moving between Tasks changed a Due date.");
+            Assert.AreEqual(reminder, saved["Dated"].ReminderUtc, "Moving between Tasks changed a Reminder.");
+            Assert.IsNull(saved["Plain"].DueDate);
+            Assert.IsNull(saved["Plain"].ReminderUtc);
+            Assert.IsNull(saved["Due only"].ReminderUtc);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task A_cleared_field_error_takes_no_room()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Book dentist", due: new DateOnly(2030, 10, 25));
+        var (window, viewModel) = await OpenAsync(db, width: 1200, height: 1000);
+        try
+        {
+            await SelectAsync(window, "Book dentist");
+            var pane = window.Details.Pane;
+            await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
+
+            // Each error shows, then clears; a cleared error takes no room.
+            await ShowThenClearAsync(pane, "DueErrorText", () => viewModel.DetailDueTime = "abc", () => viewModel.DetailDueTime = "");
+            await ShowThenClearAsync(pane, "ReminderErrorText",
+                () => viewModel.DetailReminderTime = "noon", () => viewModel.DetailReminderTime = "");
+            await ShowThenClearAsync(pane, "RepeatErrorText",
+                () =>
+                {
+                    viewModel.Repeat.Preset = RepeatPreset.Daily;
+                    viewModel.Repeat.Interval = 0;
+                },
+                () => viewModel.Repeat.Interval = 1);
+            await ShowThenClearAsync(pane, "GeneralErrorText",
+                () => viewModel.ErrorMessage = "Could not save the changes: disk full", () => viewModel.ErrorMessage = null);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task The_Close_button_closes_the_pane_and_returns_focus_to_the_Tasks_row()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Book dentist");
+        var (window, viewModel) = await OpenAsync(db, width: 1200);
+        try
+        {
+            await SelectAsync(window, "Book dentist");
+            var pane = window.Details.Pane;
+            await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
+            var close = VisualTree.Descendants(pane).OfType<Button>()
+                .Single(b => AutomationProperties.GetName(b) == "Close detail pane");
+            close.Focus(FocusState.Keyboard);
+
+            ((IInvokeProvider)FrameworkElementAutomationPeer.CreatePeerForElement(close)).Invoke();
+
+            await UiWait.UntilAsync(
+                () => !viewModel.IsDetailPaneVisible
+                      && FocusManager.GetFocusedElement(window.Content.XamlRoot) is ListViewItem item
+                      && AutomationProperties.GetName(item) == "Book dentist",
+                () => $"Close left the pane open or focus on {FocusManager.GetFocusedElement(window.Content.XamlRoot)}.", Ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
     public async Task A_Due_time_error_shows_right_under_the_Due_field_above_the_Priority_label()
     {
         using var db = await DatabaseAsync();
@@ -429,6 +535,21 @@ public sealed class DetailPaneTests
         }
     }
 
+    // Shows a field error, then clears it and checks it takes no room.
+    private async Task ShowThenClearAsync(FrameworkElement pane, string name, Action show, Action clear)
+    {
+        var error = VisualTree.Find<TextBlock>(pane, name);
+        show();
+        await UiWait.UntilAsync(() => error.Text.Length > 0 && error.Visibility == Visibility.Visible && error.ActualHeight > 0,
+            () => $"{name} did not show; it reads '{error.Text}' ({error.Visibility}).", Ct);
+
+        clear();
+        pane.UpdateLayout();
+        // A collapsed element keeps its last ActualHeight; the room it asks of the layout is its DesiredSize.
+        await UiWait.UntilAsync(() => error.Visibility == Visibility.Collapsed && error.DesiredSize.Height == 0,
+            () => $"{name} still takes {error.DesiredSize.Height} px with '{error.Text}' ({error.Visibility}).", Ct);
+    }
+
     private static TextBox Box(FrameworkElement root, string name) => VisualTree.Find<TextBox>(root, name);
 
     private static void AssertIds(FrameworkElement root, string id, string name)
@@ -531,7 +652,8 @@ public sealed class DetailPaneTests
     }
 
     private static async Task AddAsync(
-        TempDatabase db, string title, string notes = "", Priority priority = Priority.None, DateOnly? due = null)
+        TempDatabase db, string title, string notes = "", Priority priority = Priority.None, DateOnly? due = null,
+        DateTime? reminderUtc = null)
     {
         var listId = (await db.QueryAsync(c => c.Lists.Where(l => l.IsDefault))).Single().Id;
         var order = (await db.QueryAsync(c => c.Tasks)).Count;
@@ -546,6 +668,7 @@ public sealed class DetailPaneTests
             Notes = notes,
             Priority = priority,
             DueDate = due,
+            ReminderUtc = reminderUtc,
             SortOrder = order,
             CreatedUtc = now,
             UpdatedUtc = now,

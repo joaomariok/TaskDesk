@@ -168,6 +168,7 @@ public partial class App : Application
         window.AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "TaskDesk.ico"));
         // The saved theme applies before the window first shows; later switches reach it live.
         var themes = _host.Services.GetRequiredService<ThemeService>();
+        themes.Applied += NativeMenuTheme.Apply;
         themes.Register(window);
         _host.Services.GetRequiredService<ActiveWindow>().Register(window);
         themes.Apply(_host.Services.GetRequiredService<IShellSettingsStore>().Load().Theme);

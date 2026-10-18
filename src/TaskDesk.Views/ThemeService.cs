@@ -33,6 +33,12 @@ public sealed class ThemeService : IThemeService
         OnUiThread(window, () => ApplyTo(window, _theme));
     }
 
+    /// <summary>
+    /// Raised by every <see cref="Apply"/>, for what XAML does not draw (the tray's native menu), on the calling
+    /// thread.
+    /// </summary>
+    public event Action<ThemeChoice>? Applied;
+
     public void Apply(ThemeChoice theme)
     {
         Window[] windows;
@@ -46,6 +52,8 @@ public sealed class ThemeService : IThemeService
         {
             OnUiThread(window, () => ApplyTo(window, theme));
         }
+
+        Applied?.Invoke(theme);
     }
 
     private static void ApplyTo(Window window, ThemeChoice theme)
