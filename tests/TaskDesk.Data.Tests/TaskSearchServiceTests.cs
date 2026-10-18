@@ -205,6 +205,18 @@ public class TaskSearchServiceTests
     }
 
     [Fact]
+    public async Task Search_on_a_List_page_stays_within_that_List()
+    {
+        using var db = await StartAsync();
+        var work = await db.Get<IListService>().CreateListAsync("Work", Ct);
+        await AddAsync(db, "milk default");
+        await db.Get<ITaskCreator>().CreateTaskInListAsync("milk at work", work.Id, Ct);
+
+        Assert.Equal(["milk at work"], await SearchAsync(db, new(Text: "milk", ViewListId: work.Id)));
+        Assert.Equal(["milk default"], await SearchAsync(db, new(Text: "milk")));
+    }
+
+    [Fact]
     public async Task Search_within_smart_views_applies_the_view_and_the_filter()
     {
         using var db = await StartAsync();

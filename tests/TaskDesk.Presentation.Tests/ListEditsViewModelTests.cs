@@ -69,6 +69,21 @@ public class ListEditsViewModelTests
     }
 
     [Fact]
+    public async Task Deleting_a_List_announces_the_edit()
+    {
+        var s = await StartAsync();
+        await s.ListService.CreateListAsync("Work", Ct);
+        await s.Lists.LoadAsync(Ct);
+        var edits = 0;
+        s.Lists.ListEdited += (_, _) => edits++;
+        s.Dialogs.ConfirmResult = true;
+
+        await s.Lists.DeleteCommand.ExecuteAsync(s.Lists.Lists.Single(l => l.Name == "Work"));
+
+        Assert.Equal(1, edits);
+    }
+
+    [Fact]
     public async Task Cancelling_a_rename_announces_nothing()
     {
         var s = await StartAsync();

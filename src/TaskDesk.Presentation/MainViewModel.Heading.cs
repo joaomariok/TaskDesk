@@ -17,15 +17,25 @@ public sealed partial class MainViewModel
     private string _defaultListName = "Inbox";
 
     /// <summary>True when the page shows a List (not a Smart View or a Tag's page).</summary>
-    public bool IsListPage => CurrentView is null && TagFilter is null;
+    public bool IsListPage => Page is TaskListPage.ListPage;
+
+    // The shown List's name; the Default List's until the Lists are loaded.
+    private string CurrentListName =>
+        CurrentListId is { } id && _lists.TryGetValue(id, out var list) ? list.Name : DefaultListName;
 
     /// <summary>What the page shows: the Smart View's name, the List's name, or "#" plus the Tag's name.</summary>
-    public string PageHeading => CurrentView is { } view
-        ? ViewName(view)
-        : TagFilter is { } tag ? "#" + tag.Name : DefaultListName;
+    public string PageHeading => Page switch
+    {
+        TaskListPage.SmartViewPage page => ViewName(page.View),
+        TaskListPage.TagPage page => "#" + page.Tag.Name,
+        _ => CurrentListName,
+    };
 
-    /// <summary>The label of the quick-add box; Tasks always go to the Default List, also from a Smart View.</summary>
-    public string QuickAddTarget => "Add a task to " + DefaultListName;
+    /// <summary>
+    /// The label of the quick-add box: a List's page adds to that List; a Smart View or a Tag's page adds to
+    /// the Default List.
+    /// </summary>
+    public string QuickAddTarget => "Add a task to " + (IsListPage ? CurrentListName : DefaultListName);
 
     /// <summary>True when quick add is offered: on every page except the Completed Smart View.</summary>
     public bool ShowsQuickAdd => CurrentView != SmartView.Completed;
@@ -94,7 +104,7 @@ public sealed partial class MainViewModel
             SmartView.Completed => "No completed Tasks.",
             _ => TagFilter is { } tag
                 ? $"No Tasks tagged #{tag.Name}."
-                : $"No Tasks in {DefaultListName} yet. Type above to add one.",
+                : $"No Tasks in {CurrentListName} yet. Type above to add one.",
         };
     }
 
@@ -103,6 +113,7 @@ public sealed partial class MainViewModel
     {
         OnPropertyChanged(nameof(IsListPage));
         OnPropertyChanged(nameof(PageHeading));
+        OnPropertyChanged(nameof(QuickAddTarget));
         OnPropertyChanged(nameof(SearchScope));
         OnPropertyChanged(nameof(IsPageEmpty));
         OnPropertyChanged(nameof(EmptyMessage));

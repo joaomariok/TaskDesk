@@ -93,9 +93,10 @@ public sealed partial class MainViewModel
         [.. FilterTags.Select(t => t.Id)],
         HasDueFilter,
         CurrentView,
-        CurrentView is null ? TagFilter?.Id : null,
+        TagFilter?.Id,
         skip,
-        HasReminderFilter);
+        HasReminderFilter,
+        CurrentListId);
 
     // Re-selects the chips of Tags that still exist, dropping those that were deleted.
     private void PruneFilterTags()

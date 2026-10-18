@@ -12,9 +12,11 @@ namespace TaskDesk.Core.Tasks;
 /// <param name="HasDue">Only Tasks with a Due date.</param>
 /// <param name="View">The Smart View searched in, or null.</param>
 /// <param name="ViewTagId">When <paramref name="View"/> is null: the Tag whose Tasks are searched; null
-/// searches the Default List.</param>
+/// searches <paramref name="ViewListId"/>.</param>
 /// <param name="Skip">Page offset, honoured by the Completed Smart View only.</param>
 /// <param name="HasReminder">Only Tasks with a Reminder.</param>
+/// <param name="ViewListId">When <paramref name="View"/> and <paramref name="ViewTagId"/> are null: the List
+/// whose Tasks are searched; null searches the Default List.</param>
 public sealed record TaskSearchQuery(
     string? Text = null,
     Priority? MinPriority = null,
@@ -23,7 +25,8 @@ public sealed record TaskSearchQuery(
     SmartView? View = null,
     Guid? ViewTagId = null,
     int Skip = 0,
-    bool HasReminder = false)
+    bool HasReminder = false,
+    Guid? ViewListId = null)
 {
     /// <summary>True when no search text and no filter is set.</summary>
     public bool IsEmpty =>

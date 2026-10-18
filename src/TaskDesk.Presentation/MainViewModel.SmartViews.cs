@@ -12,9 +12,8 @@ public sealed partial class MainViewModel
     /// </summary>
     public async Task ShowSmartViewAsync(SmartView? view, CancellationToken cancellationToken = default)
     {
-        TagFilter = null;
-        CurrentView = view;
-        await LoadAsync(cancellationToken);
+        await ShowAsync(
+            view is { } shown ? new TaskListPage.SmartViewPage(shown) : TaskListPage.DefaultList, cancellationToken);
     }
 
     /// <summary>Switches to a Smart View (Ctrl+1 to Ctrl+5).</summary>

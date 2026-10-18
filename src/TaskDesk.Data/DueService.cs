@@ -83,6 +83,8 @@ internal sealed class DueService(
             .WithDetails());
         tasks = query.ViewTagId is { } tagId
             ? tasks.Where(t => t.Tags.Any(g => g.Id == tagId))
+            : query.ViewListId is { } listId
+            ? tasks.Where(t => t.ListId == listId)
             : tasks.Where(t => context.Lists.Any(l => l.IsDefault && l.Id == t.ListId));
         return await tasks.OrderBy(t => t.SortOrder).ThenBy(t => t.CreatedUtc).ToListAsync(cancellationToken);
     }

@@ -14,9 +14,7 @@ public sealed partial class MainViewModel
     /// <summary>Filters Tasks by the Tag, or shows the Default List again when null.</summary>
     public async Task FilterByTagAsync(Tag? tag, CancellationToken cancellationToken = default)
     {
-        CurrentView = null;
-        TagFilter = tag;
-        await LoadAsync(cancellationToken);
+        await ShowAsync(tag is { } shown ? new TaskListPage.TagPage(shown) : TaskListPage.DefaultList, cancellationToken);
     }
 
     [RelayCommand(CanExecute = nameof(CanAddTag))]

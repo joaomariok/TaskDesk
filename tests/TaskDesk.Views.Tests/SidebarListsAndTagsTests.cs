@@ -2,6 +2,7 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
+using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
@@ -342,18 +343,68 @@ public sealed class SidebarListsAndTagsTests
 
             rows = await RowsAsync(window, "ListsList", 2);
             menu = await OpenMenuAsync(rows[1]);
+            Invoke(((MenuFlyoutSubItem)menu.Items[1]).Items[0]); // None
+            await UiWait.UntilAsync(() => lists.Lists[1].ColorHex is null, () => "None did not remove the colour.", ct);
+            Assert.IsNull((await db.QueryAsync(c => c.Lists)).Single(l => l.Name == "Food").ColorHex);
+
+            await viewModel.ShowListAsync(saved.Id, ct);
+            Assert.AreEqual("Food", viewModel.PageHeading);
+            rows = await RowsAsync(window, "ListsList", 2);
+            menu = await OpenMenuAsync(rows[1]);
             Invoke(menu.Items[2]);
             var delete = await DialogHost.OpenDialogAsync(window.Content.XamlRoot, ct);
             DialogHost.Press(delete, "PrimaryButton");
             await UiWait.UntilAsync(() => lists.Lists.Count == 1,
                 () => $"Lists were [{string.Join(", ", lists.Lists.Select(l => l.Name))}]; error '{lists.ErrorMessage}'.", ct);
             await RowsAsync(window, "ListsList", 1);
+            await UiWait.UntilAsync(() => viewModel.PageHeading == "Inbox" && viewModel.CurrentListId == lists.Lists[0].Id,
+                () => $"Deleting the shown List left the page on '{viewModel.PageHeading}'.", ct);
             Assert.HasCount(1, await db.QueryAsync(c => c.Lists));
 
             rows = await RowsAsync(window, "ListsList", 1);
             menu = await OpenMenuAsync(rows[0]);
             Assert.IsFalse(menu.Items[2].IsEnabled, "The Default List cannot be deleted.");
             menu.Hide();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Clicking_a_List_opens_its_page_and_clicking_it_again_ends_a_search()
+    {
+        var ct = TestContext.CancellationToken;
+        using var db = new TempDatabase();
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
+        var inbox = (await db.QueryAsync(c => c.Lists)).Single().Id;
+        var work = await db.Get<IListService>().CreateListAsync("Work", ct);
+        await db.AddTaskAsync(inbox, "Pay rent", completed: false);
+        await db.AddTaskAsync(work.Id, "Write report", completed: false);
+        await db.AddTaskAsync(work.Id, "Call Ana", completed: false);
+        var (window, viewModel, lists) = NewWindow(db);
+        try
+        {
+            window.Activate();
+            await viewModel.LoadAsync(ct);
+            await lists.LoadAsync(ct);
+            var rows = await RowsAsync(window, "ListsList", 2);
+            var listsList = (ListView)WithId(window.Content, "ListsList")!;
+
+            Click(rows[1]);
+            await UiWait.UntilAsync(() => viewModel.PageHeading == "Work" && Titles(viewModel).SequenceEqual(["Write report", "Call Ana"]),
+                () => $"The page shows {viewModel.PageHeading} with [{string.Join(", ", Titles(viewModel))}].", ct);
+            Assert.AreEqual("Work", (listsList.SelectedItem as ListItemViewModel)?.Name, "Work's page selects Work.");
+
+            viewModel.SearchText = "report";
+            await UiWait.UntilAsync(() => Titles(viewModel).SequenceEqual(["Write report"]),
+                () => $"The search shows [{string.Join(", ", Titles(viewModel))}].", ct);
+
+            Click((await RowsAsync(window, "ListsList", 2))[1]); // already selected
+            await UiWait.UntilAsync(() => viewModel.SearchText.Length == 0 && Titles(viewModel).Count == 2,
+                () => $"Clicking Work again left '{viewModel.SearchText}' with [{string.Join(", ", Titles(viewModel))}].", ct);
+            Assert.AreEqual("Work", (listsList.SelectedItem as ListItemViewModel)?.Name);
         }
         finally
         {
@@ -517,7 +568,7 @@ public sealed class SidebarListsAndTagsTests
     {
         MainWindow? window = null;
         var viewModel = new MainViewModel(db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock, db.Get<IDueService>(),
-            db.Get<ITaskSearchService>(), listService: db.Get<IListService>());
+            db.Get<ITaskSearchService>(), listService: db.Get<IListService>(), taskCreator: db.Get<ITaskCreator>());
         var lists = new ListsViewModel(db.Get<IListService>(), new WinUiDialogs(new DialogService(() => window)));
         window = new MainWindow(viewModel, lists);
         return (window, viewModel, lists);
@@ -604,6 +655,11 @@ public sealed class SidebarListsAndTagsTests
         element.TransformToVisual(root).TransformPoint(new Windows.Foundation.Point(0, 0)).X;
 
     private static Color Colour(Brush brush) => ((SolidColorBrush)brush).Color;
+
+    // Clicks a List row as the owner would, through its automation peer.
+    private static void Click(ListViewItem row) =>
+        ((IInvokeProvider)FrameworkElementAutomationPeer.CreatePeerForElement(row).GetPattern(PatternInterface.Invoke)
+            ?? throw new AssertFailedException("The List row cannot be invoked.")).Invoke();
 
     private static List<string> Titles(MainViewModel viewModel) =>
         [.. viewModel.OverdueTasks.Concat(viewModel.Tasks).Select(t => t.Title)];

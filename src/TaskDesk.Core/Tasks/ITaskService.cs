@@ -10,6 +10,9 @@ public interface ITaskService
     /// <summary>Lists the Tasks of the Default List in their manual order.</summary>
     Task<IReadOnlyList<TaskItem>> ListDefaultListTasksAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Lists the Tasks of one List in their manual order; none when no List has this id.</summary>
+    Task<IReadOnlyList<TaskItem>> ListTasksInListAsync(Guid listId, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Moves a Task to <paramref name="newIndex"/> within its List's manual order (zero-based, in the
     /// List's full order after the move). Persists the new position; renormalises when gaps get too small.

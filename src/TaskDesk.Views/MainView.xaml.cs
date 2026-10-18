@@ -221,7 +221,7 @@ public sealed partial class MainView : UserControl
 
     // ---- The List's menu beside the heading ----
 
-    private ListItemViewModel? ShownList => Lists?.Lists.FirstOrDefault(l => l.IsDefault);
+    private ListItemViewModel? ShownList => Lists?.ListOrDefault(ViewModel.CurrentListId);
 
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnListRenameClick(object sender, RoutedEventArgs e)
@@ -235,9 +235,10 @@ public sealed partial class MainView : UserControl
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnListColourClick(object sender, RoutedEventArgs e)
     {
-        if (Lists is { } lists && ShownList is { } list && sender is MenuFlyoutItem { Tag: string hex })
+        // None's empty Tag arrives as null, not "", so read it as a nullable string.
+        if (Lists is { } lists && ShownList is { } list && sender is MenuFlyoutItem item)
         {
-            await lists.SetColorAsync(list, hex);
+            await lists.SetColorAsync(list, item.Tag as string);
         }
     }
 }

@@ -180,31 +180,33 @@ public sealed partial class NavigationPane
         });
     }
 
-    // Part of SyncSelection: a Tag's page selects its Tag, the Default List's page a List (the Default List
-    // unless another is picked), and a Smart View neither.
+    // Part of SyncSelection: a Tag's page selects its Tag, a List's page that List (the Default List until the
+    // first load knows its id), and a Smart View neither.
     private void SyncListAndTagSelection()
     {
         var tag = ViewModel.TagFilter is { } filter ? ViewModel.Tags.FirstOrDefault(t => t.Id == filter.Id) : null;
         TagList.SelectedItem = tag;
         RailTagList.SelectedItem = tag;
-        if (ViewModel.CurrentView is not null || ViewModel.TagFilter is not null)
-        {
-            ListsList.SelectedItem = null;
-        }
-        else if (ListsList.SelectedItem is null && Lists is not null)
-        {
-            ListsList.SelectedItem = Lists.Lists.FirstOrDefault(l => l.IsDefault);
-        }
+        ListsList.SelectedItem = ViewModel.IsListPage ? Lists?.ListOrDefault(ViewModel.CurrentListId) : null;
     }
 
-    // Selecting the Default List shows it again after a Smart View or a Tag; other Lists keep their behaviour.
+    // Selecting a List (by click or by keyboard) opens its page.
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnListSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_syncing && ListsList.SelectedItem is ListItemViewModel { IsDefault: true }
-            && (ViewModel.CurrentView is not null || ViewModel.TagFilter is not null))
+        if (!_syncing && ListsList.SelectedItem is ListItemViewModel item && ViewModel.CurrentListId != item.Id)
         {
-            await ViewModel.FilterByTagAsync(null);
+            await ViewModel.ShowListAsync(item.Id);
+        }
+    }
+
+    // A click opens the List's page even when it is selected already, which ends a search there.
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
+    private async void OnListItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is ListItemViewModel item)
+        {
+            await ViewModel.ShowListAsync(item.Id);
         }
     }
 
@@ -261,9 +263,10 @@ public sealed partial class NavigationPane
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnColourClick(object sender, RoutedEventArgs e)
     {
-        if (Lists is not null && _menuList is { } item && sender is MenuFlyoutItem { Tag: string hex })
+        // None's empty Tag arrives as null, not "", so read it as a nullable string.
+        if (Lists is not null && _menuList is { } item && sender is MenuFlyoutItem menuItem)
         {
-            await Lists.SetColorAsync(item, hex);
+            await Lists.SetColorAsync(item, menuItem.Tag as string);
         }
     }
 

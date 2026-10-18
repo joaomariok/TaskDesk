@@ -1,3 +1,4 @@
+using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Data.Tests;
@@ -39,6 +40,26 @@ public class TaskServiceTests
             var titles = (await service.ListDefaultListTasksAsync(TestContext.Current.CancellationToken)).Select(t => t.Title);
 
             Assert.Equal(["first", "second", "third"], titles);
+        }
+    }
+
+    [Fact]
+    public async Task Lists_only_the_Tasks_of_the_chosen_List_in_their_manual_order()
+    {
+        var (db, service) = await StartAsync();
+        using (db)
+        {
+            var ct = TestContext.Current.CancellationToken;
+            var work = await db.Get<IListService>().CreateListAsync("Work", ct);
+            var creator = db.Get<ITaskCreator>();
+            await service.CreateTaskAsync("in the Default List", ct);
+            await creator.CreateTaskInListAsync("report", work.Id, ct);
+            var call = await creator.CreateTaskInListAsync("call Ana", work.Id, ct);
+            await service.MoveTaskAsync(call.Id, 0, ct);
+
+            var titles = (await service.ListTasksInListAsync(work.Id, ct)).Select(t => t.Title);
+
+            Assert.Equal(["call Ana", "report"], titles);
         }
     }
 

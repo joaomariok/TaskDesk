@@ -337,7 +337,7 @@ public class MainViewModelTests
         }
     }
 
-    internal sealed class FakeTaskService : ITaskService
+    internal sealed class FakeTaskService : ITaskService, ITaskCreator
     {
         private readonly List<TaskItem> _tasks = [];
         public List<string> Created { get; } = [];
@@ -551,7 +551,32 @@ public class MainViewModelTests
             return Task.FromResult(task);
         }
 
+        // Tasks created in a chosen List; every other Task counts as the Default List's.
+        private readonly HashSet<Guid> _inChosenList = [];
+
+        public List<(string Title, Guid ListId)> CreatedInList { get; } = [];
+
         public Task<IReadOnlyList<TaskItem>> ListDefaultListTasksAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<TaskItem>>(_tasks.ToList());
+            => Task.FromResult<IReadOnlyList<TaskItem>>(_tasks.Where(t => !_inChosenList.Contains(t.Id)).ToList());
+
+        public Task<IReadOnlyList<TaskItem>> ListTasksInListAsync(Guid listId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<TaskItem>>(_tasks.Where(t => t.ListId == listId).ToList());
+
+        public Task<TaskItem> CreateTaskInListAsync(string title, Guid listId, CancellationToken cancellationToken = default)
+            => CreateTaskInListAsync(title, listId, null, cancellationToken);
+
+        public Task<TaskItem> CreateTaskInListAsync(
+            string title, Guid listId, DateOnly? dueDate, CancellationToken cancellationToken = default)
+        {
+            var task = new TaskItem
+            {
+                Id = Guid.NewGuid(), ListId = listId, Title = TaskTitle.Normalize(title), DueDate = dueDate,
+                SortOrder = _nextOrder++,
+            };
+            _tasks.Add(task);
+            _inChosenList.Add(task.Id);
+            CreatedInList.Add((task.Title, listId));
+            return Task.FromResult(task);
+        }
     }
 }

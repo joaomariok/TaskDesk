@@ -203,11 +203,11 @@
                     <ListView x:Name="ListsList"
                               ItemContainerStyle="{StaticResource SidebarListItem}"
                               ItemTemplate="{StaticResource ListRowTemplate}"
-                              SelectionMode="Single" CanDragItems="True" AllowDrop="True"
+                              SelectionMode="Single" IsItemClickEnabled="True" CanDragItems="True" AllowDrop="True"
                               ScrollViewer.VerticalScrollMode="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
                               AutomationProperties.Name="Lists" AutomationProperties.AutomationId="ListsList"
                               ContainerContentChanging="OnListContainerContentChanging"
-                              SelectionChanged="OnListSelectionChanged" KeyDown="OnListKeyDown"
+                              SelectionChanged="OnListSelectionChanged" ItemClick="OnListItemClick" KeyDown="OnListKeyDown"
                               DragItemsStarting="OnListDragStarting" DragItemsCompleted="OnListDragCompleted"
                               DragOver="OnListDragOver" Drop="OnListDrop" />
                     <StackPanel x:Name="NewListArea">

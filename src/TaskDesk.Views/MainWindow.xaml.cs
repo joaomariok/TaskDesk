@@ -39,7 +39,8 @@ public sealed partial class MainWindow : Window
 #pragma warning disable VSTHRD101 // Event handlers; a failed reload reaches the app's UnhandledException log
             // Open-Task counts change when Tasks are added, completed, un-completed, deleted or restored.
             viewModel.OpenTaskCountsChanged += async (_, _) => await lists.LoadAsync();
-            // A renamed or recoloured List: reload so the heading and the rows show its new name and colour.
+            // A renamed, recoloured or deleted List: reload so the heading and the rows show its new name and
+            // colour, and a page on a deleted List falls back to the Default List.
             lists.ListEdited += async (_, _) => await viewModel.LoadAsync();
 #pragma warning restore VSTHRD101
         }

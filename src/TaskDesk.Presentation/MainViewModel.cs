@@ -19,7 +19,8 @@ public sealed partial class MainViewModel(
     IOccurrenceDialogs? occurrenceDialogs = null,
     IReminderService? reminderService = null,
     IShellSettingsStore? settingsStore = null,
-    IListService? listService = null) : ObservableObject
+    IListService? listService = null,
+    ITaskCreator? taskCreator = null) : ObservableObject
 {
     /// <summary>How long text edits wait for further typing before they are saved.</summary>
     public static readonly TimeSpan SaveDebounce = TimeSpan.FromMilliseconds(500);
@@ -44,6 +45,10 @@ public sealed partial class MainViewModel(
     private IOccurrenceDialogs OccurrenceDialogs => occurrenceDialogs
         ?? throw new InvalidOperationException("No Occurrence dialogs were supplied.");
 
+    // Needed for quick-add on a List page other than the Default List's only.
+    private ITaskCreator Creator => taskCreator
+        ?? throw new InvalidOperationException("No Task creator was supplied.");
+
     // Needed for Reminder edits only.
     private IReminderService Reminders => reminderService
         ?? throw new InvalidOperationException("No Reminder service was supplied.");
@@ -64,7 +69,7 @@ public sealed partial class MainViewModel(
     public Task CompletionMove => _completionMove;
 
     // The rows of Smart Views, a Tag's page and search results caption their Task with the List's name.
-    private bool ShowsListNames => CurrentView is not null || TagFilter is not null || IsNarrowed;
+    private bool ShowsListNames => Page is not TaskListPage.ListPage || IsNarrowed;
 
     private TaskRowViewModel CreateRow(TaskItem task) =>
         new(task, _clock, _lists.GetValueOrDefault(task.ListId), ShowsListNames, IsCompletedPage);
@@ -125,31 +130,50 @@ public sealed partial class MainViewModel(
     [ObservableProperty]
     private string? _errorMessage;
 
-    /// <summary>The Tag the Task list is filtered by, or null to show the Default List.</summary>
+    /// <summary>What the Task list shows; the only page state. Navigate with <see cref="ShowAsync"/>.</summary>
     [ObservableProperty]
-    private Tag? _tagFilter;
-
-    /// <summary>The Smart View being shown, or null for the Default List / Tag filter.</summary>
-    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentView))]
+    [NotifyPropertyChangedFor(nameof(TagFilter))]
+    [NotifyPropertyChangedFor(nameof(CurrentListId))]
     [NotifyPropertyChangedFor(nameof(HasMoreCompleted))]
     [NotifyPropertyChangedFor(nameof(ShowsQuickAdd))]
-    private SmartView? _currentView;
+    private TaskListPage _page = TaskListPage.DefaultList;
+
+    /// <summary>The Smart View being shown, or null on a List's or a Tag's page.</summary>
+    public SmartView? CurrentView => (Page as TaskListPage.SmartViewPage)?.View;
+
+    /// <summary>The Tag whose page is shown, or null on a List's page or a Smart View.</summary>
+    public Tag? TagFilter => (Page as TaskListPage.TagPage)?.Tag;
+
+    /// <summary>
+    /// The List whose page is shown, or null on a Smart View or a Tag's page. Also null for the Default List
+    /// until the first load knows its id.
+    /// </summary>
+    public Guid? CurrentListId => (Page as TaskListPage.ListPage)?.ListId;
 
     // Positions in a Tag-filtered view or a Smart View are not List positions, so reordering is off there.
-    partial void OnTagFilterChanged(Tag? value)
-    {
-        UpdateReorderEnabled();
-        NotifyPageStateChanged();
-    }
-
-    partial void OnCurrentViewChanged(SmartView? value)
+    partial void OnPageChanged(TaskListPage value)
     {
         UpdateReorderEnabled();
         NotifyPageStateChanged();
     }
 
     private void UpdateReorderEnabled() =>
-        IsReorderEnabled = TagFilter is null && CurrentView is null && !IsNarrowed;
+        IsReorderEnabled = Page is TaskListPage.ListPage && !IsNarrowed;
+
+    /// <summary>Shows <paramref name="page"/> and loads its Tasks.</summary>
+    public async Task ShowAsync(TaskListPage page, CancellationToken cancellationToken = default)
+    {
+        Page = page;
+        await LoadAsync(cancellationToken);
+    }
+
+    /// <summary>Shows a List's page. Opening a List ends the search; Filters stay on.</summary>
+    public Task ShowListAsync(Guid listId, CancellationToken cancellationToken = default)
+    {
+        SearchText = "";
+        return ShowAsync(new TaskListPage.ListPage(listId), cancellationToken);
+    }
 
     // Loads may overlap (a reload after a Task change while a search reload runs). Each load takes a
     // version; only the latest one applies its results, so Tags are never added twice and an older query
@@ -206,11 +230,20 @@ public sealed partial class MainViewModel(
             Tags.Add(tag);
         }
 
-        if (TagFilter is not null)
+        if (TagFilter is { } filter)
         {
-            // Keep the filter on the current instance of its Tag, or drop it if the Tag was deleted.
-            var filterId = TagFilter.Id;
-            TagFilter = Tags.FirstOrDefault(t => t.Id == filterId);
+            // Keep the page on the current instance of its Tag, or go back to the Default List if it was deleted.
+            Page = Tags.FirstOrDefault(t => t.Id == filter.Id) is { } tag
+                ? new TaskListPage.TagPage(tag)
+                : TaskListPage.DefaultList;
+        }
+
+        // The Default List's placeholder page, or a List that was deleted, becomes the Default List's page.
+        if (Page is TaskListPage.ListPage { ListId: var shownListId }
+            && (shownListId is null || !_lists.ContainsKey(shownListId.Value))
+            && lists.FirstOrDefault(s => s.List.IsDefault) is { } fallback)
+        {
+            Page = new TaskListPage.ListPage(fallback.List.Id);
         }
 
         PruneFilterTags();
@@ -218,11 +251,14 @@ public sealed partial class MainViewModel(
 
         var tasks = IsNarrowed
             ? await Search.SearchAsync(BuildSearchQuery(0), cancellationToken)
-            : CurrentView is { } view
-            ? await Due.ListSmartViewAsync(view, 0, cancellationToken)
-            : TagFilter is null
-                ? await taskService.ListDefaultListTasksAsync(cancellationToken)
-                : await tagService.ListTasksByTagAsync(TagFilter.Id, cancellationToken);
+            : Page switch
+            {
+                TaskListPage.SmartViewPage page => await Due.ListSmartViewAsync(page.View, 0, cancellationToken),
+                TaskListPage.TagPage page => await tagService.ListTasksByTagAsync(page.Tag.Id, cancellationToken),
+                TaskListPage.ListPage { ListId: { } listId } =>
+                    await taskService.ListTasksInListAsync(listId, cancellationToken),
+                _ => await taskService.ListDefaultListTasksAsync(cancellationToken),
+            };
         if (version != _loadVersion)
         {
             return;
@@ -264,8 +300,12 @@ public sealed partial class MainViewModel(
             return; // ExecuteAsync does not honour CanExecute, so guard here too.
         }
 
-        // In a Smart View the Task goes to the Default List; in Today it is also due today.
-        var task = await taskService.CreateTaskAsync(QuickAddTitle, cancellationToken);
+        // On a List's page the Task goes to that List. Elsewhere it goes to the Default List; in Today it is
+        // also due today.
+        var task = Page is TaskListPage.ListPage { ListId: { } listId }
+            && _lists.TryGetValue(listId, out var list) && !list.IsDefault
+            ? await Creator.CreateTaskInListAsync(QuickAddTitle, listId, cancellationToken)
+            : await taskService.CreateTaskAsync(QuickAddTitle, cancellationToken);
         if (CurrentView is { } view)
         {
             if (view == SmartView.Today)
@@ -282,7 +322,7 @@ public sealed partial class MainViewModel(
             // The new Task may not match the search or the filters, so let them decide.
             await LoadAsync(cancellationToken);
         }
-        else if (TagFilter is null)
+        else if (Page is TaskListPage.ListPage)
         {
             // A new Task has no Tags, so it never belongs in a Tag-filtered view.
             var row = CreateRow(task);

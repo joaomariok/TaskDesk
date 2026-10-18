@@ -89,6 +89,18 @@ public sealed class ListHeaderTests
             await UiWait.UntilAsync(() => lists.Lists.Single(l => l.IsDefault).ColorHex == "#107C10",
                 () => "Colour did not colour the shown List.", Ct);
 
+            Invoke(colour.Items.Cast<MenuFlyoutItem>().Single(i => i.Text == "None"));
+            await UiWait.UntilAsync(() => lists.Lists.Single(l => l.IsDefault).ColorHex is null,
+                () => "None did not remove the shown List's colour.", Ct);
+
+            var work = await db.Get<IListService>().CreateListAsync("Work", Ct);
+            await lists.LoadAsync(Ct);
+            await viewModel.ShowListAsync(work.Id, Ct);
+            Invoke(colour.Items.Cast<MenuFlyoutItem>().Single(i => i.Text == "Green"));
+            await UiWait.UntilAsync(() => lists.Lists.Single(l => l.Name == "Work").ColorHex == "#107C10",
+                () => "Colour did not colour Work, the shown List.", Ct);
+            Assert.IsNull(lists.Lists.Single(l => l.IsDefault).ColorHex, "Colour also changed the Default List.");
+
             await viewModel.ShowSmartViewAsync(SmartView.Today, Ct);
             Assert.AreEqual(Visibility.Collapsed, button.Visibility, "A Smart View has no List menu.");
         }

@@ -58,6 +58,7 @@ public class TaskQueryDetailsTests
 
         AssertDetails("UpdateTaskAsync", await tasks.UpdateTaskAsync(id, "zeta-first", "notes", Priority.High, Ct));
         AssertDetails("ListDefaultListTasksAsync", await tasks.ListDefaultListTasksAsync(Ct), id);
+        AssertDetails("ListTasksInListAsync", await tasks.ListTasksInListAsync(task.ListId, Ct), id);
         AssertDetails("ListTasksByTagAsync", await db.Get<ITagService>().ListTasksByTagAsync(tagId, Ct), id);
         AssertDetails("SearchAsync (Default List)", await search.SearchAsync(new(Text: "zeta"), Ct), id);
         AssertDetails("SearchAsync (Tag)", await search.SearchAsync(new(ViewTagId: tagId), Ct), id);

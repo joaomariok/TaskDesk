@@ -131,8 +131,7 @@ public class PageHeadingViewModelTests
         var task = await service.CreateTaskAsync("Ship it", Ct);
         await tags.AddTagToTaskAsync(task.Id, "work", Ct);
         await vm.LoadAsync(Ct);
-        vm.TagFilter = vm.Tags.Single();
-        await vm.LoadAsync(Ct);
+        await vm.FilterByTagAsync(vm.Tags.Single(), Ct);
 
         Assert.Equal("#work", vm.PageHeading);
         Assert.Equal("Search in #work", vm.SearchScope);
@@ -149,7 +148,7 @@ public class PageHeadingViewModelTests
         var task = await service.CreateTaskAsync("Ship it", Ct);
         await tags.AddTagToTaskAsync(task.Id, "work", Ct);
         await vm.LoadAsync(Ct);
-        vm.TagFilter = vm.Tags.Single();
+        await vm.FilterByTagAsync(vm.Tags.Single(), Ct);
         await tags.RemoveTagFromTaskAsync(task.Id, vm.Tags.Single().Id, Ct);
 
         await vm.LoadAsync(Ct);

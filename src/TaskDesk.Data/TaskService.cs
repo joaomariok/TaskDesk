@@ -368,4 +368,17 @@ internal sealed class TaskService(
             .ThenBy(t => t.CreatedUtc)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<TaskItem>> ListTasksInListAsync(
+        Guid listId, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await context.Tasks
+            .AsNoTracking()
+            .WithDetails()
+            .Where(t => t.ListId == listId)
+            .OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.CreatedUtc)
+            .ToListAsync(cancellationToken);
+    }
 }

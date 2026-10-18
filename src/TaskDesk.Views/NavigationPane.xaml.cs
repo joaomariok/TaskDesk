@@ -100,7 +100,7 @@ public sealed partial class NavigationPane : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(MainViewModel.CurrentView) or nameof(MainViewModel.TagFilter))
+        if (e.PropertyName is nameof(MainViewModel.Page))
         {
             SyncSelection();
         }

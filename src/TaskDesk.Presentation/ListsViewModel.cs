@@ -50,8 +50,8 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
     private string? _errorMessage;
 
     /// <summary>
-    /// Raised after a List was renamed or recoloured, so the views that show its name or colour (the page
-    /// heading, the rows' stripes and captions) reload.
+    /// Raised after a List was renamed, recoloured or deleted, so the views that show its name or colour (the page
+    /// heading, the rows' stripes and captions) reload, and a page on a deleted List falls back to the Default List.
     /// </summary>
     public event EventHandler? ListEdited;
 
@@ -117,7 +117,12 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
 
             await listService.DeleteListAsync(item.Id, cancellationToken);
             await LoadAsync(cancellationToken);
+            ListEdited?.Invoke(this, EventArgs.Empty);
         });
+
+    /// <summary>The List with this id, or the Default List when there is none (or the id is null).</summary>
+    public ListItemViewModel? ListOrDefault(Guid? listId) =>
+        Lists.FirstOrDefault(l => l.Id == listId) ?? Lists.FirstOrDefault(l => l.IsDefault);
 
     /// <summary>Moves a List to the position currently held by <paramref name="target"/>.</summary>
     public Task MoveAsync(ListItemViewModel item, ListItemViewModel target, CancellationToken cancellationToken = default)

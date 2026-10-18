@@ -99,6 +99,16 @@ public class ListsViewModelTests
     }
 
     [Fact]
+    public async Task ListOrDefault_finds_the_List_or_falls_back_to_the_Default_List()
+    {
+        var (vm, _, _) = await StartAsync(("Work", 0));
+
+        Assert.Equal("Work", vm.ListOrDefault(vm.Lists[1].Id)?.Name);
+        Assert.Equal("Inbox", vm.ListOrDefault(Guid.NewGuid())?.Name);
+        Assert.Equal("Inbox", vm.ListOrDefault(null)?.Name);
+    }
+
+    [Fact]
     public async Task Delete_does_nothing_when_declined()
     {
         var (vm, _, dialogs) = await StartAsync(("Work", 2));
