@@ -315,7 +315,11 @@ public sealed partial class MainViewModel
                 return;
             }
 
-            _debounce = null;
+            // A later edit may have armed its own debounce already; clear only this save's.
+            if (_debounce is { } own && own.Token == token)
+            {
+                _debounce = null;
+            }
         }
 
         await previous; // saves of one Task never overlap

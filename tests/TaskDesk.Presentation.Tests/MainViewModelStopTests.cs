@@ -397,6 +397,68 @@ public sealed class MainViewModelStopTests
         Assert.Single(s.Service.Updates);
     }
 
+    // Queues every continuation instead of running it, so a test decides when a resumed await runs.
+    private sealed class QueuedContext : SynchronizationContext
+    {
+        private readonly Queue<(SendOrPostCallback Callback, object? State)> _queue = new();
+
+        public override void Post(SendOrPostCallback d, object? state) => _queue.Enqueue((d, state));
+
+        public int Count => _queue.Count;
+
+        public void RunQueued()
+        {
+            while (_queue.TryDequeue(out var item))
+            {
+                item.Callback(item.State);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task The_stop_saves_an_edit_made_after_an_earlier_save_debounce_ended_but_before_it_resumed()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        var context = new QueuedContext();
+        var original = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(context);
+        try
+        {
+            s.Vm.DetailTitle = "first";
+
+            // The first delay ends; its continuation is queued. A continuation runs inline when its context is the
+            // completing thread's current one, so the clock advances from outside the queued context.
+            SynchronizationContext.SetSynchronizationContext(null);
+            s.Clock.Advance(MainViewModel.SaveDebounce);
+            SynchronizationContext.SetSynchronizationContext(context);
+            Assert.True(context.Count > 0);
+            Assert.Empty(s.Service.Updates);
+            s.Vm.DetailTitle = "second"; // arms the next debounce before the first save resumes
+            context.RunQueued(); // the first save resumes
+
+            var stop = s.Vm.StopAsync();
+
+            // The lifetime completes its jobs on the thread pool; keep resuming the queued continuations until
+            // the stop is done. Nothing here waits for a clock: the guard only stops a hung stop from hanging us.
+            var guard = System.Diagnostics.Stopwatch.StartNew();
+            while (!stop.IsCompleted && guard.Elapsed < TimeSpan.FromSeconds(30))
+            {
+                context.RunQueued();
+                Thread.Yield();
+            }
+
+            Assert.True(stop.IsCompleted);
+            await stop;
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(original);
+        }
+
+        Assert.Equal(["first", "second"], s.Service.Updates.Select(u => u.Title));
+    }
+
     [Fact]
     public async Task After_the_stop_a_detail_edit_starts_no_save_debounce()
     {
