@@ -51,7 +51,6 @@ public sealed partial class NavigationPane : UserControl
             SyncSelection();
             QueueCountRefresh();
         };
-        FollowSplitterDragsWithoutMoves();
     }
 
     public MainViewModel ViewModel { get; }
@@ -97,44 +96,6 @@ public sealed partial class NavigationPane : UserControl
         Pane.IsPaneOpen = !rail;
         SidebarSplitter.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
         ShowCompact(rail && !Pane.IsPaneOpen);
-    }
-
-    // The splitter (a toolkit PropertySizer) resizes from manipulation deltas, which need pointer moves while the
-    // button is down, and it does not capture the pointer. Input that jumps between press and release (UI
-    // Automation's mouse, a touchpad that reports no move in between) then lands outside the splitter and never
-    // resizes. Capturing on press and resizing on release by the distance travelled covers that; when the
-    // manipulation already resized the pane, release leaves it alone.
-    private void FollowSplitterDragsWithoutMoves()
-    {
-        double? pressedAt = null;
-        double startWidth = 0;
-        var manipulated = false;
-        SidebarSplitter.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
-        {
-            if (!e.GetCurrentPoint(SidebarSplitter).Properties.IsLeftButtonPressed)
-            {
-                return;
-            }
-
-            pressedAt = e.GetCurrentPoint(null).Position.X;
-            startWidth = SidebarWidth;
-            manipulated = false;
-            SidebarSplitter.CapturePointer(e.Pointer);
-        }), handledEventsToo: true);
-        SidebarSplitter.AddHandler(ManipulationDeltaEvent,
-            new ManipulationDeltaEventHandler((_, _) => manipulated = true), handledEventsToo: true);
-        SidebarSplitter.AddHandler(PointerReleasedEvent, new PointerEventHandler((_, e) =>
-        {
-            if (pressedAt is { } start && !manipulated)
-            {
-                SidebarWidth = startWidth + e.GetCurrentPoint(null).Position.X - start;
-            }
-
-            pressedAt = null;
-            SidebarSplitter.ReleasePointerCapture(e.Pointer);
-        }), handledEventsToo: true);
-        SidebarSplitter.AddHandler(PointerCaptureLostEvent, new PointerEventHandler((_, _) => pressedAt = null),
-            handledEventsToo: true);
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

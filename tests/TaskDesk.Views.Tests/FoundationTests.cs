@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using static TaskDesk.Views.Tests.ThemeColours;
@@ -81,6 +82,46 @@ public sealed class FoundationTests
             Assert.IsGreaterThanOrEqualTo(4.5, Contrast(ink, window),
                 $"{theme}: {key} text contrast is {Contrast(ink, window):0.00}:1");
         }
+    }
+
+    // An implicit style applies to its exact type only: a subclass of a Fluent control without its own falls back to
+    // the framework's older template (CommandCheckBox once did: square corners, a box cut by a short check box).
+    [UITestMethod]
+    public void Every_subclass_of_a_Fluent_styled_control_has_an_implicit_style_based_on_Fluents()
+    {
+        var resources = Application.Current.Resources;
+        var foundation = Foundation();
+        var subclasses = typeof(CommandCheckBox).Assembly.GetExportedTypes()
+            .Where(t => !t.IsAbstract && t.IsSubclassOf(typeof(Control)) && !t.IsSubclassOf(typeof(UserControl)))
+            .Select(t => (Type: t, Fluent: FrameworkBase(t)))
+            .Where(c => resources.TryGetValue(c.Fluent, out var style) && style is Style)
+            .ToList();
+        CollectionAssert.IsSubsetOf(
+            new[] { typeof(CommandCheckBox), typeof(CommandToggleButton) }, subclasses.Select(c => c.Type).ToList(),
+            "The scan misses the known subclasses of Fluent-styled controls.");
+
+        var unstyled = subclasses.Where(c =>
+        {
+            var fluent = (Style)resources[c.Fluent];
+            return !foundation.TryGetValue(c.Type, out var value) || value is not Style own || own.TargetType != c.Type
+                || !(ReferenceEquals(own.BasedOn, fluent) || ReferenceEquals(own.BasedOn, fluent.BasedOn));
+        }).Select(c => $"{c.Type.Name} (needs <Style TargetType=\"local:{c.Type.Name}\" BasedOn=\"{{StaticResource Default{c.Fluent.Name}Style}}\" />)")
+            .ToList();
+
+        Assert.IsEmpty(unstyled,
+            $"Styles/Foundation.xaml has no implicit style, based on Fluent's, for: {string.Join(", ", unstyled)}");
+    }
+
+    // The nearest base type the framework defines (CheckBox for CommandCheckBox).
+    private static Type FrameworkBase(Type type)
+    {
+        var current = type.BaseType!;
+        while (current.Assembly == type.Assembly)
+        {
+            current = current.BaseType!;
+        }
+
+        return current;
     }
 
     private static ResourceDictionary Foundation() =>

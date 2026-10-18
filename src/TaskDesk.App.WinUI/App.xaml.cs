@@ -118,7 +118,7 @@ public partial class App : Application
         builder.Services.AddSingleton<HotkeyService>();
         builder.Services.AddTransient<QuickAddViewModel>();
         builder.Services.AddSingleton<IFolderOpener, ExplorerFolderOpener>();
-        builder.Services.AddSingleton<IClipboardService, WinUiClipboardService>();
+        builder.Services.AddSingleton<IClipboardService>(_ => new WinUiClipboardService());
         builder.Services.AddTransient(sp => new SettingsViewModel(
             sp.GetRequiredService<IShellSettingsStore>(),
             sp.GetRequiredService<AutoStartService>(),

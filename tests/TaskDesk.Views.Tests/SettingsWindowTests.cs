@@ -21,12 +21,14 @@ namespace TaskDesk.Views.Tests;
 [TestClass]
 public sealed class SettingsWindowTests
 {
-    // Combinations nobody uses, and not the ones the registrar tests or the UI tests take.
     private static readonly Hotkey Free = new(HotkeyModifiers.Ctrl | HotkeyModifiers.Alt | HotkeyModifiers.Shift, 0x77); // F8
     private static readonly Hotkey Taken = new(HotkeyModifiers.Ctrl | HotkeyModifiers.Alt | HotkeyModifiers.Shift, 0x76); // F7
 
     private const VirtualKeyModifiers CtrlAltShift =
         VirtualKeyModifiers.Control | VirtualKeyModifiers.Menu | VirtualKeyModifiers.Shift;
+
+    // The registrars register in a fake of the session's hotkey table, never the real one (shared with every app).
+    private readonly FakeHotkeyTable _hotkeyTable = new();
 
     // Start with Windows off, so switching it on is a change.
     private readonly InMemorySettingsStore _store = new() { Current = new ShellSettings(StartWithWindows: false) };
@@ -178,7 +180,7 @@ public sealed class SettingsWindowTests
             Assert.IsFalse(Named<InfoBar>(window, "Shortcut problem").IsOpen);
             // The combination is registered now: nobody else can take it.
             using var otherWindow = new MessageWindow();
-            using var other = new WinUiHotkeyRegistrar(otherWindow, NullLogger<WinUiHotkeyRegistrar>.Instance);
+            using var other = new WinUiHotkeyRegistrar(otherWindow, NullLogger<WinUiHotkeyRegistrar>.Instance, _hotkeyTable);
             Assert.IsFalse(other.TryRegister(Free), "The captured shortcut is not registered.");
         }
         finally
@@ -192,7 +194,7 @@ public sealed class SettingsWindowTests
     {
         var ct = TestContext.CancellationToken;
         using var ownerWindow = new MessageWindow();
-        using var owner = new WinUiHotkeyRegistrar(ownerWindow, NullLogger<WinUiHotkeyRegistrar>.Instance);
+        using var owner = new WinUiHotkeyRegistrar(ownerWindow, NullLogger<WinUiHotkeyRegistrar>.Instance, _hotkeyTable);
         Assert.IsTrue(owner.TryRegister(Taken));
         using var hotkeys = NewHotkeys();
         var window = await OpenAsync(NewViewModel(new ThemeService(), hotkeys), ct);
@@ -263,7 +265,7 @@ public sealed class SettingsWindowTests
     private HotkeyService NewHotkeys()
     {
         var messages = new MessageWindow();
-        var registrar = new WinUiHotkeyRegistrar(messages, NullLogger<WinUiHotkeyRegistrar>.Instance);
+        var registrar = new WinUiHotkeyRegistrar(messages, NullLogger<WinUiHotkeyRegistrar>.Instance, _hotkeyTable);
         var service = new HotkeyService(registrar, _store);
         // The registrar does not own its message window; dispose it once the service is disposed.
         _messageWindows.Add(messages);

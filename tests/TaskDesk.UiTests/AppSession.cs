@@ -38,6 +38,9 @@ public sealed class AppSession : IDisposable
 
     public Window Window { get; private set; } = null!;
 
+    /// <summary>The temp data folder this TaskDesk runs against (TASKDESK_DATA_DIR).</summary>
+    public string DataDirectory => _dataDirectory;
+
     /// <param name="theme">The <c>themeMode</c> setting: System, Light or Dark.</param>
     /// <param name="globalHotkey">The <c>globalHotkey</c> setting; empty registers none.</param>
     /// <param name="closeBehavior">The <c>closeBehavior</c> setting: Exit (the default here) or HideToTray.</param>
@@ -452,12 +455,15 @@ public sealed class AppSession : IDisposable
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint count, [In] Input[] inputs, int size);
 
-    /// <summary>Drags an element (a splitter) horizontally by <paramref name="dx"/> physical pixels.</summary>
+    /// <summary>
+    /// Drags an element (a splitter) horizontally by <paramref name="dx"/> physical pixels, with the pointer moves a
+    /// person's drag makes (<see cref="DragSlowly"/>), so the splitter resizes through its own manipulation.
+    /// </summary>
     public static void DragBy(AutomationElement element, int dx)
     {
         var bounds = element.BoundingRectangle;
         var start = new Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2);
-        Mouse.Drag(start, new Point(start.X + dx, start.Y));
+        DragSlowly(start, new Point(start.X + dx, start.Y));
     }
 
     public static T Eventually<T>(Func<T?> probe, string failure) where T : class

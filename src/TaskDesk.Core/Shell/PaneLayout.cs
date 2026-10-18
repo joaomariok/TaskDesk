@@ -45,12 +45,6 @@ public static class PaneLayout
     /// <summary>The width of the overlaid detail pane: its own width within its limits, but at least <see cref="DetailOverlayMinWidth"/>.</summary>
     public static double DetailOverlayWidth(double width) => Math.Max(DetailLimits.Clamp(width), DetailOverlayMinWidth);
 
-    /// <summary>
-    /// The docked detail pane's width after its splitter, on the pane's left edge, is dragged
-    /// <paramref name="dx"/> pixels from where the pane was <paramref name="startWidth"/> wide.
-    /// </summary>
-    public static double DraggedDetailWidth(double startWidth, double dx) => DetailLimits.Clamp(startWidth - dx);
-
     public static PaneLimits LimitsOf(string pane) => pane switch
     {
         Navigation => NavigationLimits,

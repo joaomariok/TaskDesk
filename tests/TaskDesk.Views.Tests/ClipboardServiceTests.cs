@@ -1,88 +1,85 @@
-using System.Runtime.InteropServices;
-using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using TaskDesk.App.Shell;
 
 namespace TaskDesk.Views.Tests;
 
 /// <summary>
-/// Settings' "Copy path" buttons put the path on the Windows clipboard. The shell source is linked in. The test
-/// reads the clipboard through Win32, which (unlike the WinRT clipboard) does not need the foreground.
+/// Settings' "Copy path" buttons put the path on the Windows clipboard (the shell source is linked in). These tests
+/// run the service against a fake of the Win32 clipboard: the real clipboard is the person's, shared with every
+/// app, so the gate must not write it. The real round trip is the UI suite's
+/// <c>SettingsWindowTests.Copy_path_puts_the_data_folder_on_the_clipboard</c>.
 /// </summary>
 [TestClass]
-public sealed partial class ClipboardServiceTests
+public sealed class ClipboardServiceTests
 {
-    private const uint CfUnicodeText = 13;
-
-    public TestContext TestContext { get; set; } = null!;
-
-    [UITestMethod]
-    public async Task SetText_puts_the_text_on_the_clipboard()
+    [TestMethod]
+    public void SetText_replaces_the_clipboard_contents_with_the_text_and_closes_it()
     {
-        var ct = TestContext.CancellationToken;
-        // Put back the owner's text afterwards, when there is some.
-        var previous = ReadText();
-        var text = $@"C:\TaskDesk-clipboard-test\{Guid.NewGuid():N}";
-        try
-        {
-            new WinUiClipboardService().SetText(text);
+        var clipboard = new FakeWin32Clipboard();
 
-            await UiWait.UntilAsync(() => ReadText() == text, () => "The clipboard does not hold the copied text.", ct);
-        }
-        finally
-        {
-            if (previous is not null)
-            {
-                new WinUiClipboardService().SetText(previous);
-            }
-        }
+        Service(clipboard).SetText(@"C:\Users\me\AppData\Local\TaskDesk");
+
+        CollectionAssert.AreEqual(
+            new[] { "Open", "Empty", @"SetUnicodeText C:\Users\me\AppData\Local\TaskDesk", "Close" }, clipboard.Calls);
     }
 
-    private static string? ReadText()
+    [TestMethod]
+    public void A_clipboard_another_app_holds_open_for_a_moment_is_tried_again()
     {
-        if (!OpenClipboard(0))
-        {
-            return null;
-        }
+        var clipboard = new FakeWin32Clipboard { RefusedOpens = 2 };
+        var waits = new List<TimeSpan>();
 
-        try
-        {
-            var handle = GetClipboardData(CfUnicodeText);
-            if (handle == 0)
-            {
-                return null;
-            }
+        Service(clipboard, waits.Add).SetText("path");
 
-            var pointer = GlobalLock(handle);
-            try
-            {
-                return Marshal.PtrToStringUni(pointer);
-            }
-            finally
-            {
-                GlobalUnlock(handle);
-            }
-        }
-        finally
-        {
-            CloseClipboard();
-        }
+        CollectionAssert.AreEqual(new[] { "Open", "Open", "Open", "Empty", "SetUnicodeText path", "Close" }, clipboard.Calls);
+        CollectionAssert.AreEqual(new[] { TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20) }, waits);
     }
 
-    [LibraryImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool OpenClipboard(nint owner);
+    [TestMethod]
+    public void A_clipboard_that_stays_held_is_given_up_after_five_tries_without_an_error()
+    {
+        var clipboard = new FakeWin32Clipboard { RefusedOpens = int.MaxValue };
 
-    [LibraryImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool CloseClipboard();
+        Service(clipboard).SetText("path");
 
-    [LibraryImport("user32.dll", SetLastError = true)]
-    private static partial nint GetClipboardData(uint format);
+        CollectionAssert.AreEqual(Enumerable.Repeat("Open", 5).ToList(), clipboard.Calls,
+            "A missed copy is not an error, and a clipboard it could not open is neither emptied nor closed.");
+    }
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    private static partial nint GlobalLock(nint memory);
+    [TestMethod]
+    public void A_clipboard_that_refuses_the_text_is_still_closed()
+    {
+        var clipboard = new FakeWin32Clipboard { RefusesText = true };
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GlobalUnlock(nint memory);
+        Service(clipboard).SetText("path");
+
+        CollectionAssert.AreEqual(new[] { "Open", "Empty", "SetUnicodeText path", "Close" }, clipboard.Calls);
+    }
+
+    private static WinUiClipboardService Service(FakeWin32Clipboard clipboard, Action<TimeSpan>? wait = null) =>
+        new(clipboard, wait ?? (_ => { }));
+
+    private sealed class FakeWin32Clipboard : IWin32Clipboard
+    {
+        public int RefusedOpens { get; init; }
+
+        public bool RefusesText { get; init; }
+
+        public List<string> Calls { get; } = [];
+
+        public bool Open()
+        {
+            Calls.Add("Open");
+            return Calls.Count(c => c == "Open") > RefusedOpens;
+        }
+
+        public void Empty() => Calls.Add("Empty");
+
+        public bool SetUnicodeText(string text)
+        {
+            Calls.Add($"SetUnicodeText {text}");
+            return !RefusesText;
+        }
+
+        public void Close() => Calls.Add("Close");
+    }
 }

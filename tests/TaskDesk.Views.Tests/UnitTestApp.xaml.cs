@@ -10,9 +10,16 @@ namespace TaskDesk.Views.Tests;
 /// </summary>
 public partial class UnitTestApp : Application
 {
+    // The process's own stderr, opened before the test platform redirects Console to capture each test's output.
+    private static readonly TextWriter CrashLog = new StreamWriter(Console.OpenStandardError()) { AutoFlush = true };
+
     private Window? _window;
 
-    public UnitTestApp() => InitializeComponent();
+    public UnitTestApp()
+    {
+        InitializeComponent();
+        ReportCrashes();
+    }
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -28,6 +35,32 @@ public partial class UnitTestApp : Application
         {
             _window.Close();
             Exit();
+        }
+    }
+
+    // An exception no test catches (an async void handler that outlives its window, say) ends the host with a bare
+    // 0xC000027B and no test name. Write it out first so the gate log names the cause. The exception stays
+    // unhandled: the host still dies and the run still fails.
+    private void ReportCrashes()
+    {
+        UnhandledException += (_, e) => Report("unhandled XAML exception", e.Exception, e.Message);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            Report("unhandled exception", e.ExceptionObject as Exception, null);
+        TaskScheduler.UnobservedTaskException += (_, e) => Report("unobserved task exception", e.Exception, null);
+    }
+
+    private static void Report(string kind, Exception? exception, string? message)
+    {
+        lock (CrashLog)
+        {
+            CrashLog.WriteLine($"TEST HOST CRASH ({kind}): {exception?.GetType().FullName}: {exception?.Message}");
+            // WinUI's message can carry more than the exception's own (the originating error).
+            if (message is { Length: > 0 } && message != exception?.Message)
+            {
+                CrashLog.WriteLine($"  {message}");
+            }
+
+            CrashLog.WriteLine(exception);
         }
     }
 }

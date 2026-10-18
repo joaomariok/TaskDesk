@@ -19,9 +19,6 @@ public sealed partial class DetailDock : UserControl
 {
     private double _detailWidth = PaneLayout.DetailLimits.Default;
 
-    // Where a press on the splitter started, so a drag the splitter itself did not apply still resizes the pane.
-    private (double X, double Width)? _splitterPress;
-
     public DetailDock(MainView page)
     {
         Page = page;
@@ -35,11 +32,6 @@ public sealed partial class DetailDock : UserControl
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         page.TaskList.DetailFocusRequested += (_, _) => Pane.FocusTitle();
-        // The splitter's own drag runs on manipulation events; a press and release with a single jump in
-        // between (some automation input) produces none, so the release applies the drag itself.
-        DetailSplitter.AddHandler(PointerPressedEvent, new PointerEventHandler(OnSplitterPressed), true);
-        DockRoot.AddHandler(PointerReleasedEvent, new PointerEventHandler(OnDockPointerReleased), true);
-        DetailSplitter.PointerCaptureLost += (_, _) => _splitterPress = null;
         ShowPane();
     }
 
@@ -149,27 +141,5 @@ public sealed partial class DetailDock : UserControl
         {
             _detailWidth = PaneLayout.DetailLimits.Clamp(width);
         }
-    }
-
-    private void OnSplitterPressed(object sender, PointerRoutedEventArgs e) =>
-        _splitterPress = (e.GetCurrentPoint(DockRoot).Position.X, DetailColumn.ActualWidth);
-
-    private void OnDockPointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        if (_splitterPress is not { } press)
-        {
-            return;
-        }
-
-        _splitterPress = null;
-        var dx = e.GetCurrentPoint(DockRoot).Position.X - press.X;
-        // The splitter's own drag already moved the column: nothing left to do.
-        if (Math.Abs(DetailColumn.ActualWidth - press.Width) >= 1 || Math.Abs(dx) < 1
-            || !ViewModel.IsDetailPaneVisible || !ViewModel.IsDetailDocked)
-        {
-            return;
-        }
-
-        DetailWidth = PaneLayout.DraggedDetailWidth(press.Width, dx);
     }
 }

@@ -10,20 +10,28 @@ namespace TaskDesk.App.Shell;
 /// window is hidden. Pressed is raised on the UI thread, whose message loop serves that window. Create and
 /// use it on the UI thread. It does not own the window.
 /// </summary>
-internal sealed partial class WinUiHotkeyRegistrar : IHotkeyRegistrar
+internal sealed class WinUiHotkeyRegistrar : IHotkeyRegistrar
 {
     private const uint WmHotkey = 0x0312;
     private const uint ModNoRepeat = 0x4000;
 
     private readonly MessageWindow _window;
     private readonly ILogger<WinUiHotkeyRegistrar> _logger;
+    private readonly IWin32Hotkeys _hotkeys;
     private Hotkey? _current;
     private int _currentId;
 
     public WinUiHotkeyRegistrar(MessageWindow window, ILogger<WinUiHotkeyRegistrar> logger)
+        : this(window, logger, new Win32Hotkeys())
+    {
+    }
+
+    // Internal, so dependency injection takes the public constructor and the real hotkey table.
+    internal WinUiHotkeyRegistrar(MessageWindow window, ILogger<WinUiHotkeyRegistrar> logger, IWin32Hotkeys hotkeys)
     {
         _window = window;
         _logger = logger;
+        _hotkeys = hotkeys;
         _window.AddHook(OnMessage);
     }
 
@@ -38,16 +46,16 @@ internal sealed partial class WinUiHotkeyRegistrar : IHotkeyRegistrar
 
         // Register under the other id first, so a failure leaves the working hotkey untouched.
         var newId = _currentId == 1 ? 2 : 1;
-        if (!RegisterHotKey(_window.Handle, newId, (uint)hotkey.Modifiers | ModNoRepeat, (uint)hotkey.VirtualKey))
+        if (!_hotkeys.TryRegister(_window.Handle, newId, (uint)hotkey.Modifiers | ModNoRepeat, (uint)hotkey.VirtualKey,
+                out var error))
         {
-            var error = new Win32Exception(Marshal.GetLastPInvokeError()).Message;
             _logger.LogWarning("Global hotkey {Hotkey} could not be registered: {Error}", hotkey, error);
             return false;
         }
 
         if (_current is not null)
         {
-            UnregisterHotKey(_window.Handle, _currentId);
+            _hotkeys.Unregister(_window.Handle, _currentId);
         }
 
         _current = hotkey;
@@ -63,7 +71,7 @@ internal sealed partial class WinUiHotkeyRegistrar : IHotkeyRegistrar
             return;
         }
 
-        UnregisterHotKey(_window.Handle, _currentId);
+        _hotkeys.Unregister(_window.Handle, _currentId);
         _current = null;
         _currentId = 0;
     }
@@ -85,6 +93,34 @@ internal sealed partial class WinUiHotkeyRegistrar : IHotkeyRegistrar
         Pressed?.Invoke();
         return true;
     }
+}
+
+/// <summary>The Win32 calls <see cref="WinUiHotkeyRegistrar"/> makes, so its tests need not register real hotkeys.</summary>
+internal interface IWin32Hotkeys
+{
+    /// <summary>RegisterHotKey; false, with the reason in <paramref name="error"/>, when another registration owns it.</summary>
+    bool TryRegister(nint window, int id, uint modifiers, uint virtualKey, out string error);
+
+    /// <summary>UnregisterHotKey.</summary>
+    void Unregister(nint window, int id);
+}
+
+/// <summary>The session's real hotkey table, shared with every app on the desktop.</summary>
+internal sealed partial class Win32Hotkeys : IWin32Hotkeys
+{
+    public bool TryRegister(nint window, int id, uint modifiers, uint virtualKey, out string error)
+    {
+        if (RegisterHotKey(window, id, modifiers, virtualKey))
+        {
+            error = "";
+            return true;
+        }
+
+        error = new Win32Exception(Marshal.GetLastPInvokeError()).Message;
+        return false;
+    }
+
+    public void Unregister(nint window, int id) => UnregisterHotKey(window, id);
 
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

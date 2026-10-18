@@ -27,6 +27,38 @@ public sealed class SettingsWindowTests : IDisposable
         AppSession.WaitUntil(() => !_app.SettingsWindowShown(), () => "The Settings window did not close.");
     }
 
+    // The real clipboard round trip, kept out of the gate (it is the person's clipboard, shared with every app). The
+    // in-process ClipboardServiceTests check the WinUI service's logic against a fake clipboard.
+    [Fact]
+    public void Copy_path_puts_the_data_folder_on_the_clipboard()
+    {
+        // Put back the person's text afterwards, when there is some.
+        var previous = SystemClipboard.ReadText();
+        try
+        {
+            AppSession.Ctrl(VirtualKeyShort.OEM_COMMA);
+            var settings = _app.SettingsWindow();
+            var copy = AppSession.Eventually(
+                () => settings.FindFirstDescendant(cf => cf.ByName("Copy data folder path")),
+                "Settings has no Copy data folder path button.").AsButton();
+
+            copy.Invoke();
+
+            var expected = Path.TrimEndingDirectorySeparator(Path.GetFullPath(_app.DataDirectory));
+            AppSession.WaitUntil(
+                () => SystemClipboard.ReadText() is { } text
+                    && string.Equals(Path.TrimEndingDirectorySeparator(text), expected, StringComparison.OrdinalIgnoreCase),
+                () => $"The clipboard holds '{SystemClipboard.ReadText()}', not the data folder '{expected}'.");
+        }
+        finally
+        {
+            if (previous is not null)
+            {
+                SystemClipboard.WriteText(previous);
+            }
+        }
+    }
+
     [Fact]
     public void Choosing_Hide_to_tray_in_Settings_makes_closing_the_main_window_hide_it()
     {

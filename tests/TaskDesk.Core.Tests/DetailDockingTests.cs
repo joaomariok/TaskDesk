@@ -35,14 +35,4 @@ public sealed class DetailDockingTests
     {
         Assert.Equal(overlay, PaneLayout.DetailOverlayWidth(width));
     }
-
-    [Theory]
-    [InlineData(260, -60, 320)]
-    [InlineData(260, 40, 220)]
-    [InlineData(260, 0, 260)]
-    [InlineData(500, -300, 600)]
-    public void Dragging_the_splitter_left_widens_the_pane_within_its_limits(double start, double dx, double width)
-    {
-        Assert.Equal(width, PaneLayout.DraggedDetailWidth(start, dx));
-    }
 }
