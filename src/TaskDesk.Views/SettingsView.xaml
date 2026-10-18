@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings as grouped native setting cards. Every change is applied and saved at once (SettingsViewModel).
+     The accessible names are the WPF window's: the UI tests and screen readers use them. -->
+<UserControl
+    x:Class="TaskDesk.Views.SettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ctk="using:CommunityToolkit.WinUI.Controls"
+    xmlns:local="using:TaskDesk.Views">
+    <UserControl.Resources>
+        <!-- A group's heading above its cards. -->
+        <Style x:Key="SettingsGroupHeading" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongText}">
+            <Setter Property="Margin" Value="1,28,0,4" />
+        </Style>
+        <!-- An outcome line under a card. -->
+        <Style x:Key="SettingsStatusText" TargetType="TextBlock" BasedOn="{StaticResource SecondaryCaptionText}">
+            <Setter Property="Margin" Value="1,2,0,4" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="IsTextSelectionEnabled" Value="True" />
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="4" Padding="24,16,24,24" MaxWidth="1000">
+            <TextBlock Text="Settings" Style="{StaticResource TitleText}" />
+
+            <TextBlock Text="Appearance" Style="{StaticResource SettingsGroupHeading}" />
+            <ctk:SettingsCard Header="Theme" Description="Use the Windows setting, or always Light or Dark.">
+                <ctk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE790;" />
+                </ctk:SettingsCard.HeaderIcon>
+                <ComboBox MinWidth="160"
+                          AutomationProperties.Name="Theme"
+                          ItemsSource="{x:Bind Themes, Mode=OneTime}"
+                          SelectedItem="{x:Bind ViewModel.Theme, Mode=TwoWay}" />
+            </ctk:SettingsCard>
+
+            <TextBlock Text="Startup and tray" Style="{StaticResource SettingsGroupHeading}" />
+            <ctk:SettingsCard Header="Start with Windows" Description="Open TaskDesk in the tray when you sign in.">
+                <ctk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE7E8;" />
+                </ctk:SettingsCard.HeaderIcon>
+                <ToggleSwitch AutomationProperties.Name="Start with Windows"
+                              IsOn="{x:Bind ViewModel.StartWithWindows, Mode=TwoWay}" />
+            </ctk:SettingsCard>
+            <ctk:SettingsCard Header="Close button" Description="What happens when you close the main window.">
+                <ctk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE737;" />
+                </ctk:SettingsCard.HeaderIcon>
+                <ComboBox MinWidth="160"
+                          AutomationProperties.Name="Close button behavior"
+                          ItemsSource="{x:Bind CloseBehaviors, Mode=OneTime}"
+                          SelectedItem="{x:Bind ViewModel.CloseBehavior, Mode=TwoWay}" />
+            </ctk:SettingsCard>
+
+            <TextBlock Text="Quick add" Style="{StaticResource SettingsGroupHeading}" />
+            <ctk:SettingsCard Header="Global shortcut" Description="Click the box and press a key combination.">
+                <ctk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE765;" />
+                </ctk:SettingsCard.HeaderIcon>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBox x:Name="HotkeyBox"
+                             Width="180"
+                             IsReadOnly="True"
+                             AutomationProperties.Name="Global hotkey (press a key combination)"
+                             Text="{x:Bind ViewModel.HotkeyText, Mode=OneWay}"
+                             PreviewKeyDown="OnHotkeyKeyDown" />
+                    <Button Content="Disable" Command="{x:Bind ViewModel.DisableHotkeyCommand, Mode=OneTime}" />
+                </StackPanel>
+            </ctk:SettingsCard>
+            <InfoBar Severity="Warning"
+                     IsClosable="False"
+                     AutomationProperties.Name="Shortcut problem"
+                     IsOpen="{x:Bind local:SettingsView.HasText(ViewModel.HotkeyError), Mode=OneWay}"
+                     Message="{x:Bind ViewModel.HotkeyError, Mode=OneWay}" />
+
+            <TextBlock Text="Reminders" Style="{StaticResource SettingsGroupHeading}" />
+            <ctk:SettingsCard Header="Default reminder time" Description="Used for date-only reminders, as HH:mm.">
+                <ctk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE823;" />
+                </ctk:SettingsCard.HeaderIcon>
+                <TextBox Width="80"
+                         AutomationProperties.Name="Default reminder time"
+                         Text="{x:Bind ViewModel.DefaultReminderTimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            </ctk:SettingsCard>
+            <TextBlock Text="Enter a time such as 09:00."
+                       Style="{StaticResource SettingsStatusText}"
+                       Foreground="{ThemeResource OverdueBrush}"
+                       Visibility="{x:Bind local:SettingsView.ShownWhenFalse(ViewModel.IsReminderTimeValid), Mode=OneWay}" />
+
+            <TextBlock Text="Data" Style="{StaticResource SettingsGroupHeading}" />
+            <ctk:SettingsCard Header="Data folder" Description="{x:Bind ViewModel.DataFolder, Mode=OneTime}">
+                <ctk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8B7;" />
+                </ctk:SettingsCard.HeaderIcon>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Open"
+                            AutomationProperties.Name="Open data folder"
+                            Command="{x:Bind ViewModel.OpenDataFolderCommand, Mode=OneTime}" />
+                    <Button Content="Copy path"
+                            AutomationProperties.Name="Copy data folder path"
+                            Command="{x:Bind ViewModel.CopyDataFolderCommand, Mode=OneTime}" />
+                </StackPanel>
+            </ctk:SettingsCard>
+            <ctk:SettingsCard Header="Export" Description="Save your tasks to a file.">
+                <ctk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xEDE1;" />
+                </ctk:SettingsCard.HeaderIcon>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Export to JSON…"
+                            AutomationProperties.Name="Export everything to JSON"
+                            Command="{x:Bind ViewModel.ExportJsonCommand, Mode=OneTime}" />
+                    <Button Content="Export to CSV…"
+                            AutomationProperties.Name="Export tasks to CSV"
+                            Command="{x:Bind ViewModel.ExportCsvCommand, Mode=OneTime}" />
+                </StackPanel>
+            </ctk:SettingsCard>
+            <TextBlock Style="{StaticResource SettingsStatusText}"
+                       Text="{x:Bind ViewModel.ExportStatus, Mode=OneWay}"
+                       Visibility="{x:Bind local:SettingsView.ShownWhenText(ViewModel.ExportStatus), Mode=OneWay}" />
+            <ctk:SettingsCard Header="Import" Description="Merge or replace your data from a JSON export.">
+                <ctk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8B5;" />
+                </ctk:SettingsCard.HeaderIcon>
+                <Button Content="Import…"
+                        AutomationProperties.Name="Import a JSON export"
+                        Command="{x:Bind ViewModel.ImportCommand, Mode=OneTime}" />
+            </ctk:SettingsCard>
+            <TextBlock Style="{StaticResource SettingsStatusText}"
+                       Text="{x:Bind ViewModel.ImportStatus, Mode=OneWay}"
+                       Visibility="{x:Bind local:SettingsView.ShownWhenText(ViewModel.ImportStatus), Mode=OneWay}" />
+            <ctk:SettingsCard Header="Back up" Description="Save a copy of your database now.">
+                <ctk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE81C;" />
+                </ctk:SettingsCard.HeaderIcon>
+                <Button Content="Back up now"
+                        AutomationProperties.Name="Back up now"
+                        Command="{x:Bind ViewModel.BackUpNowCommand, Mode=OneTime}" />
+            </ctk:SettingsCard>
+            <TextBlock Style="{StaticResource SettingsStatusText}"
+                       Text="{x:Bind ViewModel.BackupStatus, Mode=OneWay}"
+                       Visibility="{x:Bind local:SettingsView.ShownWhenText(ViewModel.BackupStatus), Mode=OneWay}" />
+
+            <TextBlock Text="About" Style="{StaticResource SettingsGroupHeading}" />
+            <ctk:SettingsCard Header="TaskDesk" Description="{x:Bind local:SettingsView.VersionText(ViewModel.Version), Mode=OneTime}">
+                <ctk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE946;" />
+                </ctk:SettingsCard.HeaderIcon>
+            </ctk:SettingsCard>
+            <ctk:SettingsCard Header="Log folder" Description="{x:Bind ViewModel.LogFolder, Mode=OneTime}">
+                <ctk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE9F9;" />
+                </ctk:SettingsCard.HeaderIcon>
+                <Button Content="Copy path"
+                        AutomationProperties.Name="Copy log folder path"
+                        Command="{x:Bind ViewModel.CopyLogFolderCommand, Mode=OneTime}" />
+            </ctk:SettingsCard>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

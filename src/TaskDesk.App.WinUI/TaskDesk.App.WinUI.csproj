@@ -28,6 +28,7 @@
     <!-- Non-UI shell implementations, shared by source with the WPF app until the swap. -->
     <Compile Include="..\TaskDesk.App\Shell\NamedPipeSingleInstance.cs" Link="Shell\NamedPipeSingleInstance.cs" />
     <Compile Include="..\TaskDesk.App\Shell\RegistryRunKey.cs" Link="Shell\RegistryRunKey.cs" />
+    <Compile Include="..\TaskDesk.App\Shell\ExplorerFolderOpener.cs" Link="Shell\ExplorerFolderOpener.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TaskDesk.Core\TaskDesk.Core.csproj" />

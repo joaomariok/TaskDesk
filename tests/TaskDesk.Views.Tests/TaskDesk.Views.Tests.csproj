@@ -45,5 +45,6 @@
     <!-- WinUI shell sources under test, linked from the shell exe (an exe cannot be referenced here). -->
     <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\MessageWindow.cs" Link="Shell\MessageWindow.cs" />
     <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\WinUiHotkeyRegistrar.cs" Link="Shell\WinUiHotkeyRegistrar.cs" />
+    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\WinUiClipboardService.cs" Link="Shell\WinUiClipboardService.cs" />
   </ItemGroup>
 </Project>

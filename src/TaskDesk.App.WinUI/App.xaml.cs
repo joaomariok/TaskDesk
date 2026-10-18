@@ -1,10 +1,14 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using TaskDesk.App.Shell;
+using TaskDesk.Core.Backups;
+using TaskDesk.Core.Export;
+using TaskDesk.Core.Import;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Shell;
 using TaskDesk.Data;
@@ -67,8 +71,10 @@ public partial class App : Application
         builder.Logging.AddTaskDeskFileLogging(paths);
         builder.Services.AddSingleton(mode);
         builder.Services.AddTaskDeskData(paths);
-        // Every confirmation and message is a content dialog on the main window; file pickers open on it too.
-        builder.Services.AddSingleton(sp => new DialogService(() => sp.GetRequiredService<MainWindow>()));
+        // Every confirmation and message is a content dialog on the window in use (main or Settings); file pickers
+        // open on it too.
+        builder.Services.AddSingleton<ActiveWindow>();
+        builder.Services.AddSingleton(sp => new DialogService(() => sp.GetRequiredService<ActiveWindow>().Current));
         builder.Services.AddSingleton<WinUiDialogs>();
         builder.Services.AddSingleton<IListDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
         builder.Services.AddSingleton<IExportDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
@@ -93,6 +99,24 @@ public partial class App : Application
         builder.Services.AddSingleton<IHotkeyRegistrar, WinUiHotkeyRegistrar>();
         builder.Services.AddSingleton<HotkeyService>();
         builder.Services.AddTransient<QuickAddViewModel>();
+        builder.Services.AddSingleton<IFolderOpener, ExplorerFolderOpener>();
+        builder.Services.AddSingleton<IClipboardService, WinUiClipboardService>();
+        builder.Services.AddTransient(sp => new SettingsViewModel(
+            sp.GetRequiredService<IShellSettingsStore>(),
+            sp.GetRequiredService<AutoStartService>(),
+            sp.GetRequiredService<IThemeService>(),
+            sp.GetRequiredService<IFolderOpener>(),
+            sp.GetRequiredService<IAppPaths>(),
+            Environment.ProcessPath ?? "",
+            AppVersion(),
+            sp.GetRequiredService<HotkeyService>(),
+            sp.GetRequiredService<IBackupService>(),
+            sp.GetRequiredService<IExportService>(),
+            sp.GetRequiredService<IExportDialogs>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<IImportService>(),
+            sp.GetRequiredService<IImportDialogs>(),
+            sp.GetRequiredService<IClipboardService>()));
         _host = builder.Build();
 
         await _host.StartAsync();
@@ -120,6 +144,7 @@ public partial class App : Application
         // The saved theme applies before the window first shows; later switches reach it live.
         var themes = _host.Services.GetRequiredService<ThemeService>();
         themes.Register(window);
+        _host.Services.GetRequiredService<ActiveWindow>().Register(window);
         themes.Apply(_host.Services.GetRequiredService<IShellSettingsStore>().Load().Theme);
         var layout = _host.Services.GetRequiredService<WindowLayoutService>();
         layout.Restore(window);
@@ -151,6 +176,10 @@ public partial class App : Application
         var hotkeys = _host.Services.GetRequiredService<HotkeyService>();
         hotkeys.Triggered += () => window.DispatcherQueue.TryEnqueue(ShowQuickAdd);
         hotkeys.Start();
+
+        // The tray's Settings and Ctrl+comma open the Settings window.
+        shell.SettingsRequested += () => window.DispatcherQueue.TryEnqueue(ShowSettings);
+        window.ViewModel.SettingsRequested += (_, _) => ShowSettings();
 
         var exePath = Environment.ProcessPath ?? throw new InvalidOperationException("No process path.");
         await shell.StartAsync(minimizedFlag, exePath);
@@ -204,6 +233,54 @@ public partial class App : Application
             _quickAddOpening = false;
         }
     }
+
+    private SettingsWindow? _settingsWindow;
+
+    /// <summary>Opens the Settings window, or brings the open one forward. An import reloads the main window.</summary>
+    private void ShowSettings()
+    {
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+
+        try
+        {
+            var main = _host!.Services.GetRequiredService<MainWindow>();
+            var settings = _host.Services.GetRequiredService<SettingsViewModel>();
+            // Save the pending detail edit and close the pane first, so no stale edit lands on imported data.
+            settings.BeforeImport = main.ViewModel.PrepareForImportAsync;
+#pragma warning disable VSTHRD101 // Action event; a failed reload reaches the UnhandledException log
+            // The import changed Lists, Tags and Tasks underneath the main window: reload both panes.
+            settings.Imported += async () =>
+            {
+                await main.ViewModel.LoadAsync();
+                if (main.Lists is not null)
+                {
+                    await main.Lists.LoadAsync();
+                }
+            };
+#pragma warning restore VSTHRD101
+
+            var window = new SettingsWindow(settings);
+            window.AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "TaskDesk.ico"));
+            _host.Services.GetRequiredService<ThemeService>().Register(window);
+            // Its dialogs and file pickers open on it.
+            _host.Services.GetRequiredService<ActiveWindow>().Register(window);
+            window.Closed += (_, _) => _settingsWindow = null;
+            _settingsWindow = window;
+            window.Activate();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _host!.Services.GetRequiredService<ILogger<App>>().LogError(ex, "The Settings window could not open");
+        }
+    }
+
+    private static string AppVersion() =>
+        (Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+         ?? "0.0.0").Split('+')[0];
 
     private const int AsfwAny = -1;
 

@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Input;
 using TaskDesk.Core.Shell;
 using TaskDesk.Presentation;
+using Windows.System;
 
 namespace TaskDesk.Views;
 
@@ -31,6 +33,7 @@ public sealed partial class MainWindow : Window
         }
 
         Content = Navigation;
+        AddSettingsAccelerator(viewModel);
         // The quick-add box has the initial focus of the window.
         View.Loaded += (_, _) => View.FocusQuickAdd();
     }
@@ -64,4 +67,18 @@ public sealed partial class MainWindow : Window
     }
 
     public MainViewModel ViewModel => View.ViewModel;
+
+    // Ctrl+comma opens Settings from anywhere in the window; no tooltip names it.
+    private void AddSettingsAccelerator(MainViewModel viewModel)
+    {
+        const VirtualKey comma = (VirtualKey)0xBC; // VK_OEM_COMMA: VirtualKey has no name for it.
+        var accelerator = new KeyboardAccelerator { Key = comma, Modifiers = VirtualKeyModifiers.Control };
+        accelerator.Invoked += (_, args) =>
+        {
+            args.Handled = true;
+            viewModel.OpenSettingsCommand.Execute(null);
+        };
+        Navigation.KeyboardAccelerators.Add(accelerator);
+        Navigation.KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;
+    }
 }
