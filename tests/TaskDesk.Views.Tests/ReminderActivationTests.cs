@@ -90,7 +90,7 @@ public sealed class ReminderActivationTests
         shell.ActivationRequested += router.Route;
         try
         {
-            Assert.IsTrue(await shell.StartAsync(minimized: true, exePath: "TaskDesk.App.WinUI.exe", Ct));
+            Assert.IsTrue(await shell.StartAsync(minimized: true, exePath: "TaskDesk.App.exe", Ct));
 
             using (var later = new NamedPipeSingleInstance(names))
             {

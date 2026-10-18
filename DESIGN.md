@@ -1,6 +1,6 @@
 ---
 name: TaskDesk
-description: A quiet, native Windows 11 to-do list built on WPF's Fluent theme.
+description: A quiet, native Windows 11 to-do list built on WinUI 3's Fluent controls.
 colors:
   text-primary: "#000000E4"
   text-primary-dark: "#FFFFFF"
@@ -112,7 +112,7 @@ components:
 
 **Creative North Star: "The Quiet Desk"**
 
-TaskDesk is a tidy desk that is always there and never asks for attention. It is a native Windows 11 app on WPF's built-in Fluent theme (`Application.ThemeMode`), so the window, the controls, the type ramp and every colour come from Windows itself and follow Light, Dark and high contrast without a line of TaskDesk code. The design's job is restraint: calm Fluent surfaces, one list the eye can scan in a glance, and colour that appears only where it carries meaning (a Task that is Overdue, a Due that is today, a List's own colour).
+TaskDesk is a tidy desk that is always there and never asks for attention. It is a native Windows 11 app on WinUI 3 and its Fluent controls, with Mica behind the window, so the window, the controls, the type ramp and every colour come from Windows itself and follow Light, Dark and high contrast without a line of TaskDesk code. The design's job is restraint: calm Fluent surfaces, one list the eye can scan in a glance, and colour that appears only where it carries meaning (a Task that is Overdue, a Due that is today, a List's own colour).
 
 Its signature is soft and small, and it should be reused, not reinvented: pill chips for Due and Tags, count badges in the sidebar and the rail, a List-colour stripe on each row. These pieces are built on Fluent's own brushes and radii, so they read as part of Windows, but together they make a TaskDesk screen recognisable. Density is that of a desktop tool used all day at mid-size: 14 px body text, rows that fit one line, panels that appear on demand rather than crowding the list.
 
@@ -153,7 +153,7 @@ A neutral Fluent palette lifted by the user's own Windows accent, with two signa
 ### Named Rules
 **The Meaning-Only Rule.** Colour beyond the neutrals and the system accent marks a fact: Overdue, today, caution, or which List a Task belongs to. Never use colour for decoration.
 
-**The Theme-Resource Rule.** Every colour in the app is a `DynamicResource` to a Fluent key or one of the meaning-named brushes (`OverdueBrush`, `TodayBrush`, `ListStripeBrush`); the only literal colours are the List presets. A new meaning gets a new named brush in `FoundationResources`, not a hex value in XAML.
+**The Theme-Resource Rule.** Every colour in the app is a `{ThemeResource}` to a Fluent key or one of the meaning-named brushes (`OverdueBrush`, `TodayBrush`, `ListStripeBrush`); the only literal colours are the List presets. A new meaning gets a new named brush in each theme dictionary of `TaskDesk.Views/Styles/Foundation.xaml`, not a hex value in XAML.
 
 **The Words-Too Rule.** In high contrast every signal colour becomes the system text colour, so meaning must also be in text: "Overdue" sits in the Overdue header and the badge shows a count.
 
@@ -236,7 +236,7 @@ One heading row: on the left, the subtitle-size name of what is shown with a "â‹
 ### Inputs / Fields
 - **Style:** Fluent's text boxes, combo boxes and date pickers, unrestyled, each with a visible label above (`FieldLabel`) and an accessible name.
 - **Focus:** Fluent's focus visual. An empty list takes no keyboard focus, so no outline is drawn around nothing.
-- **Hints:** an empty time box shows its format in soft ink ("HH:mm", or "09:00" where empty means 09:00), drawn over the box since WPF has no placeholder; the same words are its help text.
+- **Hints:** an empty time box shows its format in soft ink ("HH:mm", or "09:00" where empty means 09:00), as the box's placeholder text; the same words are its help text.
 - **Errors:** a validation error shows in Overdue Red caption text directly under its field; an error that belongs to no field (a failed save) shows under the detail pane's fixed header, which a hairline parts from the scrolling fields.
 - **Read-only facts:** shown as text, never as a read-only box (the detail pane's List is its dot or ring and name).
 
@@ -253,8 +253,8 @@ Plain soft-ink body text with no box or outline, specific to the page ("Nothing 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** base every style on the Fluent style it replaces (`BasedOn="{StaticResource {x:Type X}}"`) and merge it in `App.xaml` after `ThemeMode` is set.
-- **Do** take colour from Fluent keys or the meaning-named brushes through `DynamicResource`, and add any new meaning to `FoundationResources`.
+- **Do** use the native WinUI control first; a derived control gets its own style `BasedOn` the Fluent default style, in `Styles/Foundation.xaml`.
+- **Do** take colour from Fluent keys or the meaning-named brushes through `{ThemeResource}`, and add any new meaning to each theme dictionary of `Styles/Foundation.xaml`.
 - **Do** reuse the signature pieces (pill chips, badges, List stripe) before designing a new one.
 - **Do** give every control a visible label and an `AutomationProperties.Name`, and check it in Light, Dark and high contrast.
 - **Do** keep rows to one line, with the full title in a tooltip.

@@ -7,9 +7,8 @@ using FlaUI.Core.WindowsAPI;
 namespace TaskDesk.UiTests;
 
 /// <summary>
-/// The Lists in the WinUI build's sidebar, with real input in a real process: a List dragged to a new place keeps
-/// it after a restart, and Shift+F10 and the Menu key open a List's context menu. Written for the WinUI build
-/// (ui-tests.ps1 -WinUI).
+/// The Lists in the sidebar, with real input in a real process: a List dragged to a new place keeps it after a
+/// restart, and Shift+F10 and the Menu key open a List's context menu.
 /// </summary>
 public sealed class ListsPaneTests : IDisposable
 {

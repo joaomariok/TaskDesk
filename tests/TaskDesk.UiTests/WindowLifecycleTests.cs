@@ -5,7 +5,6 @@ namespace TaskDesk.UiTests;
 /// <summary>
 /// The main window's lifecycle in a real process (MANUAL-TESTS: Tray and window): close exits with the Exit close
 /// behaviour, a restart restores the size and position, and a second launch brings the running window forward.
-/// Framework-neutral: they run against the WPF build by default and the WinUI build with ui-tests.ps1 -WinUI.
 /// </summary>
 public sealed class WindowLifecycleTests : IDisposable
 {

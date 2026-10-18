@@ -6,7 +6,7 @@
 
 web
 
-> The schema has no Windows value. TaskDesk is a native Windows 11 desktop app (WPF on .NET 10, built-in Fluent theme via `Application.ThemeMode`), not a web app. Follow Windows 11 / Fluent conventions, never web ones.
+> The schema has no Windows value. TaskDesk is a native Windows 11 desktop app (WinUI 3 on .NET 10, native Fluent controls), not a web app. Follow Windows 11 / Fluent conventions, never web ones.
 
 ## Users
 Primary: the owner, a senior C#/C++ Windows developer, using it as a personal to-do list on their own PC through the working day. Other Windows 11 users may come later; this is undecided, so no surface should assume them yet (no onboarding, accounts or marketing).

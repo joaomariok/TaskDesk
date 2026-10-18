@@ -5,7 +5,7 @@ using TaskDesk.Core.Shell;
 namespace TaskDesk.App.Shell;
 
 /// <summary>
-/// Puts text on the Windows clipboard for Settings' "Copy path" buttons. Win32, like the WPF app's clipboard: the
+/// Puts text on the Windows clipboard for Settings' "Copy path" buttons. Win32: the
 /// WinRT clipboard refuses an app whose window lacks the focus, and the text stays after TaskDesk exits.
 /// </summary>
 internal sealed class WinUiClipboardService(IWin32Clipboard clipboard, Action<TimeSpan> wait, ILogger logger) : IClipboardService

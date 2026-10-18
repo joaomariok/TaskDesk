@@ -1,15 +1,14 @@
 #requires -Version 7
 # Starts TaskDesk on a throwaway data folder, for looking at it with `winapp ui` (the ui-check skill). The folder
 # turns on sandbox mode, so the owner's data, the Run key and notification registration are never touched.
-#   -WinUI               run the WinUI app (src/TaskDesk.App.WinUI, TaskDesk.App.WinUI.exe) instead of the WPF one
 #   -Theme <name>        Light, Dark or System (default), written to the folder's settings.json
 #   -Width/-Height <px>  the main window's size (the app's minimum is 800 x 500; below 900 wide the sidebar is
 #                        the icon rail); unset, the app opens at its default 900 x 600
 #   -SampleTasks <n>     fill the folder with n varied Tasks first (tools/TaskDesk.SampleData); 0 starts empty
 #   -Ref <git ref>       run that commit instead of this checkout, for a before/after look (for example main). It is
 #                        checked out in a worktree under %TEMP%\TaskDesk-ref-<ref> and built there; the worktree
-#                        stays for the next run (remove it with `git worktree remove`). With -WinUI the ref must
-#                        hold src/TaskDesk.App.WinUI.
+#                        stays for the next run (remove it with `git worktree remove`). A ref from before the
+#                        WinUI swap (#68) runs the WPF app, which has the same project path and exe name.
 # Closing the window exits the app. It prints the process id for `winapp ui ... -a <pid>` and the data folder.
 # Each run first deletes the sandbox folders of earlier runs whose app has exited.
 param(
@@ -17,13 +16,11 @@ param(
     [int]$Width,
     [int]$Height,
     [ValidateRange(0, 100000)][int]$SampleTasks = 0,
-    [string]$Ref,
-    [switch]$WinUI
+    [string]$Ref
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-# The app to run: the WPF app by default; the WinUI shell keeps its own assembly name until the swap (#68).
-$appName = $WinUI ? 'TaskDesk.App.WinUI' : 'TaskDesk.App'
+$appName = 'TaskDesk.App'
 
 # Earlier sandboxes: each holds the id of the app that used it.
 foreach ($old in Get-ChildItem $env:TEMP -Directory -Filter 'TaskDesk-sandbox-*') {

@@ -42,17 +42,17 @@
     <Compile Include="..\TaskDesk.Data.Tests\TempDatabase.cs" Link="Helpers\TempDatabase.cs" />
   </ItemGroup>
   <ItemGroup>
-    <!-- WinUI shell sources under test, linked from the shell exe (an exe cannot be referenced here). -->
-    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\MessageWindow.cs" Link="Shell\MessageWindow.cs" />
-    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\WinUiHotkeyRegistrar.cs" Link="Shell\WinUiHotkeyRegistrar.cs" />
-    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\WinUiClipboardService.cs" Link="Shell\WinUiClipboardService.cs" />
-    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\SessionEndHook.cs" Link="Shell\SessionEndHook.cs" />
-    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\PowerResumeHook.cs" Link="Shell\PowerResumeHook.cs" />
-    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\NotificationServices.cs" Link="Shell\NotificationServices.cs" />
-    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\ReminderActivationRouter.cs" Link="Shell\ReminderActivationRouter.cs" />
-    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\TrayMenu.cs" Link="Shell\TrayMenu.cs" />
-    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\NativeMenuTheme.cs" Link="Shell\NativeMenuTheme.cs" />
-    <Compile Include="..\..\src\TaskDesk.App.WinUI\Shell\ActionCommand.cs" Link="Shell\ActionCommand.cs" />
+    <!-- Shell sources under test, linked from the shell exe (an exe cannot be referenced here). -->
+    <Compile Include="..\..\src\TaskDesk.App\Shell\MessageWindow.cs" Link="Shell\MessageWindow.cs" />
+    <Compile Include="..\..\src\TaskDesk.App\Shell\WinUiHotkeyRegistrar.cs" Link="Shell\WinUiHotkeyRegistrar.cs" />
+    <Compile Include="..\..\src\TaskDesk.App\Shell\WinUiClipboardService.cs" Link="Shell\WinUiClipboardService.cs" />
+    <Compile Include="..\..\src\TaskDesk.App\Shell\SessionEndHook.cs" Link="Shell\SessionEndHook.cs" />
+    <Compile Include="..\..\src\TaskDesk.App\Shell\PowerResumeHook.cs" Link="Shell\PowerResumeHook.cs" />
+    <Compile Include="..\..\src\TaskDesk.App\Shell\NotificationServices.cs" Link="Shell\NotificationServices.cs" />
+    <Compile Include="..\..\src\TaskDesk.App\Shell\ReminderActivationRouter.cs" Link="Shell\ReminderActivationRouter.cs" />
+    <Compile Include="..\..\src\TaskDesk.App\Shell\TrayMenu.cs" Link="Shell\TrayMenu.cs" />
+    <Compile Include="..\..\src\TaskDesk.App\Shell\NativeMenuTheme.cs" Link="Shell\NativeMenuTheme.cs" />
+    <Compile Include="..\..\src\TaskDesk.App\Shell\ActionCommand.cs" Link="Shell\ActionCommand.cs" />
     <Compile Include="..\..\src\TaskDesk.App\Shell\NamedPipeSingleInstance.cs" Link="Shell\NamedPipeSingleInstance.cs" />
     <Compile Include="..\..\src\TaskDesk.App\Notifications\TrayBalloonNotificationService.cs" Link="Notifications\TrayBalloonNotificationService.cs" />
     <Compile Include="..\..\src\TaskDesk.App\Notifications\AppSdkNotificationService.cs" Link="Notifications\AppSdkNotificationService.cs" />

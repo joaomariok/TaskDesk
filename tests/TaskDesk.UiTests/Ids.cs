@@ -22,7 +22,6 @@ internal static class Ids
     public const string PageHeading = nameof(PageHeading);
     public const string QuickAddBox = nameof(QuickAddBox);
     public const string RailListsList = nameof(RailListsList);
-    public const string RailSmartViewList = nameof(RailSmartViewList);
     public const string RailTagList = nameof(RailTagList);
     public const string RailTagsButton = nameof(RailTagsButton);
     public const string SidebarExpandButton = nameof(SidebarExpandButton);

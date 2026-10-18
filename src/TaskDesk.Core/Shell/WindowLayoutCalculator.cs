@@ -11,7 +11,7 @@ public readonly record struct MonitorArea(PixelRect Bounds, PixelRect WorkArea, 
 
 /// <summary>
 /// Pure window-geometry calculations. The stored <see cref="WindowLayout"/> is in device-independent
-/// pixels (DIPs) as the WPF app writes them; a shell that places windows in physical pixels converts with
+/// pixels (DIPs) as the earlier WPF app wrote them; a shell that places windows in physical pixels converts with
 /// <see cref="ToLayout"/> and <see cref="Place"/>.
 /// </summary>
 public static class WindowLayoutCalculator
@@ -51,14 +51,14 @@ public static class WindowLayoutCalculator
         return layout with { Left = left, Top = top, Width = width, Height = height };
     }
 
-    // The stored layout means what the WPF app writes, so settings.json reads the same in both builds. That app is
-    // system-DPI aware (it has no manifest, and WPF then opts the process in): its DIPs are the coordinates Windows
+    // The stored layout means what the earlier WPF app wrote, so its settings.json carries over. That app was
+    // system-DPI aware (it had no manifest, and WPF then opts the process in): its DIPs are the coordinates Windows
     // virtualizes for it, divided by the system scale S (the primary monitor's at sign-in). Windows virtualizes a
     // monitor whose scale s differs from S about the monitor's own top-left corner O, so a physical point p on it is
     // stored as O / S + (p - O) / s. On a monitor at the system scale that is the plain p / S.
 
     /// <summary>
-    /// Converts a window's normal bounds (physical pixels) to the layout the WPF app would write for it, on the
+    /// Converts a window's normal bounds (physical pixels) to the layout the WPF app wrote for it, on the
     /// monitor that holds most of the window. <see cref="WindowLayout.PaneWidths"/> is left unset.
     /// </summary>
     /// <param name="systemScale">The system scale (the system DPI / 96).</param>
@@ -79,7 +79,7 @@ public static class WindowLayoutCalculator
     }
 
     /// <summary>
-    /// Returns the normal bounds (physical pixels) for a layout as the WPF app writes it: on the monitor whose area
+    /// Returns the normal bounds (physical pixels) for a layout as the WPF app wrote it: on the monitor whose area
     /// in those coordinates holds most of it (else the nearest one), fitted to that monitor's work area.
     /// </summary>
     /// <param name="systemScale">The system scale (the system DPI / 96).</param>

@@ -14,7 +14,8 @@ namespace TaskDesk.Views;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
-    // The WPF window's size and minimum size, in DIPs; the shell restores a saved layout over the default.
+    // The window's size and minimum size in DIPs, as the WPF window had them; the shell restores a saved layout
+    // over the default.
     public const double DefaultWidth = 900;
     public const double DefaultHeight = 600;
     public const double MinimumWidth = 800;
@@ -44,7 +45,7 @@ public sealed partial class MainWindow : Window
         }
 
         Content = Navigation;
-        // The window's width decides the rail and whether the detail pane docks, as it does in the WPF window.
+        // The window's width decides the rail and whether the detail pane docks.
         FollowWindowWidth();
         AppWindow.Changed += (_, e) =>
         {
@@ -125,7 +126,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// The window's width in device-independent pixels, its frame included (what the WPF window's width
-    /// measures): the sidebar is the rail below <see cref="PaneLayout.RailBelowWidth"/> and the detail pane
+    /// measured): the sidebar is the rail below <see cref="PaneLayout.RailBelowWidth"/> and the detail pane
     /// docks above <see cref="PaneLayout.DetailDockedAboveWidth"/>.
     /// </summary>
     public double WindowWidth => AppWindow.Size.Width / Scale();

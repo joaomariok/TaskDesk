@@ -1,14 +1,13 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using System.Windows;
-using System.Windows.Threading;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Win32;
+using Microsoft.UI.Xaml;
 using TaskDesk.App.Notifications;
 using TaskDesk.App.Shell;
-using TaskDesk.App.Styles;
 using TaskDesk.Core.Backups;
 using TaskDesk.Core.Export;
 using TaskDesk.Core.Import;
@@ -18,26 +17,38 @@ using TaskDesk.Core.Shell;
 using TaskDesk.Data;
 using TaskDesk.Data.Logging;
 using TaskDesk.Presentation;
+using TaskDesk.Views;
+using TaskDesk.Views.Dialogs;
 
 namespace TaskDesk.App;
 
+/// <summary>
+/// Start-up: single instance, Generic Host and services, database, main window at its saved layout, first
+/// load, then the shell (tray, close behaviour, second launch). Sandbox mode when TASKDESK_DATA_DIR is set.
+/// </summary>
 public partial class App : Application
 {
     private IHost? _host;
-    private ShellController? _shell;
-    private SettingsWindow? _settingsWindow;
-    private QuickAddWindow? _quickAddWindow;
-    private HotkeyService? _hotkeys;
-    private INotificationService? _notifications;
-    private ReminderScheduler? _reminders;
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WPF override with a void signature; start-up failures are not recoverable.")]
-    protected override async void OnStartup(StartupEventArgs e)
+    // Resolved once, while the host is alive: the last exit step disposes the host, and an unhandled exception
+    // after that must still reach this logger instead of throwing ObjectDisposedException from the provider.
+    private ILogger<App>? _logger;
+
+    public App()
     {
-        base.OnStartup(e);
-        ShutdownMode = ShutdownMode.OnExplicitShutdown;
-        FoundationResources.Install(this);
+        InitializeComponent();
+        // The exit steps (flush, stop the host) run after the main window has closed; ShellController ends the app.
+        DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
+        // Logged, then the app ends (Handled stays false): an unhandled UI exception ends the app. The log file
+        // sink is unbuffered.
+        UnhandledException += (_, e) => _logger?.LogCritical(e.Exception, "Unhandled UI exception");
+    }
 
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI override with a void signature; start-up failures are not recoverable.")]
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        var arguments = Environment.GetCommandLineArgs();
+        var minimizedFlag = arguments.Contains(SecondLaunchArguments.MinimizedFlag, StringComparer.OrdinalIgnoreCase);
         var mode = RuntimeMode.FromEnvironment();
 
         // Claim single-instance ownership before any expensive start-up work.
@@ -45,13 +56,14 @@ public partial class App : Application
             SingleInstanceNames.For(Environment.GetEnvironmentVariable(AppPaths.DataDirectoryVariable)));
         if (!singleInstance.TryAcquire())
         {
-            // Forward --minimized and a Reminder notification click to the running instance (SPEC 7.1).
+            // This launch has the foreground; let the running instance take it when it shows its window.
+            AllowSetForegroundWindow(AsfwAny);
+            // Forward --minimized and a Reminder toast click to the running instance (SPEC 7.1).
             var forwarded = SecondLaunchArguments.Build(
-                e.Args.Contains(SecondLaunchArguments.MinimizedFlag, StringComparer.OrdinalIgnoreCase),
-                mode.RegistersNotifications ? ReadLaunchActivation() : null);
+                minimizedFlag, mode.RegistersNotifications ? ReadLaunchActivation() : null);
             await singleInstance.SignalExistingAsync(forwarded, CancellationToken.None);
             singleInstance.Dispose();
-            Shutdown();
+            Exit();
             return;
         }
 
@@ -62,51 +74,49 @@ public partial class App : Application
         builder.Logging.AddTaskDeskFileLogging(paths);
         builder.Services.AddSingleton(mode);
         builder.Services.AddTaskDeskData(paths);
+        // Every confirmation and message is a content dialog on the window in use (main or Settings); file pickers
+        // open on it too.
+        builder.Services.AddSingleton<ActiveWindow>();
+        builder.Services.AddSingleton(sp => new DialogService(() => sp.GetRequiredService<ActiveWindow>().Current));
+        builder.Services.AddSingleton<WinUiDialogs>();
+        builder.Services.AddSingleton<IListDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
+        builder.Services.AddSingleton<IExportDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
+        builder.Services.AddSingleton<IImportDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
+        builder.Services.AddSingleton<IOccurrenceDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
         builder.Services.AddSingleton<MainViewModel>();
-        builder.Services.AddSingleton<IListDialogs, WpfListDialogs>();
-        builder.Services.AddSingleton<IExportDialogs, WpfExportDialogs>();
-        builder.Services.AddSingleton<IImportDialogs, WpfImportDialogs>();
-        builder.Services.AddSingleton<IOccurrenceDialogs, WpfOccurrenceDialogs>();
         builder.Services.AddSingleton<ListsViewModel>();
         builder.Services.AddSingleton<MainWindow>();
-        builder.Services.AddSingleton<WpfMainWindow>();
-        builder.Services.AddSingleton<IMainWindow>(sp => sp.GetRequiredService<WpfMainWindow>());
-        builder.Services.AddSingleton<IAppShutdown>(sp => sp.GetRequiredService<WpfMainWindow>());
+        builder.Services.AddSingleton<WinUiMainWindow>();
+        builder.Services.AddSingleton<IMainWindow>(sp => sp.GetRequiredService<WinUiMainWindow>());
+        builder.Services.AddSingleton<IAppShutdown>(sp => sp.GetRequiredService<WinUiMainWindow>());
         builder.Services.AddSingleton<ISingleInstance>(singleInstance);
-        builder.Services.AddSingleton<HNotifyTrayIcon>();
-        builder.Services.AddSingleton<ITrayIcon>(sp => sp.GetRequiredService<HNotifyTrayIcon>());
-        builder.Services.AddSingleton<IBalloonTray>(sp => sp.GetRequiredService<HNotifyTrayIcon>());
-        builder.Services.AddSingleton<TrayBalloonNotificationService>();
-        if (!mode.RegistersNotifications)
-        {
-            // No AppNotificationManager registration: balloons only, so nothing is left behind in the registry.
-            builder.Services.AddSingleton<INotificationService>(
-                sp => sp.GetRequiredService<TrayBalloonNotificationService>());
-        }
-        else
-        {
-            builder.Services.AddSingleton<AppSdkNotificationService>();
-            builder.Services.AddSingleton(sp => new NotificationDelivery(
-                sp.GetRequiredService<AppSdkNotificationService>(),
-                sp.GetRequiredService<TrayBalloonNotificationService>(),
-                sp.GetRequiredService<ILogger<NotificationDelivery>>()));
-            builder.Services.AddSingleton<INotificationService>(sp => sp.GetRequiredService<NotificationDelivery>());
-        }
-
+        builder.Services.AddSingleton<WinUiTrayIcon>();
+        builder.Services.AddSingleton<ITrayIcon>(sp => sp.GetRequiredService<WinUiTrayIcon>());
+        builder.Services.AddSingleton<IBalloonTray>(sp => sp.GetRequiredService<WinUiTrayIcon>());
+        // Toasts with the balloon fallback, or the balloon only in sandbox mode (no toast registration).
+        builder.Services.AddTaskDeskNotifications(mode);
         builder.Services.AddSingleton<ReminderScheduler>();
         builder.Services.AddSingleton<ReminderActivationHandler>();
+        builder.Services.AddSingleton(sp => new ReminderActivationRouter(
+            sp.GetRequiredService<MainWindow>().DispatcherQueue,
+            sp.GetRequiredService<ReminderActivationHandler>(),
+            sp.GetRequiredService<ILogger<ReminderActivationRouter>>(),
+            sp.GetRequiredService<ShellController>().RunActivationAsync));
         builder.Services.AddSingleton<IRunKey, RegistryRunKey>();
         builder.Services.AddSingleton<AutoStartService>();
         builder.Services.AddSingleton<IShellSettingsStore>(_ => new JsonShellSettingsStore(paths.SettingsFile));
         builder.Services.AddSingleton<ShellController>();
-        builder.Services.AddSingleton<IHotkeyRegistrar, Win32HotkeyRegistrar>();
+        builder.Services.AddSingleton<WindowLayoutService>();
+        builder.Services.AddSingleton<ThemeService>();
+        builder.Services.AddSingleton<IThemeService>(sp => sp.GetRequiredService<ThemeService>());
+        builder.Services.AddSingleton<MessageWindow>();
+        builder.Services.AddSingleton<IHotkeyRegistrar, WinUiHotkeyRegistrar>();
         builder.Services.AddSingleton<HotkeyService>();
         builder.Services.AddTransient<QuickAddViewModel>();
-        builder.Services.AddSingleton<IThemeService, WpfThemeService>();
         builder.Services.AddSingleton<IFolderOpener, ExplorerFolderOpener>();
-        builder.Services.AddSingleton<IClipboardService, WpfClipboardService>();
-        builder.Services.AddSingleton<WindowLayoutService>();
-        builder.Services.AddTransient<SettingsViewModel>(sp => new SettingsViewModel(
+        builder.Services.AddSingleton<IClipboardService>(
+            sp => new WinUiClipboardService(sp.GetRequiredService<ILogger<WinUiClipboardService>>()));
+        builder.Services.AddTransient(sp => new SettingsViewModel(
             sp.GetRequiredService<IShellSettingsStore>(),
             sp.GetRequiredService<AutoStartService>(),
             sp.GetRequiredService<IThemeService>(),
@@ -124,88 +134,153 @@ public partial class App : Application
             sp.GetRequiredService<IClipboardService>()));
         _host = builder.Build();
 
+        var logger = _host.Services.GetRequiredService<ILogger<App>>();
+        _logger = logger;
         await _host.StartAsync();
-        _host.Services.GetRequiredService<ILogger<App>>().LogInformation(
-            "Runtime mode: {Mode} (data folder {DataDirectory})", mode, paths.DataDirectory);
+        logger.LogInformation("Runtime mode: {Mode} (data folder {DataDirectory})", mode, paths.DataDirectory);
         try
         {
             await _host.Services.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
         }
         catch (DatabaseStartupException ex)
         {
-            MessageBox.Show(
-                $"{ex.Message}\n\nNothing was deleted.\n\nLog folder: {ex.LogsDirectory}\nBackups folder: {ex.BackupsDirectory}",
-                "TaskDesk", MessageBoxButton.OK, MessageBoxImage.Error);
+            logger.LogCritical(ex, "The database could not be opened; exiting");
+            // No main window exists yet, so the explaining dialog gets a window of its own.
+            await new StartupFailureWindow().ShowAsync(
+                StartupFailureText.Describe(ex.Message, ex.LogsDirectory, ex.BackupsDirectory));
             await _host.StopAsync();
-            Shutdown(1);
+            _host.Dispose();
+            singleInstance.Dispose();
+            Environment.ExitCode = 1;
+            Exit();
             return;
         }
 
-        _host.Services.GetRequiredService<IThemeService>()
-            .Apply(_host.Services.GetRequiredService<IShellSettingsStore>().Load().Theme);
-
         var window = _host.Services.GetRequiredService<MainWindow>();
+        window.AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "TaskDesk.ico"));
+        // The saved theme applies before the window first shows; later switches reach it live.
+        var themes = _host.Services.GetRequiredService<ThemeService>();
+        themes.Applied += NativeMenuTheme.Apply;
+        themes.Register(window);
+        _host.Services.GetRequiredService<ActiveWindow>().Register(window);
+        themes.Apply(_host.Services.GetRequiredService<IShellSettingsStore>().Load().Theme);
         var layout = _host.Services.GetRequiredService<WindowLayoutService>();
         layout.Restore(window);
-        window.IsVisibleChanged += (_, args) =>
+        window.AppWindow.Changed += (sender, change) =>
         {
-            if (args.NewValue is false)
+            if (change.DidVisibilityChange && !sender.IsVisible)
             {
                 layout.Save(window);
             }
         };
         await window.ViewModel.LoadAsync();
-        await window.Lists.LoadAsync();
+        await window.Lists!.LoadAsync();
 
-        _shell = _host.Services.GetRequiredService<ShellController>();
-        // Exit waits for these, in order, before it calls Shutdown: WPF ends the process soon after.
-        _shell.AddExitStep(() => window.ViewModel.FlushPendingSaveAsync());
+        var shell = _host.Services.GetRequiredService<ShellController>();
+        // Exit waits for these, in order, before it ends the app. The window closes only once they have run, so it
+        // first takes no more input and its search ends: a reload during the flush or the host stop would query a
+        // host being stopped.
+        shell.AddExitStep(window.PrepareForExitAsync);
+        shell.AddExitStep(() => window.ViewModel.FlushPendingSaveAsync());
         var host = _host;
-        _shell.AddExitStep(() => host.StopAsync());
-        window.Closing += (_, args) =>
+        shell.AddExitStep(() => host.StopAsync());
+        // Closing hides to the tray or exits, per the close-behaviour setting.
+        window.AppWindow.Closing += (_, closing) =>
         {
             layout.Save(window);
-            args.Cancel = _shell.OnWindowClosing();
+            closing.Cancel = shell.OnWindowClosing();
         };
-        _shell.SettingsRequested += () => Dispatcher.Invoke(ShowSettings);
+
+        // The tray's Quick add and the global hotkey open the quick-add card. A hotkey conflict is logged
+        // (Settings shows it), never blocking start-up.
+        shell.QuickAddRequested += () => window.DispatcherQueue.TryEnqueue(ShowQuickAdd);
+        var hotkeys = _host.Services.GetRequiredService<HotkeyService>();
+        hotkeys.Triggered += () => window.DispatcherQueue.TryEnqueue(ShowQuickAdd);
+        hotkeys.Start();
+
+        // The tray's Settings and Ctrl+comma open the Settings window.
+        shell.SettingsRequested += () => window.DispatcherQueue.TryEnqueue(ShowSettings);
         window.ViewModel.SettingsRequested += (_, _) => ShowSettings();
-        _shell.ActivationRequested += activation => _ = Dispatcher.InvokeAsync(() => HandleActivationAsync(activation));
-        _shell.QuickAddRequested += () => _ = Dispatcher.InvokeAsync(ShowQuickAddAsync);
 
-        // A conflict is logged and shown in Settings; it never blocks start-up.
-        _hotkeys = _host.Services.GetRequiredService<HotkeyService>();
-        _hotkeys.Triggered += () => _ = ShowQuickAddAsync();
-        _hotkeys.Start();
-
-        // Rich notifications, or the tray balloon fallback with a banner explaining why (SPEC 7.3).
-        _notifications = _host.Services.GetRequiredService<INotificationService>();
-        if (_notifications is NotificationDelivery delivery)
+        // Rich notifications, or the tray balloon fallback with a banner explaining why (SPEC 7.3). Every
+        // Reminder activation (toast, balloon, a later launch from a toast) opens or acts on its Task.
+        var notifications = _host.Services.GetRequiredService<INotificationService>();
+        if (notifications is NotificationDelivery delivery)
         {
             delivery.FellBack += reason =>
-                _ = Dispatcher.InvokeAsync(() => window.ViewModel.ShowNotificationBanner(reason));
+                window.DispatcherQueue.TryEnqueue(() => window.ViewModel.ShowNotificationBanner(reason));
         }
 
-        _notifications.Activated += activation => _ = Dispatcher.InvokeAsync(() => HandleActivationAsync(activation));
-        _notifications.Register();
-        var launch = _notifications.GetLaunchActivation();
+        var activations = _host.Services.GetRequiredService<ReminderActivationRouter>();
+        activations.Attach(notifications);
+        shell.ActivationRequested += activations.Route;
+        notifications.Register();
+        var launch = notifications.GetLaunchActivation();
 
         // Launched by "Mark done" or a Snooze button on a toast: act without opening the window.
-        var minimized = e.Args.Contains("--minimized", StringComparer.OrdinalIgnoreCase)
+        var minimized = minimizedFlag
             || launch?.Action is ReminderAction.MarkDone or ReminderAction.SnoozeShort or ReminderAction.SnoozeLong;
         var exePath = Environment.ProcessPath ?? throw new InvalidOperationException("No process path.");
-        await _shell.StartAsync(minimized, exePath);
-        if (launch is not null)
-        {
-            await HandleActivationAsync(launch);
-        }
 
-        // Checks on start, every 30 s, on every Task change and on resume from sleep (SPEC 7.4).
-        _reminders = _host.Services.GetRequiredService<ReminderScheduler>();
-        _ = _reminders.StartAsync();
-        SystemEvents.PowerModeChanged += OnPowerModeChanged;
+        // Every exit step is added here, with no await since the first: from shell.StartAsync on, the tray's
+        // Exit and session end can start the exit, and ShellController rejects a step added after that.
+        var reminders = _host.Services.GetRequiredService<ReminderScheduler>();
+        StartSystemHooks(shell, reminders, notifications);
+
+        // The last exit step: release the global hotkey, then the shell (tray,
+        // single-instance guard) and the host, which closes the database and the log file.
+        shell.AddExitStep(async () =>
+        {
+            hotkeys.Dispose();
+            shell.Dispose();
+            if (host is IAsyncDisposable asyncHost)
+            {
+                await asyncHost.DisposeAsync();
+            }
+            else
+            {
+                host.Dispose();
+            }
+        });
+
+        // The launch's activation and the Reminder checks start only while no exit has started: the exit disposes
+        // what they use, and it waits for the activation, so a Mark done or Snooze from the toast is kept. The
+        // Reminder checks run on start, every 30 s, on every Task change and on resume from sleep (SPEC 7.4).
+        await shell.LaunchAsync(
+            minimized,
+            exePath,
+            launch is null ? null : exitStarted => activations.HandleAsync(launch, exitStarted),
+            () => _ = reminders.StartAsync());
     }
 
-    // The Reminder notification click that launched this (second) process, read before any registration.
+    // Session end and resume from sleep reach top-level windows only, so they get a hidden one of their own.
+    private void StartSystemHooks(ShellController shell, ReminderScheduler reminders, INotificationService notifications)
+    {
+        var systemWindow = new MessageWindow(topLevel: true);
+        // Windows signing out or shutting down: exit now (flush the pending edit, stop the host), then answer.
+        var sessionEnd = new SessionEndHook(systemWindow, shell.ExitAsync);
+        var resume = new PowerResumeHook(systemWindow, () => _ = reminders.RequestCheck());
+        var logger = _host!.Services.GetRequiredService<ILogger<App>>();
+        shell.AddExitStep(() =>
+        {
+            resume.Dispose();
+            sessionEnd.Dispose();
+            systemWindow.Dispose();
+            reminders.Dispose();
+            try
+            {
+                notifications.Unregister();
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                logger.LogWarning(ex, "Unregistering notifications failed");
+            }
+
+            return Task.CompletedTask;
+        });
+    }
+
+    // The Reminder toast click that launched this (second) process, read before any registration.
     private static NotificationActivation? ReadLaunchActivation()
     {
         try
@@ -218,27 +293,12 @@ public partial class App : Application
         }
     }
 
-    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
-    {
-        if (e.Mode == PowerModes.Resume)
-        {
-            _ = _reminders?.RequestCheck();
-        }
-    }
+    private QuickAddWindow? _quickAddWindow;
+    private bool _quickAddOpening;
 
-    private async Task HandleActivationAsync(NotificationActivation activation)
-    {
-        try
-        {
-            await _host!.Services.GetRequiredService<ReminderActivationHandler>().HandleAsync(activation);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            _host!.Services.GetRequiredService<ILogger<App>>().LogError(ex, "Reminder notification action failed");
-        }
-    }
-
-    private async Task ShowQuickAddAsync()
+    /// <summary>Opens the quick-add card, or brings the open one forward. A saved Task reloads the main window.</summary>
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "UI entry point; failures are logged here.")]
+    private async void ShowQuickAdd()
     {
         if (_quickAddWindow is not null)
         {
@@ -246,100 +306,93 @@ public partial class App : Application
             return;
         }
 
-        var viewModel = _host!.Services.GetRequiredService<QuickAddViewModel>();
-        var main = _host.Services.GetRequiredService<MainWindow>();
-#pragma warning disable VSTHRD101 // Action event; a failed reload surfaces on the dispatcher as before
-        viewModel.TaskCreated += async () =>
+        if (_quickAddOpening)
         {
-            // MainViewModel.LoadAsync does not raise OpenTaskCountsChanged, so reload the Lists
-            // explicitly to refresh their open-Task counts.
-            await main.ViewModel.LoadAsync();
-            await main.Lists.LoadAsync();
-        };
-#pragma warning restore VSTHRD101
-        await viewModel.LoadAsync();
+            return;
+        }
 
-        _quickAddWindow = new QuickAddWindow(viewModel);
-        _quickAddWindow.Closed += (_, _) => _quickAddWindow = null;
-        _quickAddWindow.Show();
-        _quickAddWindow.Activate();
+        _quickAddOpening = true;
+        try
+        {
+            var main = _host!.Services.GetRequiredService<MainWindow>();
+            var viewModel = _host.Services.GetRequiredService<QuickAddViewModel>();
+#pragma warning disable VSTHRD101 // Action event; a failed reload reaches the UnhandledException log
+            // MainViewModel.LoadAsync does not raise OpenTaskCountsChanged, so the Lists' counts reload here.
+            viewModel.TaskCreated += async () =>
+            {
+                await main.ViewModel.LoadAsync();
+                await main.Lists!.LoadAsync();
+            };
+#pragma warning restore VSTHRD101
+            await viewModel.LoadAsync();
+
+            var card = new QuickAddWindow(viewModel);
+            _host.Services.GetRequiredService<ThemeService>().Register(card);
+            card.Closed += (_, _) => _quickAddWindow = null;
+            _quickAddWindow = card;
+            card.Activate();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger?.LogError(ex, "The quick-add card could not open");
+        }
+        finally
+        {
+            _quickAddOpening = false;
+        }
     }
 
+    private SettingsWindow? _settingsWindow;
+
+    /// <summary>Opens the Settings window, or brings the open one forward. An import reloads the main window.</summary>
     private void ShowSettings()
     {
-        if (_settingsWindow is { IsLoaded: true })
+        if (_settingsWindow is not null)
         {
             _settingsWindow.Activate();
             return;
         }
 
-        var settings = _host!.Services.GetRequiredService<SettingsViewModel>();
-        var main = _host.Services.GetRequiredService<MainWindow>();
-        // Save the pending detail edit and close the pane first, so no stale edit lands on imported data.
-        settings.BeforeImport = main.ViewModel.PrepareForImportAsync;
-#pragma warning disable VSTHRD101 // Action event; a failed reload surfaces on the dispatcher as before
-        settings.Imported += async () =>
+        try
         {
+            var main = _host!.Services.GetRequiredService<MainWindow>();
+            var settings = _host.Services.GetRequiredService<SettingsViewModel>();
+            // Save the pending detail edit and close the pane first, so no stale edit lands on imported data.
+            settings.BeforeImport = main.ViewModel.PrepareForImportAsync;
+#pragma warning disable VSTHRD101 // Action event; a failed reload reaches the UnhandledException log
             // The import changed Lists, Tags and Tasks underneath the main window: reload both panes.
-            await main.ViewModel.LoadAsync();
-            await main.Lists.LoadAsync();
-        };
+            settings.Imported += async () =>
+            {
+                await main.ViewModel.LoadAsync();
+                if (main.Lists is not null)
+                {
+                    await main.Lists.LoadAsync();
+                }
+            };
 #pragma warning restore VSTHRD101
-        _settingsWindow = new SettingsWindow(settings);
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
-        _settingsWindow.Show();
-        _settingsWindow.Activate();
+
+            var window = new SettingsWindow(settings);
+            window.AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "TaskDesk.ico"));
+            _host.Services.GetRequiredService<ThemeService>().Register(window);
+            // Its dialogs and file pickers open on it.
+            _host.Services.GetRequiredService<ActiveWindow>().Register(window);
+            window.Closed += (_, _) => _settingsWindow = null;
+            _settingsWindow = window;
+            window.Activate();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger?.LogError(ex, "The Settings window could not open");
+        }
     }
 
     private static string AppVersion() =>
         (Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
          ?? "0.0.0").Split('+')[0];
 
-    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
-    {
-        // Let Windows log off or shut down instead of hiding the window to the tray, but only after the
-        // pending save has landed: keep the dispatcher pumping while the exit steps run.
-        if (_shell is not null)
-        {
-            WaitPumping(_shell.ExitAsync());
-        }
+    private const int AsfwAny = -1;
 
-        base.OnSessionEnding(e);
-    }
-
-    // Waits on the UI thread without blocking it, so continuations that need the dispatcher still run.
-    private static void WaitPumping(Task task)
-    {
-        if (task.IsCompleted)
-        {
-            return;
-        }
-
-        var frame = new DispatcherFrame();
-        _ = task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
-        Dispatcher.PushFrame(frame);
-    }
-
-    // Runs after the exit steps (ShellController.ExitAsync) have flushed the pending save and stopped the
-    // host, so nothing here awaits: WPF would end the process at the first await.
-    protected override void OnExit(ExitEventArgs e)
-    {
-        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
-        _reminders?.Dispose();
-        try
-        {
-            _notifications?.Unregister();
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            _host?.Services.GetRequiredService<ILogger<App>>().LogWarning(ex, "Unregistering notifications failed");
-        }
-
-        _hotkeys?.Dispose();
-        _shell?.Dispose();
-
-        _host?.Dispose();
-
-        base.OnExit(e);
-    }
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool AllowSetForegroundWindow(int processId);
 }

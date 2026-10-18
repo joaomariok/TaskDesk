@@ -22,7 +22,7 @@ Done means the spec is on `main`, every ticket and the spec are closed, and no a
 
 1. Review the integration branch with the `code-review` skill. Name the spec issue and its tickets as context, so approvals recorded in a ticket (such as an approved test-expectation change) are not re-flagged.
 2. Fix every confirmed finding in one implementer, then land it like a ticket.
-3. Run the `ui-check` skill on the integration tip, against the build the spec ships (the WinUI app: `-WinUI` on `run-sandbox.ps1` and `ui-tests.ps1`), with before shots from `main` (its step 4; in a port, the replaced app on `main`), covering every state the spec's diff touches and the tickets' visual criteria. Report its findings before any owner acceptance run.
+3. Run the `ui-check` skill on the integration tip, with before shots from `main` (its step 4; in a port, the replaced app on `main`), covering every state the spec's diff touches and the tickets' visual criteria. Report its findings before any owner acceptance run.
 4. Ask the owner, then fast-forward `main` to the integration tip and push.
 5. Close each ticket, then the spec, with `gh issue close <n> --comment "<commits>, on main."`.
 6. Remove each agent worktree (`git worktree remove`) and delete its `worktree-agent-*` branch (`git branch -D`); every one is integrated by now.
@@ -78,7 +78,7 @@ Beyond that one fast-forward, leave git alone: no commit, branch, checkout, merg
 - Write everything in English. Tests are never weakened, skipped or deleted.
 - Tests write only to temp locations, never to `%LOCALAPPDATA%` or the registry.
 - Write the FlaUI tests your ticket needs and leave running them to the orchestrator (see **Concurrency**); list the test classes to run in your report.
-- To measure startup time or working set, use `pwsh scripts/measure-startup.ps1 -Publish <publish dir> [-WinUI]` (sandbox mode, temp data folder, no leftover processes) instead of an ad-hoc script. It is the one way an implementer runs either app. `scripts/verify-toast.ps1` is owner-run only.
+- To measure startup time or working set, use `pwsh scripts/measure-startup.ps1 -Publish <publish dir>` (sandbox mode, temp data folder, no leftover processes) instead of an ad-hoc script. It is the one way an implementer runs the app. `scripts/verify-toast.ps1` is owner-run only.
 
 ### Migrations
 

@@ -4,8 +4,7 @@ namespace TaskDesk.UiTests;
 
 /// <summary>
 /// The detail splitter with real mouse input in a real process: dragging it resizes the docked detail pane, and
-/// the width survives a restart. Written for the WinUI build (ui-tests.ps1 -WinUI); the WPF build is covered by
-/// RestartTests.Pane_widths_set_with_the_splitters_survive_a_restart.
+/// the width survives a restart.
 /// </summary>
 public sealed class DetailSplitterTests : IDisposable
 {

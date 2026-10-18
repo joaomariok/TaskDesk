@@ -14,7 +14,7 @@ List with a Reminder 5 s in the past (sqlite3); relaunch with TASKDESK_SANDBOX=0
 -DryRun stops before that final launch.
 
 .EXAMPLE
-pwsh scripts/verify-toast.ps1 -Publish C:\pub\win-x64-fdd
+pwsh scripts/verify-toast.ps1 -Publish C:\pub\win-x64
 #>
 param(
     [Parameter(Mandatory)][string]$Publish,

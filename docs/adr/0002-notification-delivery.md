@@ -2,6 +2,14 @@
 
 **Status: Accepted (2026-10-16).** The owner verified (a) to (c) with the spike; (d) remains unverified (see below).
 
+**Update (2026-10-18, #68).** TaskDesk is now a WinUI 3 app ([ADR 0004](0004-port-to-winui.md)); the WPF app this record was written for is deleted. The notification design is unchanged: the same `AppSdkNotificationService` registers the same exe, `TaskDesk.App.exe`, unpackaged and with no arguments to `Register()`. What changed at the swap:
+
+- The app references the full `Microsoft.WindowsAppSDK` metapackage (through `H.NotifyIcon.WinUI`), not `Microsoft.WindowsAppSDK.Foundation` and `Microsoft.WindowsAppSDK.Runtime`.
+- One publish profile is left, `win-x64` (self-contained, ADR 0004). `win-x64-fdd` is gone.
+- The payload filter keeps Stage A only. Stage B is gone, because WinUI needs those files, and so is the WPF-only removal of `Microsoft.InteractiveExperiences.Projection.dll`, which holds `Microsoft.UI.Windowing`.
+
+The sections below describe the WPF build as measured then.
+
 Reminders are delivered as Windows toasts through the Windows App SDK `AppNotificationManager` (`Microsoft.Windows.AppNotifications`), from an unpackaged, self-contained WPF .NET 10 app, with a tray balloon fallback behind `INotificationService` (SPEC 7.3). The spike in `spikes/NotificationSpike/` (outside `TaskDesk.slnx`) exercises this.
 
 ## Established from documentation and from building

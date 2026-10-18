@@ -3,23 +3,19 @@
 # Needs an interactive desktop; it takes over the keyboard and mouse while it runs (about a minute).
 # Each test uses a fresh temp data folder (sandbox mode: no Run key, no notification registration).
 #   -Publish <dir>  test TaskDesk.App.exe in a publish folder instead of the Debug build
-#   -WinUI          test the WinUI build (TaskDesk.App.WinUI.exe, sandbox mode only) instead of the WPF one;
-#                   with -Publish, the publish folder holds TaskDesk.App.WinUI.exe
 #   -Class <name>   run one test class, for example NavigationTests
 #   -Method <name>  run the tests whose method name matches, with * as a wildcard, for example *Ctrl_comma*
-# Before the run it stops TaskDesk.App (with -WinUI, TaskDesk.App.WinUI) processes left over from earlier UI runs
+# Before the run it stops TaskDesk.App processes left over from earlier UI runs
 # (identified by running from this repo's bin folder, or from -Publish; the TASKDESK_DATA_DIR environment cannot be read
 # from another process) and warns about any other running one without touching it.
 param(
     [string]$Publish,
     [string]$Class,
-    [string]$Method,
-    [switch]$WinUI
+    [string]$Method
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-# The app under test: the WPF app by default; the WinUI shell keeps its own assembly name until the swap (#68).
-$appName = $WinUI ? 'TaskDesk.App.WinUI' : 'TaskDesk.App'
+$appName = 'TaskDesk.App'
 $appProject = "src/$appName"
 
 function Get-TaskDeskProcess {
@@ -37,13 +33,7 @@ try {
         Remove-Item Env:TASKDESK_UI_APP -ErrorAction SilentlyContinue
         & dotnet build $appProject -warnaserror
         if ($LASTEXITCODE -ne 0) { Write-Host "UI TESTS FAILED: app build exit $LASTEXITCODE"; exit $LASTEXITCODE }
-        if ($WinUI) {
-            # AppSession finds the WPF Debug build by itself; point it at the WinUI one.
-            $built = Get-ChildItem (Join-Path $repoRoot "$appProject/bin/Debug") -Recurse -Filter "$appName.exe" |
-                Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
-            if (-not $built) { throw "No $appName.exe under $appProject/bin/Debug" }
-            $env:TASKDESK_UI_APP = $built.FullName
-        }
+        # AppSession finds the newest Debug build by itself.
     }
 
     # Leftovers from an earlier UI run would hold focus and the keyboard; the owner's own instance is left alone.

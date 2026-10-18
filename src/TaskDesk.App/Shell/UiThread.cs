@@ -2,7 +2,7 @@ using Microsoft.UI.Dispatching;
 
 namespace TaskDesk.App.Shell;
 
-/// <summary>Runs work on a window's UI thread and waits for it, like WPF's Dispatcher.Invoke.</summary>
+/// <summary>Runs work on a window's UI thread and waits for it.</summary>
 internal static class UiThread
 {
     public static void Invoke(DispatcherQueue dispatcher, Action action) => Invoke(dispatcher, () =>

@@ -20,8 +20,8 @@ namespace TaskDesk.UiTests;
 public sealed class AppSession : IDisposable
 {
     /// <summary>
-    /// Set to a TaskDesk.App.exe (for example a published build) or a TaskDesk.App.WinUI.exe to test it instead of the
-    /// WPF Debug build; scripts/ui-tests.ps1 -Publish and -WinUI set it.
+    /// Set to a TaskDesk.App.exe (for example a published build) to test it instead of the Debug build;
+    /// scripts/ui-tests.ps1 -Publish sets it.
     /// </summary>
     public const string AppVariable = "TASKDESK_UI_APP";
 
@@ -255,7 +255,7 @@ public sealed class AppSession : IDisposable
     /// <summary>The name of the element with keyboard focus (a Task row is named by its title).</summary>
     public string? FocusedName() => _automation.FocusedElement()?.Properties.Name.ValueOrDefault;
 
-    /// <summary>Resizes the main window to a width and height in device-independent pixels (what WPF measures).</summary>
+    /// <summary>Resizes the main window to a width and height in device-independent pixels.</summary>
     public void ResizeTo(int width, int height)
     {
         var scale = GetDpiForWindow(Window.Properties.NativeWindowHandle.Value) / 96.0;
@@ -303,7 +303,7 @@ public sealed class AppSession : IDisposable
     {
         Focus(automationId);
         Keyboard.Type(text);
-        // The app can still be working through the keys (the WinUI text box takes longer per key than WPF's); Enter
+        // The app can still be working through the keys (the WinUI text box takes a while per key); Enter
         // or a focus change sent before it has would reach another element, or the rest of the text would.
         WaitUntil(() => TextBox(automationId).Text.Contains(text, StringComparison.Ordinal),
             () => $"{automationId} did not receive '{text}'; it holds '{TextBox(automationId).Text}'.");
@@ -633,10 +633,6 @@ public sealed class AppSession : IDisposable
         WaitUntil(() => FocusedAutomationId() == Ids.QuickAddBox,
             () => $"Start-up focus never reached quick add; it is on '{FocusedAutomationId()}' ({DescribeFocused()}).");
     }
-
-    /// <summary>True when the app under test is the WinUI build (TaskDesk.App.WinUI.exe), false for the WPF one.</summary>
-    public static bool IsWinUI =>
-        Path.GetFileName(AppPath()).Equals("TaskDesk.App.WinUI.exe", StringComparison.OrdinalIgnoreCase);
 
     internal static string AppPath()
     {

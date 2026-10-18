@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace TaskDesk.App.Shell;
 
 /// <summary>
-/// Replaces WPF's <c>SessionEnding</c>: when Windows signs out or shuts down, runs the given work (the shell's
+/// When Windows signs out or shuts down, runs the given work (the shell's
 /// exit, which flushes the pending detail edit and stops the host) and answers only once it has finished. The
 /// UI thread keeps pumping messages meanwhile, so the work's continuations on the dispatcher still run. The
 /// session is never blocked. Needs a top-level <see cref="MessageWindow"/>: a message-only one gets no

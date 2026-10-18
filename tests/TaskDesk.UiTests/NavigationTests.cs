@@ -159,7 +159,7 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
-    public void A_past_Due_date_typed_into_the_detail_pane_puts_the_Task_in_Overdue()
+    public void A_past_Due_date_picked_in_the_detail_pane_puts_the_Task_in_Overdue()
     {
         AppSession.Ctrl(VirtualKeyShort.KEY_4);
         _app.TypeInto(Ids.QuickAddBox, "Pay the rent", pressEnter: true);
@@ -167,36 +167,9 @@ public sealed class NavigationTests : IDisposable
         Keyboard.Type(VirtualKeyShort.F2);
         AppSession.WaitUntil(() => _app.TextBox(Ids.DetailTitleBox).Text == "Pay the rent",
             () => "The detail pane did not open.");
-        if (AppSession.IsWinUI)
-        {
-            WinUIDueYesterdayPickedInTheCalendarPutsTheTaskInOverdue();
-            return;
-        }
 
-        // Yesterday, typed into the Due date picker, which parses with the current culture.
-        var yesterday = DateTime.Today.AddDays(-1).ToString("d", CultureInfo.CurrentCulture);
-        var dueBox = _app.Find(Ids.DetailDueDatePicker).FindFirstDescendant(cf => cf.ByControlType(ControlType.Edit))
-            ?? throw new InvalidOperationException("The Due date picker has no text box.");
-        dueBox.Focus();
-        Keyboard.Type(yesterday);
-        Keyboard.Type(VirtualKeyShort.RETURN);
-        Keyboard.Type(VirtualKeyShort.TAB);
-
-        // The Due edit saves after a short debounce, so reopen Overdue until the Task shows there.
-        AppSession.WaitUntil(() =>
-            {
-                AppSession.Ctrl(VirtualKeyShort.KEY_3);
-                Thread.Sleep(300);
-                return _app.Rows(Ids.OpenTaskList).Contains("Pay the rent");
-            },
-            () => $"Overdue rows were [{string.Join(", ", _app.Rows(Ids.OpenTaskList))}]; the typed Due '{yesterday}' did not save.");
-        AppSession.WaitUntil(() => _app.Find(Ids.PageHeading).Name == "Overdue", () => "The Overdue view did not open.");
-    }
-
-    // The WinUI build's CalendarDatePicker has no text box: open its calendar flyout and pick yesterday's day, paging
-    // back a month when yesterday is in the previous one.
-    private void WinUIDueYesterdayPickedInTheCalendarPutsTheTaskInOverdue()
-    {
+        // The CalendarDatePicker has no text box: open its calendar flyout and pick yesterday's day, paging back a
+        // month when yesterday is in the previous one.
         var yesterday = DateTime.Today.AddDays(-1);
         _app.Find(Ids.DetailDueDatePicker).Click();
         // The calendar flyout is a pop-up, so look from the desktop.

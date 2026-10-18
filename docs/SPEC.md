@@ -27,7 +27,7 @@ TaskDesk is a small, fast, **local-only** to-do list desktop app for Windows 11.
 | Topic | Decision |
 |---|---|
 | Data location | Local only, on this PC. No cloud, no sync, no JMTaskApi integration. |
-| UI framework | WPF (Windows Presentation Foundation) on .NET 10 |
+| UI framework | WinUI 3 (Windows App SDK) on .NET 10; WPF until the port (ADR 0004) |
 | Feature level | "Rich": lists, notes, due date, priority, search/filter, subtasks, tags, recurring tasks, reminders with Windows notifications |
 | Packaging | Unpackaged (no MSIX), self-contained (.NET runtime included) folder you copy and run |
 | Background behavior | Closing the window hides to tray; app auto-starts at Windows login |
@@ -50,12 +50,12 @@ Sync of any kind, JMTaskApi, accounts/login, mobile, multiple users, file attach
 | Concern | Choice | Notes |
 |---|---|---|
 | Runtime | .NET 10 (LTS) | C# latest, `<Nullable>enable</Nullable>`, `<ImplicitUsings>enable</ImplicitUsings>` |
-| UI | WPF | Built-in Fluent theme via `Application.ThemeMode` (see 8.4) |
+| UI | WinUI 3 (Windows App SDK 1.8), unpackaged | Native Fluent controls and Mica; views in `TaskDesk.Views` (ADR 0004, see 8.4) |
 | MVVM (Model-View-ViewModel) | `CommunityToolkit.Mvvm` | Source generators: `[ObservableProperty]`, `[RelayCommand]` |
-| Dependency injection / app lifetime | `Microsoft.Extensions.Hosting` (Generic Host) | Host built in `App.OnStartup` |
+| Dependency injection / app lifetime | `Microsoft.Extensions.Hosting` (Generic Host) | Host built in `App.OnLaunched` |
 | Database | SQLite via `Microsoft.EntityFrameworkCore.Sqlite` | Migrations via `Microsoft.EntityFrameworkCore.Design` + `dotnet-ef` tool |
-| Tray icon | `H.NotifyIcon.Wpf` | Maintained continuation of the old Hardcodet WPF NotifyIcon |
-| Windows notifications ("toasts") | Windows App SDK `Microsoft.Windows.AppNotifications` (`AppNotificationManager`) via NuGet `Microsoft.WindowsAppSDK` | Microsoft's recommended API for WPF/unpackaged apps. **Has deployment caveats — read 7.3.** |
+| Tray icon | `H.NotifyIcon.WinUI` | Maintained continuation of the old Hardcodet NotifyIcon |
+| Windows notifications ("toasts") | Windows App SDK `Microsoft.Windows.AppNotifications` (`AppNotificationManager`) via NuGet `Microsoft.WindowsAppSDK` | Microsoft's recommended API for unpackaged apps. **Has deployment caveats — read 7.3.** |
 | Global hotkey | Win32 `RegisterHotKey` / `UnregisterHotKey` via P/Invoke (Platform Invocation, calling native Windows functions from C#) | No third-party package |
 | Auto-start | Registry value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` | No admin rights needed |
 | Logging | `Microsoft.Extensions.Logging` + `Serilog.Extensions.Logging` + `Serilog.Sinks.File` | Rolling daily file, keep 14 days |
@@ -79,23 +79,28 @@ TaskDesk/
 │  ├─ adr/                      # architecture decision records (NNNN-slug.md)
 │  └─ MANUAL-TESTS.md
 ├─ src/
-│  ├─ TaskDesk.Core/            # net10.0 — domain model, recurrence, reminder logic, import/export, service interfaces. NO WPF, NO EF Core.
+│  ├─ TaskDesk.Core/            # net10.0 — domain model, recurrence, reminder logic, import/export, service interfaces. NO UI framework, NO EF Core.
 │  ├─ TaskDesk.Data/            # net10.0 — EF Core DbContext, entity configuration, migrations, repositories
-│  ├─ TaskDesk.Presentation/    # net10.0 — ViewModels (CommunityToolkit.Mvvm). NO WPF types. Talks to Windows only through interfaces from Core.
-│  └─ TaskDesk.App/             # WPF exe — Views (XAML), Windows-specific service implementations (tray, toasts, hotkey, autostart, dialogs, theme)
+│  ├─ TaskDesk.Presentation/    # net10.0 — ViewModels (CommunityToolkit.Mvvm). NO UI framework or WinRT types. Talks to Windows only through interfaces from Core.
+│  ├─ TaskDesk.Views/           # WinUI class library — views, windows, controls, styles, dialogs, theme
+│  └─ TaskDesk.App/             # WinUI exe — the shell: start-up, tray, toasts, hotkey, autostart, single instance, window lifecycle
 └─ tests/
    ├─ TaskDesk.Core.Tests/
    ├─ TaskDesk.Data.Tests/      # integration tests against real SQLite files in a temp folder
-   └─ TaskDesk.Presentation.Tests/
+   ├─ TaskDesk.Presentation.Tests/
+   ├─ TaskDesk.Views.Tests/     # in-process WinUI test app (MSTest), part of the gate
+   └─ TaskDesk.UiTests/         # opt-in FlaUI suite against the real exe
 ```
 
-Why ViewModels live in a plain `net10.0` project: they can be tested without a WPF dispatcher or a Windows-specific target framework, and it forces all OS access through interfaces.
+Why ViewModels live in a plain `net10.0` project: they can be tested without a UI dispatcher or a Windows-specific target framework, and it forces all OS access through interfaces.
 
 ### 3.1 Dependency direction
 
 ```mermaid
 flowchart LR
-    App[TaskDesk.App<br/>WPF views + Windows services] --> Presentation[TaskDesk.Presentation<br/>ViewModels]
+    App[TaskDesk.App<br/>WinUI shell + Windows services] --> Views[TaskDesk.Views<br/>WinUI views]
+    App --> Presentation[TaskDesk.Presentation<br/>ViewModels]
+    Views --> Presentation
     App --> Data[TaskDesk.Data<br/>EF Core + SQLite]
     Presentation --> Core[TaskDesk.Core<br/>domain + rules + interfaces]
     Data --> Core
@@ -108,15 +113,14 @@ Rule: `Core` references nothing in this solution. `Presentation` never reference
 
 ### 3.2 App project settings (TaskDesk.App.csproj)
 
-- `OutputType` = `WinExe`, `UseWPF` = `true`
-- `TargetFramework` = `net10.0-windows10.0.19041.0` (or a newer Windows SDK version if the Windows App SDK package requires it). This number is the Windows API surface you compile against, not the minimum OS.
+- `OutputType` = `WinExe`, `UseWinUI` = `true`, `AssemblyName` = `TaskDesk.App` (the exe name the Run key points at)
+- `TargetFramework` = `net10.0-windows10.0.22000.0`. This number is the Windows API surface you compile against, not the minimum OS.
 - `SupportedOSPlatformVersion` = `10.0.22000.0` (Windows 11 minimum)
 - `RuntimeIdentifier` = `win-x64`, `SelfContained` = `true`
 - `WindowsPackageType` = `None` (unpackaged Windows App SDK)
 - `WindowsAppSDKSelfContained` = `true` **[ASSUMPTION — verify in milestone M0 spike, see 7.3]**
-- Do **not** enable trimming (`PublishTrimmed`) — WPF does not support it.
+- Do **not** enable trimming (`PublishTrimmed`) or Native AOT while EF Core blocks them (ADR 0004).
 - Do **not** use single-file publish by default (Windows App SDK files must sit next to the exe; only enable `PublishSingleFile` if M0 proves it works).
-- Suppress the experimental-API diagnostic `WPF0001` (needed for `ThemeMode`) with `<NoWarn>$(NoWarn);WPF0001</NoWarn>`, scoped to the App project only.
 - Application icon: create a simple original `.ico` (checkbox motif). Needed for tray icon and notifications.
 
 ---
@@ -379,7 +383,7 @@ Only one TaskDesk process may run. Use a named `Mutex` (e.g., `Local\TaskDesk.Si
    - `AppSdkNotificationService` (primary, toast via `AppNotificationManager`)
    - `TrayBalloonNotificationService` (fallback, uses `H.NotifyIcon` notification balloon)
    On startup, try the primary; if registration throws, log the error, switch to the fallback, and show a one-time banner in the main window explaining that rich notifications are unavailable and why.
-3. Follow Microsoft's "App notifications quickstart" / "Use app notifications with a WPF app" pages for exact registration and activation code. Do not copy code from older tutorials using `Windows.UI.Notifications.ToastNotificationManager` or `Microsoft.Toolkit.Uwp.Notifications`.
+3. Follow Microsoft's "App notifications quickstart" page for exact registration and activation code. Do not copy code from older tutorials using `Windows.UI.Notifications.ToastNotificationManager` or `Microsoft.Toolkit.Uwp.Notifications`.
 
 **Reminder notification content:** title = task title; body = due date/time + list name; buttons: **Mark done**, **Snooze 10 min**, **Snooze 1 h**; clicking the body opens the main window with the task selected. Snooze sets `SnoozedUntilUtc = now + duration` and clears `ReminderFiredUtc`; `ReminderUtc` (the planned Reminder) is left unchanged so its offset carries to the next Occurrence.
 
@@ -402,7 +406,7 @@ A single `ReminderScheduler` hosted service (in Presentation or App, logic in Co
 
 ### 7.6 Global hotkey
 
-- Create a hidden message-only window via `HwndSource` (so the hotkey works when the main window is hidden), call `RegisterHotKey` with `MOD_NOREPEAT`, handle `WM_HOTKEY` (0x0312).
+- Create a hidden message-only window (`MessageWindow`, so the hotkey works when the main window is hidden), call `RegisterHotKey` with `MOD_NOREPEAT`, handle `WM_HOTKEY` (0x0312).
 - If `RegisterHotKey` fails (combination already owned by another app), do not crash: log it, show a message in Settings ("This shortcut is used by another application"), and keep the previous working hotkey (or none).
 
 ---
@@ -422,7 +426,7 @@ All paths come from one `IAppPaths` service so tests can redirect them to a temp
 
 ### 8.2 Database lifecycle
 
-- Use `IDbContextFactory<TaskDeskDbContext>`; create a short-lived context per operation (WPF apps are long-lived; a single long-lived DbContext leaks tracked entities and goes stale).
+- Use `IDbContextFactory<TaskDeskDbContext>`; create a short-lived context per operation (desktop apps are long-lived; a single long-lived DbContext leaks tracked entities and goes stale).
 - On startup: if the DB file exists and there are pending migrations, **back it up first** using `SqliteConnection.BackupDatabase` (safe online copy), then `Database.Migrate()`. On first run, migrate creates the DB, then seed the "Inbox" default list.
 - Also back up automatically once per day on first start of the day, and on "Back up now".
 - Provide `IDesignTimeDbContextFactory` in `TaskDesk.Data` so `dotnet ef migrations add` works.
@@ -431,17 +435,17 @@ All paths come from one `IAppPaths` service so tests can redirect them to a temp
 ### 8.3 Threading
 
 - All database work is `async`; never block the UI thread with `.Result`/`.Wait()`.
-- Notification callbacks and pipe messages arrive on background threads → marshal to the UI through an `IUiDispatcher` interface (implemented with `Dispatcher.InvokeAsync` in App; a synchronous fake in tests).
+- Notification callbacks and pipe messages arrive on background threads → marshal to the UI thread with the window's `DispatcherQueue` in the shell; ViewModels stay free of it.
 
 ### 8.4 Theme
 
-- Use WPF's built-in Fluent theme: `Application.Current.ThemeMode = ThemeMode.System | Light | Dark`. This API is marked experimental (`WPF0001`) in .NET 9/10 — suppress that warning in the App project only, and isolate the call in one `ThemeService` so it is easy to replace if the API changes.
-- Avoid hard-coded colors in XAML; use theme resources so both modes look right. Custom control styles must be based on the Fluent styles (`BasedOn`) or they will fall back to the old look.
+- WinUI's Fluent theme: one `ThemeService` sets each window's root `RequestedTheme` to System, Light or Dark (every window registers with it).
+- Avoid hard-coded colors in XAML; use `{ThemeResource}` brushes so both modes look right. A derived control gets its own `BasedOn` style, since an implicit style applies to its exact type only.
 - Switching theme in Settings applies immediately without restart.
 
 ### 8.5 Error handling and logging
 
-- Global handlers: `DispatcherUnhandledException`, `AppDomain.CurrentDomain.UnhandledException`, `TaskScheduler.UnobservedTaskException` → log, show a friendly dialog, keep running when possible.
+- Global handler: `Application.UnhandledException` logs the exception (Critical) and the app ends.
 - Log at Information for lifecycle events (start, stop, migration, backup, import), Warning for recoverable problems (hotkey conflict, notification fallback), Error for exceptions. Never log task contents at Information level (privacy); titles may appear at Debug level.
 
 ---
@@ -562,11 +566,10 @@ Output is a folder to copy anywhere (e.g., `%LOCALAPPDATA%\Programs\TaskDesk`). 
 | Notifications never appear, no exception | Windows Focus Assist / Do Not Disturb, notifications disabled for the app in Windows Settings, or app running elevated | Check Settings → System → Notifications; never run as administrator |
 | `AppNotificationManager.Register()` throws in the published app but worked in Visual Studio | Windows App SDK runtime/Singleton package missing on the machine (self-contained caveat) | Install the Windows App SDK runtime; fallback service must engage (7.3) |
 | Toast shows a generic icon/name | Unpackaged app without Start-menu shortcut or exe icon resource | Embed an icon in the exe (`ApplicationIcon`); optionally create a Start-menu shortcut |
-| Hotkey does nothing | Combination owned by another app; or registered on a window that was destroyed | Use a dedicated message-only `HwndSource`; surface `RegisterHotKey` failure |
+| Hotkey does nothing | Combination owned by another app; or registered on a window that was destroyed | Use a dedicated message-only window (`MessageWindow`); surface `RegisterHotKey` failure |
 | `dotnet ef` cannot create the DbContext | No design-time factory | `IDesignTimeDbContextFactory` in TaskDesk.Data |
-| Controls look old-style in Fluent theme | Custom style not `BasedOn` the theme style | Base custom styles on the Fluent ones |
-| Build fails on `WPF0001` | `ThemeMode` is experimental | `NoWarn` WPF0001 in App project only |
-| UI freezes on large lists | Virtualization disabled (e.g., `ScrollViewer.CanContentScroll=False` or grouping without virtualization settings) | Keep `VirtualizingPanel.IsVirtualizing=True`, `IsVirtualizingWhenGrouping=True`, recycling mode |
+| A derived control (`CommandCheckBox`) loses the Fluent look | An implicit style applies to its exact type only | Give it its own `BasedOn` style in `Styles/Foundation.xaml` |
+| UI freezes on large lists | Virtualization lost (the `ListView`'s `ItemsStackPanel` replaced, or the list inside a `ScrollViewer`) | Keep the `ListView`'s default virtualizing panel and scrolling |
 | App starts twice at login | Both a Run key and a Startup-folder shortcut | Only use the Run key |
 | Accented text garbled in Excel | CSV written without BOM | UTF-8 with BOM for CSV |
 

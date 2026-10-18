@@ -4,8 +4,7 @@ namespace TaskDesk.UiTests;
 
 /// <summary>
 /// Theme start-up smoke in a real process: with the theme setting at Light or Dark, the app starts, quick add
-/// gets ready and the window draws in that theme whatever the Windows app mode is. Framework-neutral: they run
-/// against the WPF build by default and the WinUI build with ui-tests.ps1 -WinUI.
+/// gets ready and the window draws in that theme whatever the Windows app mode is.
 /// </summary>
 public sealed class ThemeStartupTests
 {

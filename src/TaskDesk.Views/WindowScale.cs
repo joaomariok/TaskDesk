@@ -19,7 +19,7 @@ public static partial class WindowScale
         GetDpiForMonitor(monitor, MdtEffectiveDpi, out var dpiX, out _) == 0 ? FromDpi(dpiX) : 1.0;
 
     /// <summary>
-    /// The system scale: the primary monitor's at sign-in, which a system-DPI-aware process (the WPF app) works at.
+    /// The system scale: the primary monitor's at sign-in, which a system-DPI-aware process (the WPF app) worked at.
     /// </summary>
     public static double OfSystem() => FromDpi(GetDpiForSystem());
 

@@ -1,6 +1,6 @@
 # UI framework: port the app to WinUI 3, AOT-ready but JIT for now
 
-**Status: Accepted (2026-10-17). Supersedes [0003](0003-ui-framework.md).**
+**Status: Accepted (2026-10-17). Supersedes [0003](0003-ui-framework.md). Done: the swap (#68, 2026-10-18) deleted the WPF app, and the WinUI exe is `TaskDesk.App`.**
 
 ADR 0003 measured a WinUI 3 port and decided to stay on WPF. A WinUI build that can open the product database is not smaller than framework-dependent WPF, and it uses more memory. The owner now accepts those costs and ports the app to WinUI 3 anyway, for three reasons:
 
@@ -53,5 +53,6 @@ The platform forced two deviations from the spec:
 
 - Publish size and working set are expected to grow (0003: 226 to 281 MB self-contained against 137.7 MB framework-dependent; 176 to 194 MB against 168 MB). This is accepted.
 - The test suite gains a second framework, MSTest, limited to the WinUI test app, because `[UITestMethod]` exists only there.
-- README, DESIGN, PRODUCT, `docs/SPEC.md` and ADR 0002 describe WPF until the swap ticket updates them.
+- README, DESIGN, PRODUCT, `docs/SPEC.md` and ADR 0002 describe WinUI since the swap (#68).
+- At the swap, the exe kept its name (`TaskDesk.App.exe`), so the Run-key value and the notification registration stay the same, and `settings.json` and the window layout carry over. The framework-dependent profile (`win-x64-fdd`) and the WPF-only package pins were dropped.
 - One view-model change (owner decision on #56): WinUI dialogs and file pickers are async-only, so the four Presentation dialog interfaces (`IListDialogs`, `IOccurrenceDialogs`, `IExportDialogs`, `IImportDialogs`) return `Task`. The WPF implementations return completed tasks, the commands that call them await, and the Presentation tests changed only in their fakes.

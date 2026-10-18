@@ -7,7 +7,7 @@ namespace TaskDesk.Core.Tests;
 /// Guardrail for the WinUI port (ADR 0004): XAML in a WinUI project (a project file with
 /// <c>UseWinUI</c> set to true) uses <c>x:Bind</c> and <c>ThemeResource</c> only, so it stays AOT-ready.
 /// Each x:Bind function call over a property path also takes a FallbackValue, since x:Bind skips the call when
-/// an argument is null. WPF XAML is not scanned. Until the WinUI projects exist there is nothing to scan and the test passes.
+/// an argument is null. Other XAML is not scanned.
 /// </summary>
 public sealed partial class WinUiXamlGuardrailTests
 {

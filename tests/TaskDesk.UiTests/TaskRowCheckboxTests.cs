@@ -4,8 +4,7 @@ namespace TaskDesk.UiTests;
 
 /// <summary>
 /// The Task checkbox on a row, driven the way a screen reader drives it (UI Automation's Toggle pattern),
-/// completes the Task end to end: the row leaves the open Tasks and the completion is saved. Framework-neutral:
-/// it runs against the WPF build by default and the WinUI build with ui-tests.ps1 -WinUI.
+/// completes the Task end to end: the row leaves the open Tasks and the completion is saved.
 /// </summary>
 public sealed class TaskRowCheckboxTests : IDisposable
 {

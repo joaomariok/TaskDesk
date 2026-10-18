@@ -7,7 +7,7 @@ using TaskDesk.Presentation;
 
 namespace TaskDesk.App.Shell;
 
-/// <summary>How the WinUI shell delivers Reminders, as the WPF app does (SPEC 7.3).</summary>
+/// <summary>How the shell delivers Reminders (SPEC 7.3).</summary>
 internal static class NotificationServices
 {
     /// <summary>

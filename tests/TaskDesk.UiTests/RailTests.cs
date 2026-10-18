@@ -16,6 +16,11 @@ public sealed class RailTests : IDisposable
     private static IReadOnlyList<string> Names(AutomationElement list) =>
         list.FindAllChildren(cf => cf.ByControlType(ControlType.ListItem)).Select(i => i.Name).ToList();
 
+    // The native NavigationView keeps one Smart View list (SmartViewList) in both modes: the rail is its pane
+    // narrowed to the icons, and the hamburger's overlay is that pane widened over the page, inside the main window.
+    // NavigationView names its toggle button itself.
+    private double PaneWidth() => _app.Find(Ids.NavigationPane).BoundingRectangle.Width;
+
     [Fact]
     public void Below_900_px_the_sidebar_is_a_rail_whose_items_keep_their_names_and_it_is_full_again_when_widened()
     {
@@ -23,69 +28,6 @@ public sealed class RailTests : IDisposable
         Assert.NotEmpty(listNames);
         Assert.NotNull(_app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.SmartViewList)));
         Assert.Null(_app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.SidebarExpandButton)));
-        if (AppSession.IsWinUI)
-        {
-            WinUIRailKeepsItsItemsAndWidensAgain(listNames);
-            return;
-        }
-
-        _app.ResizeWidth(NarrowFactor);
-
-        var smartViews = AppSession.Eventually(
-            () => _app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.RailSmartViewList)),
-            "The sidebar did not collapse to the rail below 900 px.");
-        Assert.Equal(["Today", "Upcoming", "Overdue", "All", "Completed"], Names(smartViews));
-        Assert.Equal(listNames, _app.Rows(Ids.RailListsList));
-        Assert.Equal("Show sidebar", _app.Find(Ids.SidebarExpandButton).Name);
-        AppSession.WaitUntil(() => _app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.SmartViewList)) is null,
-            () => "The full sidebar is still shown beside the rail.");
-
-        _app.ResizeWidth(1 / NarrowFactor);
-
-        AppSession.Eventually(
-            () => _app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.SmartViewList)),
-            "Widening past 900 px did not restore the full sidebar.");
-        AppSession.WaitUntil(() => _app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.RailSmartViewList)) is null,
-            () => "The rail is still shown beside the full sidebar.");
-    }
-
-    [Fact]
-    public void The_hamburger_opens_the_full_sidebar_as_an_overlay_that_Esc_and_picking_an_item_close()
-    {
-        if (AppSession.IsWinUI)
-        {
-            WinUIHamburgerOpensAnOverlayThatEscAndPickingCloses();
-            return;
-        }
-
-        _app.ResizeWidth(NarrowFactor);
-
-        _app.Find(Ids.SidebarExpandButton).AsButton().Invoke();
-        AppSession.Eventually(() => _app.FindOnDesktop(Ids.SmartViewList), "The hamburger opened no sidebar overlay.");
-        AppSession.WaitUntil(() => _app.FocusedAutomationId() is { } id && id.StartsWith("SmartView", StringComparison.Ordinal),
-            () => $"Opening the overlay left focus on '{_app.FocusedAutomationId()}'.");
-
-        AppSession.Press(VirtualKeyShort.ESCAPE);
-        AppSession.WaitUntil(() => _app.FindOnDesktop(Ids.SmartViewList) is null, () => "Esc did not close the overlay.");
-        AppSession.WaitUntil(() => _app.FocusedAutomationId() == Ids.SidebarExpandButton,
-            () => $"Closing the overlay left focus on '{_app.FocusedAutomationId()}'.");
-
-        _app.Find(Ids.SidebarExpandButton).AsButton().Invoke();
-        var smartViews = AppSession.Eventually(() => _app.FindOnDesktop(Ids.SmartViewList), "The overlay did not reopen.");
-        AppSession.Eventually(
-                () => smartViews.FindFirstChild(cf => cf.ByControlType(ControlType.ListItem).And(cf.ByName("All"))),
-                "The overlay has no 'All' Smart View.")
-            .AsListBoxItem().Select();
-        AppSession.WaitUntil(() => _app.FindOnDesktop(Ids.SmartViewList) is null, () => "Picking an item did not close the overlay.");
-    }
-
-    // The WinUI build's native NavigationView keeps one Smart View list (SmartViewList) in both modes: the rail is
-    // its pane narrowed to the icons, and the hamburger's overlay is that pane widened over the page, inside the
-    // main window. NavigationView names its toggle button itself.
-    private double PaneWidth() => _app.Find(Ids.NavigationPane).BoundingRectangle.Width;
-
-    private void WinUIRailKeepsItsItemsAndWidensAgain(IReadOnlyList<string> listNames)
-    {
         var fullWidth = PaneWidth();
 
         _app.ResizeWidth(NarrowFactor);
@@ -103,7 +45,8 @@ public sealed class RailTests : IDisposable
             () => $"Widening past 900 px did not restore the full sidebar (it is {PaneWidth()} px of {fullWidth}).");
     }
 
-    private void WinUIHamburgerOpensAnOverlayThatEscAndPickingCloses()
+    [Fact]
+    public void The_hamburger_opens_the_full_sidebar_as_an_overlay_that_Esc_and_picking_an_item_close()
     {
         var fullWidth = PaneWidth();
         _app.ResizeWidth(NarrowFactor);

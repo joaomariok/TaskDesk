@@ -9,7 +9,7 @@ Two passes: the UI suite (does it behave) and a look at the states the change to
 
 ## 1. Behaviour
 
-Run `pwsh scripts/ui-tests.ps1` (add `-WinUI` for the WinUI app, here and in every `run-sandbox.ps1` call) and judge it by the exit code. A failed test leaves a PNG of the window in the folder printed as "Failure screenshots": read it (a dialog in the way, focus elsewhere, text in the wrong box), then rerun that one test once with `-Method <test method name>`. A pass on rerun is a **flake**, reported as such; a second failure is real.
+Run `pwsh scripts/ui-tests.ps1` and judge it by the exit code. A failed test leaves a PNG of the window in the folder printed as "Failure screenshots": read it (a dialog in the way, focus elsewhere, text in the wrong box), then rerun that one test once with `-Method <test method name>`. A pass on rerun is a **flake**, reported as such; a second failure is real.
 
 ## 2. Look
 
@@ -19,7 +19,7 @@ Run `pwsh scripts/ui-tests.ps1` (add `-WinUI` for the WinUI app, here and in eve
    - Find slugs with `winapp ui search "<text>" -a <pid>` or `inspect`.
    - Type into a box with `winapp ui focus <slug>`, then `winapp ui send-keys "<text>" --verbatim --via send-input`, then `send-keys tab --via send-input`. `set-value` skips TaskDesk's LostFocus bindings, so nothing validates or saves.
    - Wait for a result with `winapp ui wait-for "<text>" -a <pid>` rather than sleeping.
-4. **Before/after**, when the change alters something that already exists: repeat steps 2 and 3 with `-Ref main` into `<check>/before`, with the same names, theme, width and sample count. A WinUI change that `main` lacks takes its before shots from the WPF app (`-Ref main` without `-WinUI`). Then run `pwsh scripts/compare-shots.ps1 -Before <check>/before -After <check>/after` and read every image in `<check>/after/compared`: before | after | changes in magenta. Each magenta area is either the intended change or a side effect to report. For a new state there is no before.
+4. **Before/after**, when the change alters something that already exists: repeat steps 2 and 3 with `-Ref main` into `<check>/before`, with the same names, theme, width and sample count. A ref from before the WinUI swap (#68) builds the WPF app, under the same project path and exe name. Then run `pwsh scripts/compare-shots.ps1 -Before <check>/before -After <check>/after` and read every image in `<check>/after/compared`: before | after | changes in magenta. Each magenta area is either the intended change or a side effect to report. For a new state there is no before.
 5. In every shot, check:
    - text clipped, cut off or overlapping another control;
    - a control running past its pane or the window edge;

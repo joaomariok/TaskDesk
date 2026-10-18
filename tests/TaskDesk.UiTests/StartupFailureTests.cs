@@ -7,8 +7,8 @@ namespace TaskDesk.UiTests;
 
 /// <summary>
 /// The start-up failure path in a real process (#56): when the database cannot be opened, a dialog explains it and
-/// the app exits with code 1 once the owner presses OK. Framework-neutral: the WPF app shows a message box, the
-/// WinUI app a content dialog on a window of its own; both have the explanation and an OK button.
+/// the app exits with code 1 once the owner presses OK. The dialog is a content dialog on a window of its own, with
+/// the explanation and an OK button.
 /// </summary>
 public sealed class StartupFailureTests : IDisposable
 {

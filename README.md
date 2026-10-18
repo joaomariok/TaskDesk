@@ -27,21 +27,13 @@ Run it once from the published folder (below), then turn on "Start with Windows"
 
 ## Publish
 
-Two publish profiles, both `win-x64` and ReadyToRun compiled, write to `publish/<profile>/` (git-ignored):
+One publish profile, `win-x64`: self-contained (.NET and the Windows App SDK runtime inside the folder), unpackaged, ReadyToRun compiled, about 239 MB. It writes to `publish/win-x64/` (git-ignored):
 
 ```powershell
 dotnet publish src/TaskDesk.App -p:PublishProfile=win-x64
-dotnet publish src/TaskDesk.App -p:PublishProfile=win-x64-fdd
 ```
 
-| Profile | .NET runtime | Size | Use it when |
-|---|---|---|---|
-| `win-x64` | self-contained, inside the folder | about 222 MB | the PC may not have .NET 10, or you want a folder that runs anywhere on Windows 11 x64 |
-| `win-x64-fdd` | framework-dependent | about 52 MB | the PC has the **.NET 10 Desktop Runtime** (x64) installed, for example a developer PC |
-
-`win-x64-fdd` does not start without the .NET 10 Desktop Runtime (`Microsoft.WindowsDesktop.App` 10.0); the plain .NET Runtime is not enough because TaskDesk is a WPF app. Both profiles carry the Windows App SDK runtime themselves, so neither needs a Windows App Runtime install.
-
-Copy the whole folder anywhere, for example `%LOCALAPPDATA%\Programs\TaskDesk`, and run `TaskDesk.App.exe`. The profiles are in `src/TaskDesk.App/Properties/PublishProfiles/`. Every publish leaves out the Windows App SDK files TaskDesk never loads (AI/ML, Widgets, WinUI and composition); the list and the measured sizes are in [ADR 0002](docs/adr/0002-notification-delivery.md) and the rules in `src/TaskDesk.App/WindowsAppSdkPayload.targets`.
+Copy the whole folder anywhere, for example `%LOCALAPPDATA%\Programs\TaskDesk`, and run `TaskDesk.App.exe`. Nothing needs installing: neither .NET nor a Windows App Runtime. The profile is in `src/TaskDesk.App/Properties/PublishProfiles/`. Every publish leaves out the Windows App SDK files TaskDesk never loads (AI/ML, Widgets, imaging); the rules are in `src/TaskDesk.App/WindowsAppSdkPayload.targets` and the background in [ADR 0002](docs/adr/0002-notification-delivery.md) and [ADR 0004](docs/adr/0004-port-to-winui.md).
 
 ## Data location
 
@@ -62,7 +54,7 @@ Setting `TASKDESK_DATA_DIR` to a non-blank value also turns on sandbox mode, so 
 
 ## Windows App SDK
 
-Reminders use Windows app notifications from the Windows App SDK. The app references `Microsoft.WindowsAppSDK.Foundation` and `Microsoft.WindowsAppSDK.Runtime` with `WindowsAppSDKSelfContained=true` and an unpackaged app (`WindowsPackageType=None`), so the runtime DLLs ship inside the publish folder and nothing needs installing. See [ADR 0002](docs/adr/0002-notification-delivery.md); it is still a draft until the owner has run the notification checks on a clean machine.
+TaskDesk is a WinUI 3 app ([ADR 0004](docs/adr/0004-port-to-winui.md)), and Reminders use Windows app notifications from the same Windows App SDK. The app references `Microsoft.WindowsAppSDK` with `WindowsAppSDKSelfContained=true` and is unpackaged (`WindowsPackageType=None`), so the runtime DLLs ship inside the publish folder and nothing needs installing. See [ADR 0002](docs/adr/0002-notification-delivery.md).
 
 If registration of rich notifications fails for any reason, TaskDesk logs it, shows a banner in the main window and falls back to tray balloon notifications. Reminders keep working either way. If no notification appears, check Windows Focus Assist / Do Not Disturb and Settings, System, Notifications.
 
@@ -75,7 +67,7 @@ dotnet run --project tools/TaskDesk.SampleData -- "C:\temp\taskdesk-perf" 5000
 $env:TASKDESK_DATA_DIR = "C:\temp\taskdesk-perf"
 ```
 
-Sandbox mode keeps the test run away from your Run key. Measured results and method are in the ticket report for issue #20; targets are cold start to visible window under 1.5 s and `--minimized` working set under 150 MB.
+Sandbox mode keeps the test run away from your Run key. Measured results and method are in [ADR 0004](docs/adr/0004-port-to-winui.md); targets are cold start to visible window under 1.5 s and `--minimized` working set under 150 MB.
 
 ## Developer scripts
 
@@ -89,8 +81,8 @@ Sandbox mode keeps the test run away from your Run key. Measured results and met
 
 ## Known limits
 
-- The self-contained publish is still about 222 MB: most of it is the .NET and WPF runtime and the 25 MB Windows SDK projection (`Microsoft.Windows.SDK.NET.dll`). Use `win-x64-fdd` where the .NET 10 Desktop Runtime is installed.
-- Cold start to a visible window with 5,000 Tasks was measured at about 1.5 to 1.7 s, and the `--minimized` working set at about 170 MB. Both are slightly over their targets; the working set target is not a hard requirement.
+- The publish is about 239 MB: most of it is the .NET runtime, WinUI and the 25 MB Windows SDK projection (`Microsoft.Windows.SDK.NET.dll`).
+- With 5,000 Tasks, cold start to a visible window was measured at about 0.9 s, and the `--minimized` working set at about 214 MB, over its target; the working set target is not a hard requirement (ADR 0004).
 - Notifications are not delivered when TaskDesk runs elevated, or while Windows Do Not Disturb is on.
 - The default global hotkey `Ctrl+Alt+Space` may already belong to another application. TaskDesk logs the conflict and shows it in Settings; choose another combination there.
 - Subtasks are one level deep, Notes are plain text, and data is local to one PC (use Export and Import to move it).

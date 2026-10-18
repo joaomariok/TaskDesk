@@ -8,7 +8,7 @@ namespace TaskDesk.App.Shell;
 /// PopupMenu mode), which XAML's theme never reaches. Windows offers no documented API for this; uxtheme's
 /// SetPreferredAppMode (ordinal 135) and FlushMenuThemes (ordinal 136), present since Windows 10 1903, are what
 /// Explorer and other Win32 apps use. Dark forces dark menus, Light forces light ones and System follows the
-/// Windows app mode, as the WPF app's tray menu did.
+/// Windows app mode.
 /// </summary>
 internal static partial class NativeMenuTheme
 {

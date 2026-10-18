@@ -2,8 +2,8 @@ namespace TaskDesk.App.Shell;
 
 /// <summary>
 /// Calls back when the PC resumes from sleep, so Reminders due meanwhile are checked at once (SPEC 7.4). It
-/// reads WM_POWERBROADCAST on a top-level <see cref="MessageWindow"/>, the message WPF's
-/// <c>SystemEvents.PowerModeChanged</c> is raised from (without the WPF/WinForms-only package). Both resume
+/// reads WM_POWERBROADCAST on a top-level <see cref="MessageWindow"/>, the message
+/// <c>SystemEvents.PowerModeChanged</c> is raised from (that event needs the WPF or WinForms framework). Both resume
 /// notifications count: automatic (always sent) and suspend (after user input); the scheduler coalesces them.
 /// </summary>
 internal sealed class PowerResumeHook : IDisposable

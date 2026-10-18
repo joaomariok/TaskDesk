@@ -1,14 +1,14 @@
 # WinUI app
 
-The WinUI 3 port (ADR `docs/adr/0004-port-to-winui.md`) runs beside the WPF app until the swap (#68).
+TaskDesk is a WinUI 3 app (ADR `docs/adr/0004-port-to-winui.md`). The WPF app it replaced was deleted at the swap (#68).
 
 ## Layout
 
-- `src/TaskDesk.App.WinUI`: the shell exe, `TaskDesk.App.WinUI.exe`, root namespace `TaskDesk.App`. Start-up, tray, hotkey, session end and the window lifecycle live in `Shell/`. It runs in sandbox mode only (`TASKDESK_DATA_DIR` set). Shell sources shared with the WPF app are linked with `<Compile Include Link>`, never copied.
+- `src/TaskDesk.App`: the shell exe, `TaskDesk.App.exe`. Start-up, tray, hotkey, session end and the window lifecycle live in `Shell/`, toasts and the balloon fallback in `Notifications/`. `TaskDesk.Views.Tests` links the shell sources it tests with `<Compile Include Link>`.
 - `src/TaskDesk.Views`: every view, window, control, style and dialog. It references Core and Presentation, never the shell.
 - `tests/TaskDesk.Views.Tests`: an in-process WinUI test app (MSTest.Sdk, `[UITestMethod]`), part of the gate. Pattern: build the ViewModel over `TempDatabase` or fakes, `new MainWindow(vm)`, `Activate()`, `await vm.LoadAsync(ct)`, `UiWait.UntilAsync` until containers realize, assert through `VisualTree`, `Close()` in `finally`. Keys go through each view's `TryShortcut(key, modifiers)` seam.
-- `tests/TaskDesk.UiTests`: the opt-in FlaUI suite. `pwsh scripts/ui-tests.ps1 -WinUI` points it at the WinUI build.
-- To look at the app: `pwsh scripts/run-sandbox.ps1 -WinUI`.
+- `tests/TaskDesk.UiTests`: the opt-in FlaUI suite. Run it with `pwsh scripts/ui-tests.ps1`.
+- To look at the app: `pwsh scripts/run-sandbox.ps1`.
 - Keep `<UseWinUI>true</UseWinUI>` literal in WinUI csproj files: the XAML guardrail tests in `TaskDesk.Core.Tests` find WinUI projects by it.
 
 ## XAML
@@ -29,12 +29,12 @@ Async work a view starts (timers, handlers, loads) ends with its window: stop ti
 
 What the gate cannot drive in-process. Run each after changing the code it names.
 
-- Mixed-DPI restore (`Shell/WindowLayoutService.cs`): on a desk with monitors at two scales (say 100 % and 150 %), put the main window on the monitor at the other scale than the primary, resize it, exit from the tray and start again with `pwsh scripts/run-sandbox.ps1 -WinUI`. It opens on that monitor at the same position and physical size, and the day's log has no "never took its monitor's scale" warning. Repeat with the window on the primary monitor, then once with the window maximized.
-- Exit during start-up (`App.OnLaunched`, `ShellController.LaunchAsync`), once toasts are registered (after the swap, #68; sandbox mode shows balloons only): click a Reminder toast's Open while TaskDesk is not running, and choose Exit from the tray as soon as it appears. The app ends, no TaskDesk process is left, and the day's log has no "Unhandled UI exception". Repeat with Mark done: the Task is completed at the next start.
+- Mixed-DPI restore (`Shell/WindowLayoutService.cs`): on a desk with monitors at two scales (say 100 % and 150 %), put the main window on the monitor at the other scale than the primary, resize it, exit from the tray and start again with `pwsh scripts/run-sandbox.ps1`. It opens on that monitor at the same position and physical size, and the day's log has no "never took its monitor's scale" warning. Repeat with the window on the primary monitor, then once with the window maximized.
+- Exit during start-up (`App.OnLaunched`, `ShellController.LaunchAsync`), on a normal (not sandbox) run, since sandbox mode shows balloons only: click a Reminder toast's Open while TaskDesk is not running, and choose Exit from the tray as soon as it appears. The app ends, no TaskDesk process is left, and the day's log has no "Unhandled UI exception". Repeat with Mark done: the Task is completed at the next start.
 
 ## Gotchas
 
-- Rail and docked detail pane follow the window width with its frame (`MainWindow.WindowWidth`, `PaneLayout`), as the WPF window measured it.
+- Rail and docked detail pane follow the window width with its frame (`MainWindow.WindowWidth`, `PaneLayout`), as the WPF window measured it, so saved layouts carry over.
 - Recycled `ListView` containers stay in the visual tree: count only those with `list.IndexFromContainer(c) >= 0`.
 - A hidden pane's `x:Bind` values update after layout: wait for `pane.ActualWidth > 0` before asserting.
 - H.NotifyIcon.WinUI's PopupMenu runs each item's `Command` and never raises `Click` (`Shell/TrayMenu.cs`).

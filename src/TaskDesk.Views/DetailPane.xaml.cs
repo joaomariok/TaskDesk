@@ -178,7 +178,7 @@ public sealed partial class DetailPane : UserControl
     public static string[] PriorityNames { get; } = Enum.GetNames<Priority>();
 
     // A UserControl has no automation peer, so UI Automation would skip the pane and its AutomationId (DetailPane)
-    // and show only its fields; the WPF pane is an element of its own.
+    // and show only its fields.
     protected override AutomationPeer OnCreateAutomationPeer() => new FrameworkElementAutomationPeer(this);
 
     /// <summary>Focuses the title box with its text selected (F2, or Enter on a row).</summary>
