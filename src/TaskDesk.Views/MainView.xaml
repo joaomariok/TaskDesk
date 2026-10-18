@@ -112,7 +112,8 @@
                                                        AutomationProperties.Name="{x:Bind local:MainView.TagText(Tag), Mode=OneTime}"
                                                        Content="{x:Bind local:MainView.TagText(Tag), Mode=OneTime}"
                                                        IsChecked="{x:Bind IsSelected, Mode=OneTime}"
-                                                       Click="OnFilterTagClick" />
+                                                       CommandParameter="{x:Bind Tag, Mode=OneTime}"
+                                                       Loaded="OnFilterTagChipLoaded" />
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

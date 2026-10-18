@@ -14,7 +14,8 @@ public static class ThemeColours
 {
     /// <summary>
     /// The colour of each key as an element under <paramref name="theme"/> draws it in a shown window: a brush key
-    /// ("...Brush") through <c>{ThemeResource}</c>, any other key as a TextBlock style's foreground.
+    /// (such as "...Brush" or Fluent's "ToggleButtonForegroundChecked") through <c>{ThemeResource}</c>, any other
+    /// key as a TextBlock style's foreground.
     /// </summary>
     public static async Task<IReadOnlyDictionary<string, Color>> ResolveAsync(
         ElementTheme theme, IReadOnlyList<string> keys, CancellationToken cancellationToken)
@@ -23,7 +24,7 @@ public static class ThemeColours
         const string Ns = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         foreach (var key in keys)
         {
-            root.Children.Add((FrameworkElement)XamlReader.Load(key.EndsWith("Brush", StringComparison.Ordinal)
+            root.Children.Add((FrameworkElement)XamlReader.Load(IsBrush(key)
                 ? $$"""<Border xmlns="{{Ns}}" Tag="{{key}}" Width="4" Height="4" Background="{ThemeResource {{key}}}" />"""
                 : $$"""<TextBlock xmlns="{{Ns}}" Tag="{{key}}" Text="x" Style="{StaticResource {{key}}}" />"""));
         }
@@ -42,6 +43,10 @@ public static class ThemeColours
             window.Close();
         }
     }
+
+    private static bool IsBrush(string key) =>
+        key.EndsWith("Brush", StringComparison.Ordinal)
+        || Application.Current.Resources.TryGetValue(key, out var value) && value is Brush;
 
     /// <summary><paramref name="top"/> drawn over the opaque <paramref name="below"/>, as an opaque colour.</summary>
     public static Color Over(Color top, Color below)

@@ -159,11 +159,13 @@ public sealed partial class MainView : UserControl
         await ViewModel.SetMinPriorityFilterAsync((Priority)PriorityFilterBox.SelectedIndex);
     }
 
-    private void OnFilterTagClick(object sender, RoutedEventArgs e)
+    // A chip's template cannot reach the page's view model, so its Command is set here: a click, Space and a
+    // screen reader's Toggle then all run it once, with the chip's Tag.
+    private void OnFilterTagChipLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: FilterTagChip chip })
+        if (sender is CommandToggleButton { Command: null } chip)
         {
-            ViewModel.ToggleFilterTagCommand.Execute(chip.Tag);
+            chip.Command = ViewModel.ToggleFilterTagCommand;
         }
     }
 
