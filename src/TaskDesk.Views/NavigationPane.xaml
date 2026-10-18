@@ -53,26 +53,26 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Ellipse Width="10" Height="10" HorizontalAlignment="Left"
-                         Fill="{x:Bind local:NavigationPane.ColourBrush(ColorHex), Mode=OneWay}"
-                         Visibility="{x:Bind local:NavigationPane.ShownWithColour(ColorHex), Mode=OneWay}" />
+                         Fill="{x:Bind local:NavigationPane.ColourBrush(ColorHex), Mode=OneWay, FallbackValue=Transparent}"
+                         Visibility="{x:Bind local:NavigationPane.ShownWithColour(ColorHex), Mode=OneWay, FallbackValue=Collapsed}" />
                 <Ellipse Width="10" Height="10" HorizontalAlignment="Left" StrokeThickness="1.5"
                          Stroke="{ThemeResource ListStripeBrush}"
-                         Visibility="{x:Bind local:NavigationPane.ShownWithoutColour(ColorHex), Mode=OneWay}" />
+                         Visibility="{x:Bind local:NavigationPane.ShownWithoutColour(ColorHex), Mode=OneWay, FallbackValue=Visible}" />
                 <TextBlock Grid.Column="1" Style="{StaticResource BodyText}" VerticalAlignment="Center"
                            Text="{x:Bind Name, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
                 <InfoBadge Grid.Column="2" Margin="8,0,0,0" Style="{StaticResource SmartViewCountBadge}"
                            Value="{x:Bind OpenTaskCount, Mode=OneWay}"
-                           Visibility="{x:Bind local:NavigationPane.ShownAboveZero(OpenTaskCount), Mode=OneWay}" />
+                           Visibility="{x:Bind local:NavigationPane.ShownAboveZero(OpenTaskCount), Mode=OneWay, FallbackValue=Collapsed}" />
             </Grid>
         </DataTemplate>
         <!-- A List in the rail: its initial inside a ring of its colour (the stripe colour for none). -->
         <DataTemplate x:Key="RailListRowTemplate" x:DataType="presentation:ListItemViewModel">
             <Grid Width="24" Height="24" ToolTipService.ToolTip="{x:Bind Name, Mode=OneWay}">
                 <Ellipse StrokeThickness="1.5"
-                         Stroke="{x:Bind local:NavigationPane.ColourBrush(ColorHex), Mode=OneWay}"
-                         Visibility="{x:Bind local:NavigationPane.ShownWithColour(ColorHex), Mode=OneWay}" />
+                         Stroke="{x:Bind local:NavigationPane.ColourBrush(ColorHex), Mode=OneWay, FallbackValue=Transparent}"
+                         Visibility="{x:Bind local:NavigationPane.ShownWithColour(ColorHex), Mode=OneWay, FallbackValue=Collapsed}" />
                 <Ellipse StrokeThickness="1.5" Stroke="{ThemeResource ListStripeBrush}"
-                         Visibility="{x:Bind local:NavigationPane.ShownWithoutColour(ColorHex), Mode=OneWay}" />
+                         Visibility="{x:Bind local:NavigationPane.ShownWithoutColour(ColorHex), Mode=OneWay, FallbackValue=Visible}" />
                 <TextBlock Style="{StaticResource CaptionText}" HorizontalAlignment="Center" VerticalAlignment="Center"
                            Text="{x:Bind Initial, Mode=OneWay}" />
             </Grid>
@@ -129,7 +129,7 @@
                 <NavigationViewItem.InfoBadge>
                     <InfoBadge Style="{StaticResource SmartViewCountBadge}"
                                Value="{x:Bind ViewModel.TodayCount, Mode=OneWay}"
-                               Visibility="{x:Bind local:NavigationPane.ShownAboveZero(ViewModel.TodayCount), Mode=OneWay}" />
+                               Visibility="{x:Bind local:NavigationPane.ShownAboveZero(ViewModel.TodayCount), Mode=OneWay, FallbackValue=Collapsed}" />
                 </NavigationViewItem.InfoBadge>
                 <NavigationViewItem.KeyboardAccelerators>
                     <KeyboardAccelerator Key="Number1" Modifiers="Control" Invoked="OnAcceleratorInvoked" />
@@ -144,7 +144,7 @@
                 <NavigationViewItem.InfoBadge>
                     <InfoBadge Style="{StaticResource SmartViewCountBadge}"
                                Value="{x:Bind ViewModel.UpcomingCount, Mode=OneWay}"
-                               Visibility="{x:Bind local:NavigationPane.ShownAboveZero(ViewModel.UpcomingCount), Mode=OneWay}" />
+                               Visibility="{x:Bind local:NavigationPane.ShownAboveZero(ViewModel.UpcomingCount), Mode=OneWay, FallbackValue=Collapsed}" />
                 </NavigationViewItem.InfoBadge>
                 <NavigationViewItem.KeyboardAccelerators>
                     <KeyboardAccelerator Key="Number2" Modifiers="Control" Invoked="OnAcceleratorInvoked" />
@@ -159,7 +159,7 @@
                 <NavigationViewItem.InfoBadge>
                     <InfoBadge Style="{StaticResource SmartViewOverdueBadge}"
                                Value="{x:Bind ViewModel.OverdueCount, Mode=OneWay}"
-                               Visibility="{x:Bind local:NavigationPane.ShownAboveZero(ViewModel.OverdueCount), Mode=OneWay}" />
+                               Visibility="{x:Bind local:NavigationPane.ShownAboveZero(ViewModel.OverdueCount), Mode=OneWay, FallbackValue=Collapsed}" />
                 </NavigationViewItem.InfoBadge>
                 <NavigationViewItem.KeyboardAccelerators>
                     <KeyboardAccelerator Key="Number3" Modifiers="Control" Invoked="OnAcceleratorInvoked" />
@@ -174,7 +174,7 @@
                 <NavigationViewItem.InfoBadge>
                     <InfoBadge Style="{StaticResource SmartViewCountBadge}"
                                Value="{x:Bind ViewModel.AllCount, Mode=OneWay}"
-                               Visibility="{x:Bind local:NavigationPane.ShownAboveZero(ViewModel.AllCount), Mode=OneWay}" />
+                               Visibility="{x:Bind local:NavigationPane.ShownAboveZero(ViewModel.AllCount), Mode=OneWay, FallbackValue=Collapsed}" />
                 </NavigationViewItem.InfoBadge>
                 <NavigationViewItem.KeyboardAccelerators>
                     <KeyboardAccelerator Key="Number4" Modifiers="Control" Invoked="OnAcceleratorInvoked" />
@@ -215,7 +215,7 @@
                         <TextBlock Style="{StaticResource CaptionText}" Foreground="{ThemeResource OverdueBrush}"
                                    TextWrapping="Wrap" Margin="16,4,12,0"
                                    Text="{x:Bind Lists.ErrorMessage, Mode=OneWay}"
-                                   Visibility="{x:Bind local:NavigationPane.ShownWithText(Lists.ErrorMessage), Mode=OneWay}" />
+                                   Visibility="{x:Bind local:NavigationPane.ShownWithText(Lists.ErrorMessage), Mode=OneWay, FallbackValue=Collapsed}" />
                         <Button x:Name="NewListButton" Style="{StaticResource SubtleButtonStyle}"
                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="4,0,4,0"
                                 Content="+ New List" AutomationProperties.Name="New list"

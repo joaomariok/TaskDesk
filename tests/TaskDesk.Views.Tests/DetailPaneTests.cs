@@ -364,6 +364,40 @@ public sealed class DetailPaneTests
     }
 
     [UITestMethod]
+    public async Task The_List_dot_shows_each_selected_Tasks_own_List_colour_and_none_for_an_uncoloured_List()
+    {
+        using var db = await DatabaseAsync();
+        var lists = db.Get<IListService>();
+        var home = await lists.CreateListAsync("Home", Ct);
+        await lists.SetListColorAsync(home.Id, "#107C10", Ct);
+        await AddAsync(db, "Water plants", listId: home.Id);
+        await AddAsync(db, "Book dentist");
+        var (window, viewModel) = await OpenAsync(db, width: 1200);
+        try
+        {
+            await viewModel.ShowSmartViewAsync(SmartView.All, Ct);
+            await SelectAsync(window, "Water plants");
+            var pane = window.Details.Pane;
+            await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
+            var field = VisualTree.Find<StackPanel>(pane, "ListField");
+            var dot = VisualTree.Descendants(field).OfType<Microsoft.UI.Xaml.Shapes.Ellipse>().First();
+            await UiWait.UntilAsync(() => dot.Fill is SolidColorBrush { Color: { R: 0x10, G: 0x7C, B: 0x10 } },
+                () => "The coloured List's dot does not show its colour.", Ct);
+
+            await SelectAsync(window, "Book dentist");
+            await UiWait.UntilAsync(() => viewModel.DetailTask?.Title == "Book dentist",
+                () => "The pane did not move to the other Task.", Ct);
+            pane.UpdateLayout();
+
+            Assert.IsNull(dot.Fill, "The dot keeps the previous Task's List colour.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
     public async Task A_hairline_parts_the_fixed_header_from_the_scrolling_fields()
     {
         using var db = await DatabaseAsync();
@@ -653,9 +687,9 @@ public sealed class DetailPaneTests
 
     private static async Task AddAsync(
         TempDatabase db, string title, string notes = "", Priority priority = Priority.None, DateOnly? due = null,
-        DateTime? reminderUtc = null)
+        DateTime? reminderUtc = null, Guid? listId = null)
     {
-        var listId = (await db.QueryAsync(c => c.Lists.Where(l => l.IsDefault))).Single().Id;
+        listId ??= (await db.QueryAsync(c => c.Lists.Where(l => l.IsDefault))).Single().Id;
         var order = (await db.QueryAsync(c => c.Tasks)).Count;
         var now = db.Clock.GetUtcNow().UtcDateTime;
         await using var context = await db.Get<Microsoft.EntityFrameworkCore.IDbContextFactory<TaskDeskDbContext>>()
@@ -663,7 +697,7 @@ public sealed class DetailPaneTests
         context.Tasks.Add(new TaskItem
         {
             Id = Guid.CreateVersion7(),
-            ListId = listId,
+            ListId = listId.Value,
             Title = title,
             Notes = notes,
             Priority = priority,

@@ -212,6 +212,24 @@ public sealed class TaskRowTests
         Assert.AreEqual(0, shown.Count(), "Shown: " + string.Join(", ", shown));
     }
 
+    [UITestMethod]
+    public async Task A_recycled_row_moved_to_a_Task_of_an_uncoloured_List_drops_the_old_stripe_colour()
+    {
+        var coloured = new TaskList { Id = Guid.NewGuid(), Name = "Home", ColorHex = "#107C10" };
+        var plain = new TaskList { Id = Guid.NewGuid(), Name = "Inbox" };
+        var view = new TaskRow { Row = Row(new TaskItem { Id = Guid.NewGuid(), Title = "Water plants" }, coloured) };
+        using var host = await Hosted.ShowAsync(view, TestContext.CancellationToken);
+        var stripe = VisualTree.Find<Border>(view, "ListStripe");
+        Assert.IsNotNull(stripe.Background, "The coloured List's stripe has no colour to start with.");
+
+        // A ListView reuses the row for another Task, as it does while scrolling.
+        view.Row = Row(new TaskItem { Id = Guid.NewGuid(), Title = "Call the bank" }, plain);
+        view.UpdateLayout();
+
+        Assert.IsNull(stripe.Background, "The row kept the previous Task's List colour.");
+        Assert.AreEqual(0.0, stripe.Opacity);
+    }
+
     private static Tag NewTag(string name) => new() { Id = Guid.NewGuid(), Name = name };
 
     private static List<string> Texts(DependencyObject root) =>

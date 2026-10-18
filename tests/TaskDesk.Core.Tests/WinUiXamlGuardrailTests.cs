@@ -6,7 +6,8 @@ namespace TaskDesk.Core.Tests;
 /// <summary>
 /// Guardrail for the WinUI port (ADR 0004): XAML in a WinUI project (a project file with
 /// <c>UseWinUI</c> set to true) uses <c>x:Bind</c> and <c>ThemeResource</c> only, so it stays AOT-ready.
-/// WPF XAML is not scanned. Until the WinUI projects exist there is nothing to scan and the test passes.
+/// Each x:Bind function call over a property path also takes a FallbackValue, since x:Bind skips the call when
+/// an argument is null. WPF XAML is not scanned. Until the WinUI projects exist there is nothing to scan and the test passes.
 /// </summary>
 public sealed partial class WinUiXamlGuardrailTests
 {
@@ -85,6 +86,123 @@ public sealed partial class WinUiXamlGuardrailTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    [Fact]
+    public void WinUi_xaml_under_src_gives_each_x_Bind_function_over_a_path_a_FallbackValue()
+    {
+        var src = Path.Combine(FindRepoRoot(), "src");
+        var offences = WinUiXamlFiles(src)
+            .SelectMany(file => ScanFunctionBindings(File.ReadAllText(file))
+                .Select(o => $"{Path.GetRelativePath(src, file)}:{o}"))
+            .ToList();
+
+        Assert.True(offences.Count == 0,
+            "x:Bind skips a function whose argument is null, leaving the old value; give each a FallbackValue "
+            + "equal to what the function returns for null:\n" + string.Join('\n', offences));
+    }
+
+    [Theory]
+    [InlineData("<Ellipse Fill=\"{x:Bind local:TaskRow.StripeBrush(Row.ListColorHex), Mode=OneWay}\" />", 1)]
+    [InlineData("<Ellipse Fill=\"{x:Bind local:TaskRow.StripeBrush(Row.ListColorHex), Mode=OneWay, FallbackValue={x:Null}}\" />", 0)]
+    [InlineData("<TextBlock Visibility=\"{x:Bind Shown(ViewModel.Error), Mode=OneWay, FallbackValue=Collapsed}\" />", 0)]
+    [InlineData("<Border Opacity=\"{x:Bind RowOpacity(Row.IsCompleted, Row.KeepsFullStrength), Mode=OneWay}\" />", 1)]
+    [InlineData("<Border Opacity=\"{x:Bind Pick(x:True, 'a', -1.5, Row.Flag), Mode=OneWay}\" />", 1)]
+    [InlineData("<Border Opacity=\"{x:Bind Pick(x:True, 'a, b', -1.5, x:Null), Mode=OneTime}\" />", 0)]
+    [InlineData("<Border Style=\"{x:Bind Path=DueChipStyle(Row.DueState), Mode=OneWay}\" />", 1)]
+    [InlineData("<Border Tag=\"{x:Bind Now(), Mode=OneTime}\" />", 0)]
+    [InlineData("<TextBlock Text=\"{x:Bind ViewModel.Title, Mode=OneWay}\" />", 0)]
+    [InlineData("<TextBlock Text=\"{x:Bind ViewModel.Title, Mode=OneWay, TargetNullValue=''}\" />", 0)]
+    [InlineData("<TextBlock\n  Text=\"{x:Bind Hash(Name),\n    Mode=OneTime}\" Tag=\"{x:Bind Hash(Other), Mode=OneTime}\" />", 2)]
+    public void Function_scanner_flags_a_path_argument_without_a_FallbackValue(string xaml, int expected)
+    {
+        Assert.Equal(expected, ScanFunctionBindings(xaml).Count());
+    }
+
+    [Fact]
+    public void Function_scanner_reports_the_line_of_the_binding()
+    {
+        var xaml = "<Grid>\n  <Ellipse />\n  <Ellipse Fill=\"{x:Bind Brush(ColorHex), Mode=OneWay}\" />\n</Grid>";
+
+        Assert.Equal(["3: {x:Bind Brush(ColorHex), Mode=OneWay}"], ScanFunctionBindings(xaml));
+    }
+
+    // Each x:Bind whose path is a function call with at least one property-path argument (anything but a literal:
+    // x:True, x:False, x:Null, a number or a quoted string) and no FallbackValue. A source-text check cannot tell a
+    // value-type argument from a nullable one, so every path argument counts.
+    private static IEnumerable<string> ScanFunctionBindings(string text)
+    {
+        foreach (Match start in XBindStart().Matches(text))
+        {
+            var binding = MarkupExtensionAt(text, start.Index);
+            var call = FunctionPath().Match(binding);
+            if (!call.Success || FallbackValueSetting().IsMatch(binding))
+            {
+                continue;
+            }
+
+            if (SplitArguments(call.Groups["args"].Value).Any(a => !Literal().IsMatch(a)))
+            {
+                var line = text.AsSpan(0, start.Index).Count('\n') + 1;
+                yield return $"{line}: {Regex.Replace(binding, "\\s+", " ")}";
+            }
+        }
+    }
+
+    // The markup extension that opens at `index`, through its matching closing brace.
+    private static string MarkupExtensionAt(string text, int index)
+    {
+        var depth = 0;
+        for (var i = index; i < text.Length; i++)
+        {
+            depth += text[i] switch { '{' => 1, '}' => -1, _ => 0 };
+            if (depth == 0)
+            {
+                return text[index..(i + 1)];
+            }
+        }
+
+        return text[index..];
+    }
+
+    // Arguments split on commas outside quotes, trimmed; none for an empty list.
+    private static IEnumerable<string> SplitArguments(string args)
+    {
+        var parts = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var quoted = false;
+        foreach (var c in args)
+        {
+            if (c == '\'')
+            {
+                quoted = !quoted;
+            }
+
+            if (c == ',' && !quoted)
+            {
+                parts.Add(current.ToString().Trim());
+                current.Clear();
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+
+        parts.Add(current.ToString().Trim());
+        return parts.Where(p => p.Length > 0);
+    }
+
+    [GeneratedRegex("\\{\\s*x:Bind\\b")]
+    private static partial Regex XBindStart();
+
+    [GeneratedRegex("^\\{\\s*x:Bind\\s+(?:Path\\s*=\\s*)?[\\w.:]+\\s*\\((?<args>[^)]*)\\)")]
+    private static partial Regex FunctionPath();
+
+    [GeneratedRegex("[\\s,]FallbackValue\\s*=")]
+    private static partial Regex FallbackValueSetting();
+
+    [GeneratedRegex("^(?:x:True|x:False|x:Null|-?\\d+(?:\\.\\d+)?|'[^']*')$")]
+    private static partial Regex Literal();
 
     private static IEnumerable<string> Scan(string text)
     {

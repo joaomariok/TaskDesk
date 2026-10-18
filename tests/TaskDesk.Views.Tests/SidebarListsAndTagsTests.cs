@@ -63,6 +63,74 @@ public sealed class SidebarListsAndTagsTests
     }
 
     [UITestMethod]
+    public async Task A_List_whose_colour_is_removed_shows_the_hollow_ring_in_the_sidebar_and_the_rail()
+    {
+        var ct = TestContext.CancellationToken;
+        var colours = await ThemeColours.ResolveAsync(ElementTheme.Light, ["ListStripeBrush"], ct);
+        using var db = new TempDatabase();
+        var (window, viewModel, lists) = NewWindow(db);
+        lists.Lists.Add(NewList("Work", 0, "#D13438"));
+        try
+        {
+            ((FrameworkElement)window.Content).RequestedTheme = ElementTheme.Light;
+            window.Activate();
+            var row = (await RowsAsync(window, "ListsList", 1))[0];
+            Assert.AreEqual(Color.FromArgb(255, 0xD1, 0x34, 0x38), Colour(VisibleEllipse(row).Fill));
+
+            lists.Lists[0].ColorHex = null;
+
+            var ring = VisibleEllipse(row);
+            Assert.IsNotNull(ring.Stroke, "The List's old colour dot is still shown instead of the hollow ring.");
+            Assert.AreEqual(colours["ListStripeBrush"], Colour(ring.Stroke));
+            Assert.IsTrue(VisualTree.Descendants(row).OfType<Ellipse>().All(e => e.Fill is null || Colour(e.Fill) == Colors.Transparent),
+                "An Ellipse still holds the List's old colour.");
+
+            lists.Lists[0].ColorHex = "#D13438";
+            window.Navigation.SetRail(true);
+            var railRow = (await RowsAsync(window, "RailListsList", 1))[0];
+            Assert.AreEqual(Color.FromArgb(255, 0xD1, 0x34, 0x38), Colour(VisibleEllipse(railRow).Stroke));
+
+            lists.Lists[0].ColorHex = null;
+
+            Assert.AreEqual(colours["ListStripeBrush"], Colour(VisibleEllipse(railRow).Stroke),
+                "The rail's ring keeps the List's old colour.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task A_Lists_error_that_is_cleared_takes_no_room_again()
+    {
+        using var db = new TempDatabase();
+        var (window, _, lists) = NewWindow(db);
+        lists.Lists.Add(NewList("Work", 0, null));
+        try
+        {
+            window.Activate();
+            await RowsAsync(window, "ListsList", 1);
+            var area = VisualTree.Find<StackPanel>(window.Content, "NewListArea");
+            var error = VisualTree.Descendants(area).OfType<TextBlock>().First();
+
+            lists.ErrorMessage = "That name is taken.";
+            area.UpdateLayout();
+            Assert.IsGreaterThan(0, error.DesiredSize.Height, "The error is not shown.");
+
+            lists.ErrorMessage = null;
+            area.UpdateLayout();
+
+            Assert.AreEqual(Visibility.Collapsed, error.Visibility, "The cleared error is still shown.");
+            Assert.AreEqual(0, error.DesiredSize.Height, "The cleared error still takes room.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
     public async Task Lists_new_List_and_Tags_share_one_scroll_area_below_the_Smart_Views_in_that_order()
     {
         using var db = new TempDatabase();

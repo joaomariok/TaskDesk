@@ -218,6 +218,65 @@ public sealed class SettingsWindowTests
     }
 
     [UITestMethod]
+    public async Task The_shortcut_problem_closes_once_a_free_combination_is_pressed()
+    {
+        var ct = TestContext.CancellationToken;
+        using var ownerWindow = new MessageWindow();
+        using var owner = new WinUiHotkeyRegistrar(ownerWindow, NullLogger<WinUiHotkeyRegistrar>.Instance, _hotkeyTable);
+        Assert.IsTrue(owner.TryRegister(Taken));
+        using var hotkeys = NewHotkeys();
+        var window = await OpenAsync(NewViewModel(new ThemeService(), hotkeys), ct);
+        try
+        {
+            var problem = Named<InfoBar>(window, "Shortcut problem");
+            Assert.IsTrue(window.View.CaptureHotkey(VirtualKey.F7, CtrlAltShift));
+            await UiWait.UntilAsync(() => problem.IsOpen, () => "The shortcut problem did not show.", ct);
+
+            Assert.IsTrue(window.View.CaptureHotkey(VirtualKey.F8, CtrlAltShift));
+            window.View.UpdateLayout();
+
+            Assert.IsNull(window.View.ViewModel.HotkeyError);
+            Assert.IsFalse(problem.IsOpen, "The shortcut problem stays open after the error cleared.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task A_status_line_takes_no_room_while_it_has_no_text()
+    {
+        var ct = TestContext.CancellationToken;
+        using var hotkeys = NewHotkeys();
+        var viewModel = NewViewModel(new ThemeService(), hotkeys);
+        var window = await OpenAsync(viewModel, ct);
+        try
+        {
+            viewModel.ExportStatus = "Exported";
+            viewModel.ImportStatus = "Imported";
+            viewModel.BackupStatus = "Backed up";
+            window.View.UpdateLayout();
+            var statuses = VisualTree.Descendants(window.View).OfType<TextBlock>()
+                .Where(t => t.Text is "Exported" or "Imported" or "Backed up").ToList();
+            Assert.HasCount(3, statuses);
+            Assert.IsTrue(statuses.All(t => t.DesiredSize.Height > 0), "A status that has text is not shown.");
+
+            viewModel.ExportStatus = "";
+            viewModel.ImportStatus = "";
+            viewModel.BackupStatus = "";
+            window.View.UpdateLayout();
+
+            Assert.IsTrue(statuses.All(t => t.Visibility == Visibility.Collapsed && t.DesiredSize.Height == 0),
+                "A cleared status still takes room.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
     public async Task The_data_folder_opens_and_its_path_copies()
     {
         var ct = TestContext.CancellationToken;

@@ -254,16 +254,16 @@
                             <ComboBox x:Name="RepeatBox" MinWidth="160"
                                       AutomationProperties.Name="Repeat"
                                       ItemsSource="{x:Bind local:DetailPane.RepeatNames, Mode=OneTime}"
-                                      SelectedIndex="{x:Bind local:DetailPane.RepeatIndex(Repeat.Preset), BindBack=SetRepeatIndex, Mode=TwoWay}" />
+                                      SelectedIndex="{x:Bind local:DetailPane.RepeatIndex(Repeat.Preset), BindBack=SetRepeatIndex, Mode=TwoWay, FallbackValue=0}" />
                             <StackPanel Orientation="Horizontal" Spacing="6"
                                         Visibility="{x:Bind Repeat.HasInterval, Mode=OneWay}">
                                 <TextBlock Text="Every" Style="{StaticResource BodyText}" VerticalAlignment="Center" />
                                 <TextBox Width="56" MaxLength="3"
                                          AutomationProperties.Name="Repeat every"
                                          ToolTipService.ToolTip="Every N days, weeks, months or years"
-                                         Text="{x:Bind local:DetailPane.NumberText(Repeat.Interval), BindBack=SetInterval, Mode=TwoWay}" />
+                                         Text="{x:Bind local:DetailPane.NumberText(Repeat.Interval), BindBack=SetInterval, Mode=TwoWay, FallbackValue='0'}" />
                                 <TextBlock Style="{StaticResource SecondaryCaptionText}" VerticalAlignment="Center"
-                                           Text="{x:Bind local:DetailPane.IntervalUnit(Repeat.Preset), Mode=OneWay}" />
+                                           Text="{x:Bind local:DetailPane.IntervalUnit(Repeat.Preset), Mode=OneWay, FallbackValue=''}" />
                             </StackPanel>
                             <VariableSizedWrapGrid Orientation="Horizontal" ItemWidth="64"
                                                    Visibility="{x:Bind Repeat.HasDays, Mode=OneWay}">
@@ -288,7 +288,7 @@
                                 <TextBox Width="56" MaxLength="2"
                                          AutomationProperties.Name="Day of month"
                                          ToolTipService.ToolTip="Day of the month (1-31; shorter months use their last day)"
-                                         Text="{x:Bind local:DetailPane.NumberText(Repeat.DayOfMonth), BindBack=SetDayOfMonth, Mode=TwoWay}" />
+                                         Text="{x:Bind local:DetailPane.NumberText(Repeat.DayOfMonth), BindBack=SetDayOfMonth, Mode=TwoWay, FallbackValue='0'}" />
                             </StackPanel>
                             <StackPanel Spacing="4" Visibility="{x:Bind Repeat.IsRepeating, Mode=OneWay}">
                                 <CheckBox Content="Count from the completion date"
@@ -311,16 +311,16 @@
                     <ComboBox x:Name="PriorityBox" Margin="{StaticResource FieldMargin}" MinWidth="160"
                               AutomationProperties.Name="Priority"
                               ItemsSource="{x:Bind local:DetailPane.PriorityNames, Mode=OneTime}"
-                              SelectedIndex="{x:Bind local:DetailPane.PriorityIndex(ViewModel.DetailPriority), BindBack=SetPriorityIndex, Mode=TwoWay}" />
+                              SelectedIndex="{x:Bind local:DetailPane.PriorityIndex(ViewModel.DetailPriority), BindBack=SetPriorityIndex, Mode=TwoWay, FallbackValue=0}" />
 
                     <!-- List: the List the Task belongs to, as text with its dot or ring; it cannot be changed here. -->
                     <TextBlock Text="List" Style="{StaticResource FieldLabel}" />
                     <StackPanel x:Name="ListField" Orientation="Horizontal" Spacing="8" Margin="{StaticResource FieldMargin}"
                                 AutomationProperties.Name="List">
                         <Grid Width="10" Height="10" VerticalAlignment="Center">
-                            <Ellipse Fill="{x:Bind local:TaskRow.StripeBrush(ViewModel.DetailTask.ListColorHex), Mode=OneWay}" />
+                            <Ellipse Fill="{x:Bind local:TaskRow.StripeBrush(ViewModel.DetailTask.ListColorHex), Mode=OneWay, FallbackValue={x:Null}}" />
                             <Ellipse StrokeThickness="1.5" Stroke="{ThemeResource ListStripeBrush}"
-                                     Visibility="{x:Bind local:DetailPane.ShownWithoutColour(ViewModel.DetailTask.HasListColor), Mode=OneWay}" />
+                                     Visibility="{x:Bind local:DetailPane.ShownWithoutColour(ViewModel.DetailTask.HasListColor), Mode=OneWay, FallbackValue=Visible}" />
                         </Grid>
                         <TextBlock Style="{StaticResource BodyText}" TextTrimming="CharacterEllipsis"
                                    Text="{x:Bind ViewModel.DetailTask.ListName, Mode=OneWay, FallbackValue=''}" />
@@ -341,10 +341,10 @@
                                 <Border Style="{StaticResource DetailTagChip}">
                                     <StackPanel Orientation="Horizontal" Spacing="2">
                                         <TextBlock Style="{StaticResource DetailTagChipText}"
-                                                   Text="{x:Bind local:TaskRow.Hash(Name), Mode=OneTime}" />
+                                                   Text="{x:Bind local:TaskRow.Hash(Name), Mode=OneTime, FallbackValue='#'}" />
                                         <Button Style="{StaticResource TagRemoveButton}"
                                                 ToolTipService.ToolTip="Remove tag"
-                                                AutomationProperties.Name="{x:Bind local:DetailPane.RemoveTagName(Name), Mode=OneTime}"
+                                                AutomationProperties.Name="{x:Bind local:DetailPane.RemoveTagName(Name), Mode=OneTime, FallbackValue='Remove #'}"
                                                 Click="OnRemoveTagClick">
                                             <FontIcon Glyph="&#xE711;" FontSize="8" />
                                         </Button>

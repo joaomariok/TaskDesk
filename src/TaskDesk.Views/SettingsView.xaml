@@ -71,7 +71,7 @@
             <InfoBar Severity="Warning"
                      IsClosable="False"
                      AutomationProperties.Name="Shortcut problem"
-                     IsOpen="{x:Bind local:SettingsView.HasText(ViewModel.HotkeyError), Mode=OneWay}"
+                     IsOpen="{x:Bind local:SettingsView.HasText(ViewModel.HotkeyError), Mode=OneWay, FallbackValue=False}"
                      Message="{x:Bind ViewModel.HotkeyError, Mode=OneWay}" />
 
             <TextBlock Text="Reminders" Style="{StaticResource SettingsGroupHeading}" />
@@ -86,7 +86,7 @@
             <TextBlock Text="Enter a time such as 09:00."
                        Style="{StaticResource SettingsStatusText}"
                        Foreground="{ThemeResource OverdueBrush}"
-                       Visibility="{x:Bind local:SettingsView.ShownWhenFalse(ViewModel.IsReminderTimeValid), Mode=OneWay}" />
+                       Visibility="{x:Bind local:SettingsView.ShownWhenFalse(ViewModel.IsReminderTimeValid), Mode=OneWay, FallbackValue=Visible}" />
 
             <TextBlock Text="Data" Style="{StaticResource SettingsGroupHeading}" />
             <ctk:SettingsCard Header="Data folder" Description="{x:Bind ViewModel.DataFolder, Mode=OneTime}">
@@ -117,7 +117,7 @@
             </ctk:SettingsCard>
             <TextBlock Style="{StaticResource SettingsStatusText}"
                        Text="{x:Bind ViewModel.ExportStatus, Mode=OneWay}"
-                       Visibility="{x:Bind local:SettingsView.ShownWhenText(ViewModel.ExportStatus), Mode=OneWay}" />
+                       Visibility="{x:Bind local:SettingsView.ShownWhenText(ViewModel.ExportStatus), Mode=OneWay, FallbackValue=Collapsed}" />
             <ctk:SettingsCard Header="Import" Description="Merge or replace your data from a JSON export.">
                 <ctk:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE8B5;" />
@@ -128,7 +128,7 @@
             </ctk:SettingsCard>
             <TextBlock Style="{StaticResource SettingsStatusText}"
                        Text="{x:Bind ViewModel.ImportStatus, Mode=OneWay}"
-                       Visibility="{x:Bind local:SettingsView.ShownWhenText(ViewModel.ImportStatus), Mode=OneWay}" />
+                       Visibility="{x:Bind local:SettingsView.ShownWhenText(ViewModel.ImportStatus), Mode=OneWay, FallbackValue=Collapsed}" />
             <ctk:SettingsCard Header="Back up" Description="Save a copy of your database now.">
                 <ctk:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE81C;" />
@@ -139,10 +139,10 @@
             </ctk:SettingsCard>
             <TextBlock Style="{StaticResource SettingsStatusText}"
                        Text="{x:Bind ViewModel.BackupStatus, Mode=OneWay}"
-                       Visibility="{x:Bind local:SettingsView.ShownWhenText(ViewModel.BackupStatus), Mode=OneWay}" />
+                       Visibility="{x:Bind local:SettingsView.ShownWhenText(ViewModel.BackupStatus), Mode=OneWay, FallbackValue=Collapsed}" />
 
             <TextBlock Text="About" Style="{StaticResource SettingsGroupHeading}" />
-            <ctk:SettingsCard Header="TaskDesk" Description="{x:Bind local:SettingsView.VersionText(ViewModel.Version), Mode=OneTime}">
+            <ctk:SettingsCard Header="TaskDesk" Description="{x:Bind local:SettingsView.VersionText(ViewModel.Version), Mode=OneTime, FallbackValue='Version '}">
                 <ctk:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE946;" />
                 </ctk:SettingsCard.HeaderIcon>

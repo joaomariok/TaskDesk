@@ -68,7 +68,7 @@
     </UserControl.Resources>
 
     <Grid x:Name="RowRoot" ColumnSpacing="8"
-          Opacity="{x:Bind local:TaskRow.RowOpacity(Row.IsCompleted, Row.KeepsFullStrength), Mode=OneWay}">
+          Opacity="{x:Bind local:TaskRow.RowOpacity(Row.IsCompleted, Row.KeepsFullStrength), Mode=OneWay, FallbackValue=1}">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="Auto" />
@@ -79,12 +79,12 @@
         <TextBlock x:Name="RowTitle" Grid.Column="2" Style="{StaticResource BodyText}"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
                    Text="{x:Bind Row.Title, Mode=OneWay}"
-                   TextDecorations="{x:Bind local:TaskRow.TitleDecorations(Row.IsCompleted, Row.KeepsFullStrength), Mode=OneWay}"
+                   TextDecorations="{x:Bind local:TaskRow.TitleDecorations(Row.IsCompleted, Row.KeepsFullStrength), Mode=OneWay, FallbackValue=None}"
                    ToolTipService.ToolTip="{x:Bind Row.Title, Mode=OneWay}" />
         <!-- The List's colour as a thin bar; transparent (but still taking its space) when the List has none. -->
         <Border x:Name="ListStripe" Width="3" CornerRadius="1.5" Margin="0,4"
-                Background="{x:Bind local:TaskRow.StripeBrush(Row.ListColorHex), Mode=OneWay}"
-                Opacity="{x:Bind local:TaskRow.StripeOpacity(Row.HasListColor), Mode=OneWay}" />
+                Background="{x:Bind local:TaskRow.StripeBrush(Row.ListColorHex), Mode=OneWay, FallbackValue={x:Null}}"
+                Opacity="{x:Bind local:TaskRow.StripeOpacity(Row.HasListColor), Mode=OneWay, FallbackValue=0}" />
         <!-- Fluent's own box with its 4 px corners, as in the WPF app, without the room Fluent reserves for a label. -->
         <local:CommandCheckBox x:Name="CompletedBox" Grid.Column="1"
                                MinWidth="0" MinHeight="0" Padding="0"
@@ -111,7 +111,7 @@
                     <DataTemplate x:DataType="tags:Tag">
                         <Border Style="{StaticResource TagChip}">
                             <TextBlock Style="{StaticResource TagChipText}"
-                                       Text="{x:Bind local:TaskRow.Hash(Name), Mode=OneTime}" />
+                                       Text="{x:Bind local:TaskRow.Hash(Name), Mode=OneTime, FallbackValue='#'}" />
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -122,13 +122,13 @@
             <TextBlock Style="{StaticResource RowCaptionText}" AutomationProperties.Name="List"
                        Text="{x:Bind Row.ListName, Mode=OneWay}"
                        Visibility="{x:Bind Row.ShowListName, Mode=OneWay}" />
-            <TextBlock Style="{x:Bind PriorityFlagStyle(Row.Priority), Mode=OneWay}" Text="&#xE7C1;"
+            <TextBlock Style="{x:Bind PriorityFlagStyle(Row.Priority), Mode=OneWay, FallbackValue={x:Null}}" Text="&#xE7C1;"
                        AutomationProperties.Name="{x:Bind Row.PriorityLabel, Mode=OneWay}"
                        ToolTipService.ToolTip="{x:Bind Row.PriorityLabel, Mode=OneWay}"
                        Visibility="{x:Bind Row.HasPriorityFlag, Mode=OneWay}" />
-            <Border x:Name="DueChip" Style="{x:Bind DueChipStyle(Row.DueState), Mode=OneWay}"
+            <Border x:Name="DueChip" Style="{x:Bind DueChipStyle(Row.DueState), Mode=OneWay, FallbackValue={x:Null}}"
                     Visibility="{x:Bind Row.HasDue, Mode=OneWay}">
-                <TextBlock x:Name="DueText" Style="{x:Bind DueTextStyle(Row.DueState), Mode=OneWay}"
+                <TextBlock x:Name="DueText" Style="{x:Bind DueTextStyle(Row.DueState), Mode=OneWay, FallbackValue={x:Null}}"
                            AutomationProperties.Name="Due" Text="{x:Bind Row.DueText, Mode=OneWay}" />
             </Border>
         </StackPanel>

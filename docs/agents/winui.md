@@ -14,6 +14,7 @@ The WinUI 3 port (ADR `docs/adr/0004-port-to-winui.md`) runs beside the WPF app 
 ## XAML
 
 - `x:Bind` takes an explicit `Mode` (WUI2011); a nested path such as `ViewModel.DetailTask.ListName` also takes a `FallbackValue` (WUI2010). `OneWay` needs a property that raises change notifications (WMC1506).
+- An `x:Bind` function call with a path argument, such as `ShownWithText(ViewModel.Error)`, takes a `FallbackValue` equal to what the function returns for null: x:Bind skips the call when an argument is null and the old value stays (`WinUiXamlGuardrailTests`). `FallbackValue` takes only a string or `{x:Null}`.
 - Colours come from `{ThemeResource}` only. A new theme brush is a `SolidColorBrush` in each theme dictionary (Default, Light, Dark, HighContrast) of `Styles/Foundation.xaml`; a `StaticResource` alias to a Fluent brush ignores a window's `RequestedTheme`.
 - An implicit style applies to its exact type only. A derived control (`CommandCheckBox`, `CommandToggleButton`) gets its own `BasedOn` style in `Foundation.xaml`.
 - An element with keyboard accelerators sets `KeyboardAcceleratorPlacementMode="Hidden"`, or the accelerator text shows in its tooltip.

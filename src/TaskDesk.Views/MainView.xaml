@@ -111,8 +111,8 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="presentation:FilterTagChip">
                             <local:CommandToggleButton Padding="8,2"
-                                                       AutomationProperties.Name="{x:Bind local:MainView.TagText(Tag), Mode=OneTime}"
-                                                       Content="{x:Bind local:MainView.TagText(Tag), Mode=OneTime}"
+                                                       AutomationProperties.Name="{x:Bind local:MainView.TagText(Tag), Mode=OneTime, FallbackValue=''}"
+                                                       Content="{x:Bind local:MainView.TagText(Tag), Mode=OneTime, FallbackValue=''}"
                                                        IsChecked="{x:Bind IsSelected, Mode=OneTime}"
                                                        CommandParameter="{x:Bind Tag, Mode=OneTime}"
                                                        Loaded="OnFilterTagChipLoaded" />
