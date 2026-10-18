@@ -170,7 +170,7 @@ public sealed partial class MainViewModel
         }
 
         ErrorMessage = null;
-        _pendingSave = SaveDueAsync(_pendingSave, row, date, time);
+        EnqueueSave(previous => SaveDueAsync(previous, row, date, time));
     }
 
     private async Task SaveDueAsync(Task previous, TaskRowViewModel row, DateOnly? date, TimeOnly? time)
@@ -249,12 +249,24 @@ public sealed partial class MainViewModel
         }
     }
 
-    // Once the view model has stopped, an edit saves nothing: the stop has saved the pending one already.
+    /// <summary>
+    /// Every detail save joins the chain of saves here, after the saves already pending, so saves of one Task never
+    /// overlap. Once the view model has stopped, nothing joins: the stop has saved the pending edit already, and
+    /// a save started after it would run against a host being stopped.
+    /// </summary>
+    private void EnqueueSave(Func<Task, Task> save)
+    {
+        if (!_lifetime.IsStopped)
+        {
+            _pendingSave = save(_pendingSave);
+        }
+    }
+
     private void ScheduleSave(TaskRowViewModel row, bool immediate)
     {
         if (_lifetime.IsStopped)
         {
-            return;
+            return; // no save would join the chain (EnqueueSave), so arm no debounce for one
         }
 
         _debounce?.Cancel();
@@ -267,8 +279,8 @@ public sealed partial class MainViewModel
         }
 
         // Capture now: the fields describe `row` only until the selection changes.
-        _pendingSave = SaveDetailAsync(
-            _pendingSave, row, DetailTitle, DetailNotes, DetailPriority, immediate, token);
+        EnqueueSave(previous => SaveDetailAsync(
+            previous, row, DetailTitle, DetailNotes, DetailPriority, immediate, token));
     }
 
     private async Task SaveDetailAsync(

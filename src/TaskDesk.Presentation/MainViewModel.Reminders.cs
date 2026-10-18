@@ -190,7 +190,7 @@ public sealed partial class MainViewModel
         }
 
         ErrorMessage = null;
-        _pendingSave = SaveReminderAsync(_pendingSave, row, reminderUtc);
+        EnqueueSave(previous => SaveReminderAsync(previous, row, reminderUtc));
     }
 
     private async Task SaveReminderAsync(Task previous, TaskRowViewModel row, DateTime? reminderUtc)

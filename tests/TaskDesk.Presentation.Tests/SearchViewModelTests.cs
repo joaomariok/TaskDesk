@@ -87,7 +87,7 @@ public class SearchViewModelTests
 
         var tags = new FakeTagService(service);
         var search = new FakeSearchService(service);
-        var vm = new MainViewModel(service, tags, searchService: search);
+        var vm = new MainViewModel(service, tags, new FakeTimeProvider(), searchService: search);
         await vm.LoadAsync(Ct);
         return (service, tags, search, vm);
     }

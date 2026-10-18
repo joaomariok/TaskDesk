@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
 using FakeTagService = TaskDesk.Presentation.Tests.MainViewModelTests.FakeTagService;
@@ -40,7 +41,8 @@ public class PageHeadingViewModelTests
         var service = new FakeTaskService();
         var tags = new FakeTagService(service);
         var vm = new MainViewModel(
-            service, tags, dueService: new EmptyDueService(), searchService: new TitleSearchService(service))
+            service, tags, new FakeTimeProvider(), dueService: new EmptyDueService(),
+            searchService: new TitleSearchService(service))
         {
             DefaultListName = "Work",
         };

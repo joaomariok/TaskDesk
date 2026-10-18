@@ -63,9 +63,17 @@ public sealed class MainViewModelStopTests
     {
         public int Calls { get; private set; }
 
+        public List<Guid> SetCalls { get; } = [];
+
         public Task<TaskItem> SetDueAsync(
             Guid taskId, DateOnly? dueDate, TimeOnly? dueTime, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        {
+            SetCalls.Add(taskId);
+            var task = tasks.All.Single(t => t.Id == taskId);
+            task.DueDate = dueDate;
+            task.DueTime = dueTime;
+            return Task.FromResult(task);
+        }
 
         public Task<IReadOnlyList<TaskItem>> ListSmartViewAsync(
             SmartView view, int skip = 0, CancellationToken cancellationToken = default)
@@ -84,8 +92,38 @@ public sealed class MainViewModelStopTests
         }
     }
 
+    // Records every Recurrence save.
+    private sealed class RecordingRecurrenceService(FakeTaskService tasks) : IRecurrenceService
+    {
+        public List<Guid> SetCalls { get; } = [];
+
+        public Task<TaskItem> SetRecurrenceAsync(
+            Guid taskId, Recurrence? recurrence, CancellationToken cancellationToken = default)
+        {
+            SetCalls.Add(taskId);
+            var task = tasks.All.Single(t => t.Id == taskId);
+            task.Recurrence = recurrence;
+            return Task.FromResult(task);
+        }
+
+        public Task<TaskItem> UndoCompletionAsync(
+            Guid taskId, Guid? producedOccurrenceId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<SkippedOccurrence> SkipOccurrenceAsync(Guid taskId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<TaskItem> UndoSkipAsync(SkippedOccurrence skipped, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+    }
+
     private sealed record Setup(
-        FakeTaskService Service, CountingTagService Tags, CountingDueService Due, FakeTimeProvider Clock, MainViewModel Vm);
+        FakeTaskService Service, CountingTagService Tags, CountingDueService Due, FakeTimeProvider Clock, MainViewModel Vm)
+    {
+        public RecordingRecurrenceService Recurrence { get; init; } = null!;
+
+        public FakeReminderService Reminders { get; init; } = null!;
+    }
 
     // Local time is UTC-3: 2026-10-20 10:00.
     private static async Task<Setup> StartAsync(params (string Title, DateOnly? Date, TimeOnly? Time)[] tasks)
@@ -102,9 +140,12 @@ public sealed class MainViewModelStopTests
 
         var tags = new CountingTagService(service);
         var due = new CountingDueService(service, clock);
-        var vm = new MainViewModel(service, tags, clock, due);
+        var recurrence = new RecordingRecurrenceService(service);
+        var reminders = new FakeReminderService(clock, [.. service.All]);
+        var vm = new MainViewModel(
+            service, tags, clock, due, recurrenceService: recurrence, reminderService: reminders);
         await vm.LoadAsync(Ct);
-        return new Setup(service, tags, due, clock, vm);
+        return new Setup(service, tags, due, clock, vm) { Recurrence = recurrence, Reminders = reminders };
     }
 
     private static Task<Setup> StartAsync(params string[] titles) =>
@@ -255,5 +296,65 @@ public sealed class MainViewModelStopTests
         s.Clock.Advance(MainViewModel.SaveDebounce);
         await s.Vm.PendingSave;
         Assert.Empty(s.Service.Updates);
+    }
+
+    [Fact]
+    public async Task After_the_stop_a_Subtask_edit_touches_no_service()
+    {
+        var s = await StartAsync("a");
+        await s.Service.AddSubtaskAsync(s.Service.All[0].Id, "step", Ct);
+        await s.Vm.LoadAsync(Ct);
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        await s.Vm.StopAsync();
+
+        s.Vm.SubtaskItems[0].Title = "renamed";
+        s.Vm.SubtaskItems[0].IsCompleted = true;
+        await s.Vm.PendingSave;
+
+        Assert.Equal("step", s.Service.All[0].Subtasks[0].Title);
+        Assert.False(s.Service.All[0].Subtasks[0].IsCompleted, "A Subtask tick was saved after the stop.");
+        Assert.Null(s.Vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task After_the_stop_a_Due_change_touches_no_service()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        await s.Vm.StopAsync();
+
+        s.Vm.DetailDueDate = new DateTime(2026, 10, 21);
+        await s.Vm.PendingSave;
+
+        Assert.Empty(s.Due.SetCalls);
+        Assert.Null(s.Vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task After_the_stop_a_Recurrence_change_touches_no_service()
+    {
+        var s = await StartAsync(("a", Day(20), null));
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        await s.Vm.StopAsync();
+
+        s.Vm.Repeat.Preset = RepeatPreset.Daily;
+        await s.Vm.PendingSave;
+
+        Assert.Empty(s.Recurrence.SetCalls);
+        Assert.Null(s.Vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task After_the_stop_a_detail_Reminder_change_touches_no_service()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        await s.Vm.StopAsync();
+
+        s.Vm.DetailReminderDate = new DateTime(2026, 10, 21);
+        await s.Vm.PendingSave;
+
+        Assert.Empty(s.Reminders.SetCalls);
+        Assert.Null(s.Vm.ErrorMessage);
     }
 }

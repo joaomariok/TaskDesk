@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tasks;
 using FakeListService = TaskDesk.Presentation.Tests.ListsViewModelTests.FakeListService;
@@ -60,8 +61,8 @@ public class ListPageViewModelTests
         var tags = new FakeTagService(tasks);
         var search = new ListSearchService(tasks);
         var vm = new MainViewModel(
-            tasks, tags, dueService: new EmptyDueService(), searchService: search, listService: lists,
-            taskCreator: tasks);
+            tasks, tags, new FakeTimeProvider(), dueService: new EmptyDueService(), searchService: search,
+            listService: lists, taskCreator: tasks);
         await vm.LoadAsync(Ct);
         return new Setup(tasks, tags, lists, search, inbox, work, vm);
     }

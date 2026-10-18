@@ -35,7 +35,7 @@ public sealed partial class MainViewModel
         }
 
         ErrorMessage = null;
-        _pendingSave = SaveRecurrenceAsync(_pendingSave, row, recurrence);
+        EnqueueSave(previous => SaveRecurrenceAsync(previous, row, recurrence));
     }
 
     private async Task SaveRecurrenceAsync(Task previous, TaskRowViewModel row, Recurrence? recurrence)

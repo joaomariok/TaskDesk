@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using FakeTagService = TaskDesk.Presentation.Tests.MainViewModelTests.FakeTagService;
@@ -96,7 +97,7 @@ public sealed class LoadReentrancyTests
         await tasks.CreateTaskAsync("milk", Ct);
         await tasks.CreateTaskAsync("bread", Ct);
         var search = new GatedSearchService(tasks);
-        var vm = new MainViewModel(tasks, new FakeTagService(tasks), searchService: search);
+        var vm = new MainViewModel(tasks, new FakeTagService(tasks), new FakeTimeProvider(), searchService: search);
         await vm.LoadAsync(Ct);
 
         vm.SearchText = "milk";

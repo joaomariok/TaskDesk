@@ -122,7 +122,8 @@ public sealed partial class MainViewModel
     {
         if (DetailTask is { } row)
         {
-            _pendingSave = SaveSubtaskAsync(_pendingSave, row, subtask, edit, subtask.Title, subtask.IsCompleted);
+            EnqueueSave(previous => SaveSubtaskAsync(
+                previous, row, subtask, edit, subtask.Title, subtask.IsCompleted));
         }
     }
 
