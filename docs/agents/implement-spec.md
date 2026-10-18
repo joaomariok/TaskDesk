@@ -23,7 +23,7 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
 Done means the spec is on `main`, every ticket and the spec are closed, and no agent worktree or branch is left.
 
 1. Review the integration branch with the `code-review` skill. Name the spec issue and its tickets as context, so approvals recorded in a ticket (such as an approved test-expectation change) are not re-flagged. Ask the reviewer to grade each finding high, medium or low, and to report only findings with a reachable failure scenario.
-2. Fix every high and medium finding in one implementer, then land it like a ticket. Review again, this time only the fix diff. Stop at the first round with no high or medium finding, and file the remaining lows as one issue.
+2. Fix every high and medium finding in one implementer, then land it like a ticket. Review again, this time only the fix diff. A finding whose failure is reachable only through code the branch did not change is filed, not fixed. Stop at the first round with no high or medium finding, or after two fix rounds ask the owner; file the remaining lows as one issue.
 3. Run the `ui-check` skill on the integration tip, with before shots from `main` (its step 4; in a port, the replaced app on `main`), covering every state the spec's diff touches and the tickets' visual criteria. Report its findings before any owner acceptance run.
 4. Ask the owner, then fast-forward `main` to the integration tip and push.
 5. Close each ticket, then the spec, with `gh issue close <n> --comment "<commits>, on main."`.
