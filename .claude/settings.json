@@ -4,5 +4,21 @@
     "winappcli@win-dev-skills": true,
     "winui@win-dev-skills": true,
     "windbg@win-dev-skills": true
+  },
+  "env": {
+    "GIT_PAGER": "cat"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-git.sh\""
+          }
+        ]
+      }
+    ]
   }
 }

@@ -26,7 +26,8 @@ Exit codes:
   2   pre-check failed (nothing was changed)
   3   apply left conflicts (conflicted files listed; resolution is left to a merger)
   4   apply failed without conflicts (nothing was changed)
-  any other value is the gate's own exit code (or ui-tests.ps1's, with -UiTests)
+  any other value is the gate's own exit code (or ui-tests.ps1's, with -UiTests: 5 only flakes,
+  6 desktop locked)
 
 .PARAMETER Worktree
 Path of the implementer's worktree.

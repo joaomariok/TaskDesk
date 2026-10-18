@@ -9,7 +9,7 @@ Two passes: the UI suite (does it behave) and a look at the states the change to
 
 ## 1. Behaviour
 
-Run `pwsh scripts/ui-tests.ps1` and judge it by the exit code. A failed test leaves a PNG of the window in the folder printed as "Failure screenshots": read it (a dialog in the way, focus elsewhere, text in the wrong box), then rerun that one test once with `-Method <test method name>`. A pass on rerun is a **flake**, reported as such; a second failure is real.
+Run `pwsh scripts/ui-tests.ps1` and judge it by the exit code. It reruns each failed test once by itself and prints `FLAKE: <test>` (passed on rerun) or `FAILED: <test>` (failed twice, a real failure). Exit 0 is a clean pass, 5 is a pass with flakes, reported as such, and 6 means the desktop is locked: ask the owner to unlock it, then run again. For each `FAILED` test, read its PNG in the folder printed as "Failure screenshots" (a dialog in the way, focus elsewhere, text in the wrong box).
 
 ## 2. Look
 

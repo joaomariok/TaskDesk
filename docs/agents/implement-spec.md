@@ -11,8 +11,10 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
 4. When an implementer reports, read its diff and keep the diff uncommitted in its worktree. The report is a claim, not evidence.
 5. Land the tickets one at a time, in the order they finish. For each:
    - Run `pwsh scripts/integrate-worktree.ps1 -Worktree <WT> -Base <BASE>` from the integration checkout, which must be clean. It applies the worktree's tracked diff with `git apply --3way`, copies its untracked files, runs the **Gate** and exits with the gate's code. It prints the changed and new files; stage those paths by name. It never commits. On conflicts it still copies the untracked files and auto-resolves the `App.xaml` merged-dictionary lines. Add `-UiTests` to run `scripts/ui-tests.ps1` after a green gate.
+   - Commit your own doc edits (ADR, notes) before integrating; the target must be clean.
    - Exit 3 means conflicts: it lists the conflicted files and stops. Launch a merger with the **Merger brief** below. Exit 2 means a pre-check failed (dirty target, or worktree HEAD is not `<BASE>`) and nothing was changed.
    - Commit once, as `<type>: <what changed>`, after the gate exits 0 (see "Git approvals" in `CLAUDE.md`).
+   - Remove the agent's worktree and branch right away (step 6 of **Finishing**), one at a time; a bulk removal at the end outruns the 2-minute command limit.
 6. Advance `<BASE>` to the new integration tip before launching the next wave of implementers.
 7. When the last ticket is committed, run the **Gate** once more on the integration tip. Report the exit codes and test counts, and list the acceptance criteria that need a manual check.
 
@@ -20,14 +22,14 @@ Fan a spec's tickets out to parallel implementer agents, then land each ticket o
 
 Done means the spec is on `main`, every ticket and the spec are closed, and no agent worktree or branch is left.
 
-1. Review the integration branch with the `code-review` skill. Name the spec issue and its tickets as context, so approvals recorded in a ticket (such as an approved test-expectation change) are not re-flagged.
-2. Fix every confirmed finding in one implementer, then land it like a ticket.
+1. Review the integration branch with the `code-review` skill. Name the spec issue and its tickets as context, so approvals recorded in a ticket (such as an approved test-expectation change) are not re-flagged. Ask the reviewer to grade each finding high, medium or low, and to report only findings with a reachable failure scenario.
+2. Fix every high and medium finding in one implementer, then land it like a ticket. Review again, this time only the fix diff. Stop at the first round with no high or medium finding, and file the remaining lows as one issue.
 3. Run the `ui-check` skill on the integration tip, with before shots from `main` (its step 4; in a port, the replaced app on `main`), covering every state the spec's diff touches and the tickets' visual criteria. Report its findings before any owner acceptance run.
 4. Ask the owner, then fast-forward `main` to the integration tip and push.
 5. Close each ticket, then the spec, with `gh issue close <n> --comment "<commits>, on main."`.
-6. Remove each agent worktree (`git worktree remove`) and delete its `worktree-agent-*` branch (`git branch -D`); every one is integrated by now.
+6. Remove each agent worktree (`git worktree remove`) and delete its `worktree-agent-*` branch (`git branch -D`); every one is integrated by now. Removing many at once takes minutes: run it in the background.
 
-Subagents never commit, create branches or touch another worktree. The orchestrator owns every commit and every branch.
+Subagents never commit, create branches or touch another worktree. The orchestrator owns every commit and every branch. A `PreToolUse` hook (`.claude/hooks/guard-git.sh`) blocks git writes from subagents, except `git merge --ff-only`.
 
 ## Concurrency
 
@@ -103,7 +105,7 @@ Short, with no file contents:
 - gate exit codes and test counts
 - the red run: each new test's name and its failure message before the code existed
 - files and areas changed
-- every existing test you changed, with the reason
+- every existing test you changed or deleted, with the reason and who decided it: your brief, or the ticket comment that records it. Name the owner only when a ticket records the owner's approval.
 - acceptance criteria not verified automatically, as a manual checklist
 - decisions later tickets need
 
