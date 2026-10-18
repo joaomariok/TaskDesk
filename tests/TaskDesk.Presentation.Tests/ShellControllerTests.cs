@@ -593,6 +593,92 @@ public sealed class ShellControllerTests
     }
 
     [Fact]
+    public async Task The_exit_waits_for_an_activation_routed_in_the_running_app_before_its_steps()
+    {
+        var controller = await StartedAsync();
+        var acting = new TaskCompletionSource();
+        var steps = new List<string>();
+        controller.AddExitStep(() =>
+        {
+            steps.Add("flush");
+            return Task.CompletedTask;
+        });
+        // A toast's Mark done clicked as the exit starts: its write must land before the flush and the host stop.
+        var activation = controller.RunActivationAsync(async exitStarted =>
+        {
+            await acting.Task;
+            steps.Add(exitStarted.IsCancellationRequested ? "activation (exit started)" : "activation");
+        });
+
+        var exit = controller.ExitAsync();
+        Assert.Empty(steps);
+        Assert.Equal(0, _lifetime.ShutdownCount);
+
+        acting.SetResult();
+        await exit;
+        await activation;
+
+        Assert.Equal(["activation (exit started)", "flush"], steps);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task The_exit_also_waits_for_an_activation_routed_while_it_waits_for_another()
+    {
+        var controller = await StartedAsync();
+        var first = new TaskCompletionSource();
+        var second = new TaskCompletionSource();
+        var steps = new List<string>();
+        controller.AddExitStep(() =>
+        {
+            steps.Add("flush");
+            return Task.CompletedTask;
+        });
+        var firstActivation = controller.RunActivationAsync(async _ =>
+        {
+            await first.Task;
+            steps.Add("first");
+        });
+        var exit = controller.ExitAsync();
+        var secondActivation = controller.RunActivationAsync(async _ =>
+        {
+            await second.Task;
+            steps.Add("second");
+        });
+
+        first.SetResult();
+        await firstActivation;
+        Assert.Equal(["first"], steps);
+        second.SetResult();
+        await exit;
+        await secondActivation;
+
+        Assert.Equal(["first", "second", "flush"], steps);
+    }
+
+    [Fact]
+    public async Task An_activation_routed_once_the_exit_steps_have_started_is_dropped()
+    {
+        var controller = await StartedAsync();
+        var flush = new TaskCompletionSource();
+        controller.AddExitStep(() => flush.Task);
+        var exit = controller.ExitAsync();
+        var ran = false;
+
+        // The flush and the host stop are under way: the activation would write to a host being stopped.
+        await controller.RunActivationAsync(_ =>
+        {
+            ran = true;
+            return Task.CompletedTask;
+        });
+        flush.SetResult();
+        await exit;
+
+        Assert.False(ran);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
     public async Task A_failing_launch_activation_still_starts_the_background_work()
     {
         var controller = Create();

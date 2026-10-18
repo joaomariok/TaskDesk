@@ -109,7 +109,7 @@ public partial class App : Application
             sp.GetRequiredService<MainWindow>().DispatcherQueue,
             sp.GetRequiredService<ReminderActivationHandler>(),
             sp.GetRequiredService<ILogger<ReminderActivationRouter>>(),
-            sp.GetRequiredService<ShellController>().ExitStarted));
+            sp.GetRequiredService<ShellController>().RunActivationAsync));
         builder.Services.AddSingleton<IRunKey, RegistryRunKey>();
         builder.Services.AddSingleton<AutoStartService>();
         builder.Services.AddSingleton<IShellSettingsStore>(_ => new JsonShellSettingsStore(paths.SettingsFile));
@@ -184,7 +184,13 @@ public partial class App : Application
         await window.Lists!.LoadAsync();
 
         var shell = _host.Services.GetRequiredService<ShellController>();
-        // Exit waits for these, in order, before it ends the app.
+        // Exit waits for these, in order, before it ends the app. The window closes only once they have run, so the
+        // page's search stops first: a reload during the flush or the host stop would query a host being stopped.
+        shell.AddExitStep(() =>
+        {
+            window.StopSearching();
+            return Task.CompletedTask;
+        });
         shell.AddExitStep(() => window.ViewModel.FlushPendingSaveAsync());
         var host = _host;
         shell.AddExitStep(() => host.StopAsync());

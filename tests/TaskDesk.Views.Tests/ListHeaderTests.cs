@@ -512,6 +512,72 @@ public sealed class ListHeaderTests
         Assert.IsTrue(run.IsCompletedSuccessfully, $"The cancelled search ended {run.Status}, which the app reports as a crash.");
     }
 
+    [UITestMethod]
+    public async Task Stopping_search_for_the_exit_drops_the_waiting_search_and_ignores_later_typing()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Pay rent");
+        var (window, viewModel) = await OpenAsync(db);
+        var reloads = 0;
+        ((System.ComponentModel.INotifyPropertyChanged)viewModel.ApplySearchCommand).PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(viewModel.ApplySearchCommand.ExecutionTask))
+            {
+                reloads++;
+            }
+        };
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            var searchBox = VisualTree.Find<TextBox>(window.View, "SearchBox");
+            searchBox.Text = "pay";
+            await UiWait.UntilAsync(() => window.View.IsSearchPending, () => "Typing left no search waiting.", Ct);
+
+            // The exit starts while the window stays open: the flush and the host stop come next.
+            window.StopSearching();
+            Assert.IsFalse(window.View.IsSearchPending, "A search still waits to reload as the exit starts.");
+            // Typing during the exit would otherwise reload over a host being stopped.
+            searchBox.Text = "pay rent";
+            Assert.IsFalse(window.View.IsSearchPending, "Typing during the exit left a search waiting.");
+            await Task.Delay(TimeSpan.FromMilliseconds(750), Ct);
+            Assert.AreEqual(0, reloads, "The search reloaded the page during the exit.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Stopping_search_for_the_exit_cancels_the_search_still_loading()
+    {
+        using var db = await DatabaseAsync();
+        var search = new HeldSearch();
+        var viewModel = new MainViewModel(
+            db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock,
+            dueService: db.Get<IDueService>(), searchService: search, listService: db.Get<IListService>());
+        var window = new MainWindow(viewModel);
+        try
+        {
+            window.Activate();
+            await UiWait.UntilAsync(() => window.View.IsLoaded, () => "The main view never loaded.", Ct);
+            await viewModel.LoadAsync(Ct);
+            VisualTree.Find<TextBox>(window.View, "SearchBox").Text = "pay";
+            await UiWait.UntilAsync(() => search.Started, () => "The search never started.", Ct);
+
+            window.StopSearching();
+
+            Assert.IsTrue(search.Cancelled, "The search still loading went on as the exit started.");
+            var run = viewModel.ApplySearchCommand.ExecutionTask!;
+            await UiWait.UntilAsync(() => run.IsCompleted, () => "The cancelled search never ended.", Ct);
+            Assert.IsTrue(run.IsCompletedSuccessfully, $"The cancelled search ended {run.Status}, which the app reports as a crash.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     // A search that waits on the database until it is cancelled.
     private sealed class HeldSearch : ITaskSearchService
     {

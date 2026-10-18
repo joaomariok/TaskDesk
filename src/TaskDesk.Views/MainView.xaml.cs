@@ -24,6 +24,7 @@ public sealed partial class MainView : UserControl
     private static readonly string[] PriorityChoices = ["Any priority", "Low or higher", "Medium or higher", "High"];
 
     private DispatcherQueueTimer? _searchTimer;
+    private bool _searchStopped;
     private bool _syncingPriorityFilter;
 
     public MainView(MainViewModel viewModel)
@@ -58,6 +59,16 @@ public sealed partial class MainView : UserControl
     {
         _searchTimer?.Stop();
         ViewModel.ApplySearchCommand.Cancel();
+    }
+
+    /// <summary>
+    /// Drops the search waiting or still loading (<see cref="CancelPendingSearch"/>), and from now on typing in the
+    /// search box starts none: the exit is under way, and a reload would query a host being stopped.
+    /// </summary>
+    public void StopSearching()
+    {
+        _searchStopped = true;
+        CancelPendingSearch();
     }
 
     /// <summary>The Overdue, open and "Completed (N)" Task lists and the Undo bar.</summary>
@@ -149,6 +160,11 @@ public sealed partial class MainView : UserControl
 
     private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
     {
+        if (_searchStopped)
+        {
+            return;
+        }
+
         if (_searchTimer is null)
         {
             _searchTimer = DispatcherQueue.CreateTimer();

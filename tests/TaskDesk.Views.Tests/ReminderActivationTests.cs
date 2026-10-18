@@ -180,6 +180,35 @@ public sealed class ReminderActivationTests
         }
     }
 
+    [UITestMethod]
+    public async Task Mark_done_clicked_in_the_running_app_as_the_exit_starts_lands_before_the_exit_steps()
+    {
+        using var db = await SystemHooksTests.DatabaseAsync();
+        var taskId = await SystemHooksTests.AddAsync(db, "Call the bank");
+        using var shell = new ShellController(
+            new FakeTrayIcon(), new FakeMainWindow(),
+            new NamedPipeSingleInstance(SingleInstanceNames.For(db.Paths.DataDirectory)),
+            new JsonShellSettingsStore(Path.Combine(db.Paths.DataDirectory, "settings.json")),
+            new AutoStartService(new FakeRunKey(), Sandbox), new FakeShutdown());
+        bool? doneAtFlush = null;
+        // The first exit step: the flush, then the host stop and dispose, which the Mark done must not outlive.
+        shell.AddExitStep(async () =>
+            doneAtFlush = (await db.QueryAsync(c => c.Tasks.Where(t => t.Id == taskId))).Single().IsCompleted);
+        var (window, _, router) = await OpenAsync(db, shell: shell);
+        try
+        {
+            // The click and the tray's Exit in the same turn of the UI thread.
+            router.Route(new NotificationActivation(taskId, ReminderAction.MarkDone));
+            await shell.ExitAsync();
+
+            Assert.IsTrue(doneAtFlush, "The exit steps ran before the Mark done clicked as the exit started.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private async Task AssertPaneShowsAsync(MainWindow window, FakeMainWindow shellWindow, string title)
     {
         var pane = window.Details.Pane;
@@ -191,7 +220,10 @@ public sealed class ReminderActivationTests
     }
 
     private async Task<(MainWindow Window, FakeMainWindow ShellWindow, ReminderActivationRouter Router)> OpenAsync(
-        TempDatabase db, ILogger<ReminderActivationRouter>? logger = null, CancellationToken exitStarted = default)
+        TempDatabase db,
+        ILogger<ReminderActivationRouter>? logger = null,
+        CancellationToken exitStarted = default,
+        ShellController? shell = null)
     {
         var viewModel = new MainViewModel(
             db.Get<ITaskService>(), db.Get<Core.Tags.ITagService>(), db.Clock,
@@ -213,7 +245,8 @@ public sealed class ReminderActivationTests
             var shellWindow = new FakeMainWindow();
             var router = new ReminderActivationRouter(
                 window.DispatcherQueue, new ReminderActivationHandler(viewModel, shellWindow),
-                logger ?? NullLogger<ReminderActivationRouter>.Instance, exitStarted);
+                logger ?? NullLogger<ReminderActivationRouter>.Instance,
+                shell is null ? work => work(exitStarted) : shell.RunActivationAsync);
             return (window, shellWindow, router);
         }
         catch

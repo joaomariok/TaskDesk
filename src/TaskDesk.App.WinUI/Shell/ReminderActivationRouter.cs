@@ -10,22 +10,47 @@ namespace TaskDesk.App.Shell;
 /// toast or tray balloon in the running app, the toast that launched it, and a later launch from a toast that the
 /// single-instance pipe forwards (on a background thread). A failed action is logged, never thrown.
 /// </summary>
-/// <param name="shellExitStarted">
-/// <see cref="ShellController.ExitStarted"/>: an activation that arrives in the running app stops showing the window
-/// once the exit has started.
+/// <param name="runActivation">
+/// <see cref="ShellController.RunActivationAsync"/>: runs each activation that arrives in the running app with
+/// <see cref="ShellController.ExitStarted"/> (it stops showing the window once the exit has started), and the exit
+/// waits for it, so a Mark done or Snooze clicked as the exit starts is kept. Without it, activations run with no
+/// exit to watch.
 /// </param>
 internal sealed class ReminderActivationRouter(
     DispatcherQueue dispatcher,
     ReminderActivationHandler handler,
     ILogger<ReminderActivationRouter> logger,
-    CancellationToken shellExitStarted = default)
+    Func<Func<CancellationToken, Task>, Task>? runActivation = null)
 {
     /// <summary>Hands <paramref name="notifications"/>' clicks to <see cref="Route"/>.</summary>
     public void Attach(INotificationService notifications) => notifications.Activated += Route;
 
-    /// <summary>Queues the activation on the UI thread; callable from any thread.</summary>
+    /// <summary>
+    /// Queues the activation on the UI thread; callable from any thread. The shell counts it from this call, so an
+    /// exit that starts before the queued activation runs still waits for it.
+    /// </summary>
     public void Route(NotificationActivation activation) =>
-        dispatcher.TryEnqueue(() => _ = HandleAsync(activation, shellExitStarted));
+        _ = (runActivation ?? (work => work(CancellationToken.None)))(
+            exitStarted => HandleOnUiThreadAsync(activation, exitStarted));
+
+    // Completes once the activation has run, or at once when the UI thread is gone.
+    private Task HandleOnUiThreadAsync(NotificationActivation activation, CancellationToken exitStarted)
+    {
+        var handled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!dispatcher.TryEnqueue(() => _ = HandleThenSignalAsync(activation, exitStarted, handled)))
+        {
+            handled.SetResult();
+        }
+
+        return handled.Task;
+    }
+
+    private async Task HandleThenSignalAsync(
+        NotificationActivation activation, CancellationToken exitStarted, TaskCompletionSource handled)
+    {
+        await HandleAsync(activation, exitStarted);
+        handled.SetResult();
+    }
 
     /// <summary>Acts on the activation; call on the UI thread.</summary>
     /// <param name="activation">The notification click.</param>
