@@ -243,6 +243,44 @@ public sealed class ListHeaderTests
         }
     }
 
+    // The Filter row's buttons keep Fluent's default size, so they are as tall as the priority drop-down beside them.
+    [UITestMethod]
+    public async Task The_Filter_rows_buttons_are_as_tall_as_its_priority_drop_down()
+    {
+        using var db = await DatabaseAsync();
+        await db.Get<ITagService>().CreateTagAsync("home", Ct);
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            Toggle(VisualTree.Find<AppBarToggleButton>(window.View, "FilterButton"));
+            var hasDue = FindByName<ToggleButton>(window.View, "Has due filter");
+            Toggle(hasDue);
+            await UiWait.UntilAsync(() => hasDue.IsChecked == true, () => "Has due did not turn on.", Ct);
+            var priority = VisualTree.Find<ComboBox>(window.View, "PriorityFilterBox");
+            var home = await WaitForAsync(() => FindByNameOrNull<ToggleButton>(window.View, "#home"),
+                "The Filter row has no #home Tag toggle.");
+            var buttons = new List<ButtonBase>
+            {
+                hasDue,
+                FindByName<ToggleButton>(window.View, "Has reminder filter"),
+                home,
+                FindByName<Button>(window.View, "Clear filters"),
+            };
+            window.View.UpdateLayout();
+
+            foreach (var button in buttons)
+            {
+                Assert.AreEqual(priority.ActualHeight, button.ActualHeight, 0.5,
+                    $"'{AutomationProperties.GetName(button)}' is {button.ActualHeight} px tall, the priority drop-down {priority.ActualHeight} px.");
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     // A List name too long for the row stays on one line and ends with an ellipsis, so the row keeps its height and
     // the command bar stays in view before the search box.
     [UITestMethod]

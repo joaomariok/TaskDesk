@@ -97,11 +97,11 @@
                 <ComboBox x:Name="PriorityFilterBox" Width="170"
                           AutomationProperties.Name="Priority filter"
                           SelectionChanged="OnPriorityFilterChanged" />
-                <local:CommandToggleButton Content="Has due" Padding="8,2"
+                <local:CommandToggleButton Content="Has due"
                                            AutomationProperties.Name="Has due filter"
                                            IsChecked="{x:Bind ViewModel.HasDueFilter, Mode=OneWay}"
                                            Command="{x:Bind ViewModel.ToggleHasDueFilterCommand, Mode=OneTime}" />
-                <local:CommandToggleButton Content="Has reminder" Padding="8,2"
+                <local:CommandToggleButton Content="Has reminder"
                                            AutomationProperties.Name="Has reminder filter"
                                            IsChecked="{x:Bind ViewModel.HasReminderFilter, Mode=OneWay}"
                                            Command="{x:Bind ViewModel.ToggleHasReminderFilterCommand, Mode=OneTime}" />
@@ -113,7 +113,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="presentation:FilterTagChip">
-                            <local:CommandToggleButton Padding="8,2"
+                            <local:CommandToggleButton
                                                        AutomationProperties.Name="{x:Bind local:MainView.TagText(Tag), Mode=OneTime, FallbackValue=''}"
                                                        Content="{x:Bind local:MainView.TagText(Tag), Mode=OneTime, FallbackValue=''}"
                                                        IsChecked="{x:Bind IsSelected, Mode=OneTime}"
@@ -122,7 +122,7 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Button Content="Clear filters" Padding="8,2"
+                <Button Content="Clear filters"
                         Command="{x:Bind ViewModel.ClearAllFiltersCommand, Mode=OneTime}"
                         Visibility="{x:Bind ViewModel.HasFilter, Mode=OneWay}" />
             </local:WrapPanel>
