@@ -123,6 +123,9 @@ public sealed class ShellController(
     public Task RunActivationAsync(Func<CancellationToken, Task> activation)
     {
         ArgumentNullException.ThrowIfNull(activation);
+        // Registered under the gate, so the exit waits for it; started outside it, so its synchronous part never
+        // holds up an activation routed from another thread.
+        var registered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_activationsGate)
         {
             if (_activationsClosed)
@@ -132,14 +135,14 @@ public sealed class ShellController(
             }
 
             _activations.RemoveAll(t => t.IsCompleted);
-            var running = RunGuardedAsync(activation);
-            _activations.Add(running);
-            return running;
+            _activations.Add(registered.Task);
         }
+
+        return RunGuardedAsync(activation, registered);
     }
 
     // Never throws: the exit waits for it.
-    private async Task RunGuardedAsync(Func<CancellationToken, Task> activation)
+    private async Task RunGuardedAsync(Func<CancellationToken, Task> activation, TaskCompletionSource registered)
     {
         try
         {
@@ -152,6 +155,10 @@ public sealed class ShellController(
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             _logger.LogError(ex, "A Reminder activation failed");
+        }
+        finally
+        {
+            registered.TrySetResult();
         }
     }
 

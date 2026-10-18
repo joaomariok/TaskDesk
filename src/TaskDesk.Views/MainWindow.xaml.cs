@@ -99,9 +99,15 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Call when the exit starts, before its flush and host stop: the window stays open until the exit has run, so
-    /// its Closed comes too late to stop a search (see <see cref="MainView.StopSearching"/>).
+    /// its Closed comes too late. The sidebar, page and detail pane take no more input, so nothing there starts a
+    /// reload, and the page's search stops; completes once a cancelled search has ended
+    /// (see <see cref="MainView.StopSearchingAsync"/>).
     /// </summary>
-    public void StopSearching() => View.StopSearching();
+    public Task PrepareForExitAsync()
+    {
+        Navigation.IsEnabled = false;
+        return View.StopSearchingAsync();
+    }
 
     // Opens at the default size (the shell then restores a saved layout), never smaller than the minimum.
     private void SetDefaultSize()

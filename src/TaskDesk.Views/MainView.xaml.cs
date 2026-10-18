@@ -63,12 +63,17 @@ public sealed partial class MainView : UserControl
 
     /// <summary>
     /// Drops the search waiting or still loading (<see cref="CancelPendingSearch"/>), and from now on typing in the
-    /// search box starts none: the exit is under way, and a reload would query a host being stopped.
+    /// search box starts none: the exit is under way, and a reload would query a host being stopped. Completes once
+    /// the cancelled search has ended, however it ended.
     /// </summary>
-    public void StopSearching()
+    public async Task StopSearchingAsync()
     {
         _searchStopped = true;
         CancelPendingSearch();
+        if (ViewModel.ApplySearchCommand.ExecutionTask is { } search)
+        {
+            await search.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+        }
     }
 
     /// <summary>The Overdue, open and "Completed (N)" Task lists and the Undo bar.</summary>
@@ -96,10 +101,16 @@ public sealed partial class MainView : UserControl
 
     /// <summary>
     /// Runs the list header shortcut for a key: Ctrl+F searches, Ctrl+N goes to quick add, Esc clears the search
-    /// and Enter in quick add adds the Task. Returns false when the key is not a shortcut or there is nothing to do.
+    /// and Enter in quick add adds the Task. Returns false when the key is not a shortcut or there is nothing to do,
+    /// and while the page takes no input (the exit is under way).
     /// </summary>
     public bool TryShortcut(VirtualKey key, VirtualKeyModifiers modifiers)
     {
+        if (!IsEnabled)
+        {
+            return false;
+        }
+
         switch (key, modifiers)
         {
             case (VirtualKey.F, VirtualKeyModifiers.Control):

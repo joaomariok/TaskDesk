@@ -184,13 +184,10 @@ public partial class App : Application
         await window.Lists!.LoadAsync();
 
         var shell = _host.Services.GetRequiredService<ShellController>();
-        // Exit waits for these, in order, before it ends the app. The window closes only once they have run, so the
-        // page's search stops first: a reload during the flush or the host stop would query a host being stopped.
-        shell.AddExitStep(() =>
-        {
-            window.StopSearching();
-            return Task.CompletedTask;
-        });
+        // Exit waits for these, in order, before it ends the app. The window closes only once they have run, so it
+        // first takes no more input and its search ends: a reload during the flush or the host stop would query a
+        // host being stopped.
+        shell.AddExitStep(window.PrepareForExitAsync);
         shell.AddExitStep(() => window.ViewModel.FlushPendingSaveAsync());
         var host = _host;
         shell.AddExitStep(() => host.StopAsync());

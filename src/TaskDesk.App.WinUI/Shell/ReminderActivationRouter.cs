@@ -45,11 +45,18 @@ internal sealed class ReminderActivationRouter(
         return handled.Task;
     }
 
+    // Signals in any case: the exit waits for the signal, so a failure that escapes HandleAsync must not hold it up.
     private async Task HandleThenSignalAsync(
         NotificationActivation activation, CancellationToken exitStarted, TaskCompletionSource handled)
     {
-        await HandleAsync(activation, exitStarted);
-        handled.SetResult();
+        try
+        {
+            await HandleAsync(activation, exitStarted);
+        }
+        finally
+        {
+            handled.TrySetResult();
+        }
     }
 
     /// <summary>Acts on the activation; call on the UI thread.</summary>

@@ -657,6 +657,31 @@ public sealed class ShellControllerTests
     }
 
     [Fact]
+    public async Task An_activation_runs_without_holding_up_one_routed_from_another_thread()
+    {
+        var controller = await StartedAsync();
+        var nestedRan = false;
+        var nestedReturned = false;
+
+        // While the first activation's synchronous part runs, a toast click forwarded on another thread routes one
+        // more. Starting it must not wait for the first to yield.
+        await controller.RunActivationAsync(_ =>
+        {
+            var other = new Thread(() => controller.RunActivationAsync(_ =>
+            {
+                nestedRan = true;
+                return Task.CompletedTask;
+            }));
+            other.Start();
+            nestedReturned = other.Join(TimeSpan.FromSeconds(2));
+            return Task.CompletedTask;
+        });
+
+        Assert.True(nestedReturned, "Routing an activation waited for another one's synchronous part.");
+        Assert.True(nestedRan);
+    }
+
+    [Fact]
     public async Task An_activation_routed_once_the_exit_steps_have_started_is_dropped()
     {
         var controller = await StartedAsync();

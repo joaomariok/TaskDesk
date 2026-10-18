@@ -209,6 +209,36 @@ public sealed class ReminderActivationTests
         }
     }
 
+    [UITestMethod]
+    public async Task The_exit_goes_on_after_a_routed_activation_throws_past_its_handler()
+    {
+        using var db = await SystemHooksTests.DatabaseAsync();
+        await SystemHooksTests.AddAsync(db, "Book dentist");
+        var taskId = await SystemHooksTests.AddAsync(db, "Call the bank");
+        using var shell = new ShellController(
+            new FakeTrayIcon(), new FakeMainWindow(),
+            new NamedPipeSingleInstance(SingleInstanceNames.For(db.Paths.DataDirectory)),
+            new JsonShellSettingsStore(Path.Combine(db.Paths.DataDirectory, "settings.json")),
+            new AutoStartService(new FakeRunKey(), Sandbox), new FakeShutdown());
+        // Logging the exit's cancellation throws, so the failure escapes the router's catch blocks.
+        var (window, _, router) = await OpenAsync(db, new ThrowingLogger<ReminderActivationRouter>(), shell: shell);
+        try
+        {
+            window.ViewModel.SearchText = "dentist";
+            await window.ViewModel.ApplySearchCommand.ExecuteAsync(null);
+
+            // A Task the search hides: opening it reloads the page, which the exit cancels.
+            router.Route(new NotificationActivation(taskId, ReminderAction.Open));
+            var exit = shell.ExitAsync();
+
+            await UiWait.UntilAsync(() => exit.IsCompleted, () => "The exit still waits for the failed activation.", Ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private async Task AssertPaneShowsAsync(MainWindow window, FakeMainWindow shellWindow, string title)
     {
         var pane = window.Details.Pane;
@@ -268,6 +298,18 @@ public sealed class ReminderActivationTests
         public void Log<TState>(
             LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
             Levels.Add(logLevel);
+    }
+
+    private sealed class ThrowingLogger<T> : ILogger<T>
+    {
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            throw new InvalidOperationException("The log is gone.");
     }
 
     private sealed class FakeMainWindow : IMainWindow

@@ -534,7 +534,7 @@ public sealed class ListHeaderTests
             await UiWait.UntilAsync(() => window.View.IsSearchPending, () => "Typing left no search waiting.", Ct);
 
             // The exit starts while the window stays open: the flush and the host stop come next.
-            window.StopSearching();
+            await window.PrepareForExitAsync();
             Assert.IsFalse(window.View.IsSearchPending, "A search still waits to reload as the exit starts.");
             // Typing during the exit would otherwise reload over a host being stopped.
             searchBox.Text = "pay rent";
@@ -565,7 +565,7 @@ public sealed class ListHeaderTests
             VisualTree.Find<TextBox>(window.View, "SearchBox").Text = "pay";
             await UiWait.UntilAsync(() => search.Started, () => "The search never started.", Ct);
 
-            window.StopSearching();
+            await window.PrepareForExitAsync();
 
             Assert.IsTrue(search.Cancelled, "The search still loading went on as the exit started.");
             var run = viewModel.ApplySearchCommand.ExecutionTask!;
@@ -575,6 +575,89 @@ public sealed class ListHeaderTests
         finally
         {
             window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Preparing_for_the_exit_waits_for_the_cancelled_search_to_end()
+    {
+        using var db = await DatabaseAsync();
+        var search = new SlowToStopSearch();
+        var viewModel = new MainViewModel(
+            db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock,
+            dueService: db.Get<IDueService>(), searchService: search, listService: db.Get<IListService>());
+        var window = new MainWindow(viewModel);
+        try
+        {
+            window.Activate();
+            await UiWait.UntilAsync(() => window.View.IsLoaded, () => "The main view never loaded.", Ct);
+            await viewModel.LoadAsync(Ct);
+            VisualTree.Find<TextBox>(window.View, "SearchBox").Text = "pay";
+            await UiWait.UntilAsync(() => search.Started, () => "The search never started.", Ct);
+
+            var preparing = window.PrepareForExitAsync();
+            await Task.Delay(TimeSpan.FromMilliseconds(250), Ct);
+            // The flush and the host stop come next: the search must not overlap them.
+            Assert.IsFalse(preparing.IsCompleted, "The exit went on while the cancelled search still ran.");
+
+            search.Release.SetResult();
+            await UiWait.UntilAsync(() => preparing.IsCompleted, () => "The exit never went on after the search ended.", Ct);
+            Assert.IsTrue(preparing.IsCompletedSuccessfully, $"Preparing for the exit ended {preparing.Status}.");
+        }
+        finally
+        {
+            search.Release.TrySetResult();
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Preparing_for_the_exit_turns_off_input_so_Esc_and_the_filter_chips_start_no_reload()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Pay rent");
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            viewModel.ToggleFilterBarCommand.Execute(null);
+            var hasDue = FindByName<ToggleButton>(window.View, "Has due filter");
+            await UiWait.UntilAsync(() => hasDue.ActualWidth > 0, () => "The Has due chip never showed.", Ct);
+            viewModel.SearchText = "pay";
+
+            await window.PrepareForExitAsync();
+
+            // Esc would clear the search and reload the page over a host being stopped.
+            Assert.IsFalse(window.View.TryShortcut(VirtualKey.Escape, VirtualKeyModifiers.None), "Esc ran during the exit.");
+            Assert.AreEqual("pay", viewModel.SearchText, "Esc cleared the search during the exit.");
+            Assert.IsNull(viewModel.ClearSearchCommand.ExecutionTask, "Esc started a reload during the exit.");
+
+            // A screen reader's Toggle on a chip that takes no input is refused with UIA_E_ELEMENTNOTENABLED.
+            var refused = Assert.ThrowsExactly<System.Runtime.InteropServices.COMException>(
+                () => Toggle(hasDue), "The Has due chip took input during the exit.");
+            Assert.AreEqual(unchecked((int)0x80040200), refused.HResult, "The chip's Toggle failed for another reason.");
+            Assert.IsFalse(viewModel.HasDueFilter, "The Has due chip turned on during the exit.");
+            Assert.IsNull(viewModel.ToggleHasDueFilterCommand.ExecutionTask, "The Has due chip started a reload during the exit.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // A search that ignores its cancellation until the test releases it, as a query already sent to the database does.
+    private sealed class SlowToStopSearch : ITaskSearchService
+    {
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool Started { get; private set; }
+
+        public async Task<IReadOnlyList<TaskItem>> SearchAsync(TaskSearchQuery query, CancellationToken cancellationToken = default)
+        {
+            Started = true;
+            await Release.Task;
+            cancellationToken.ThrowIfCancellationRequested();
+            return [];
         }
     }
 
