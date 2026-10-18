@@ -45,6 +45,11 @@ public sealed partial class MainViewModel
         }
 
         await _pendingSave; // a rename or tick still in flight must land before the Subtask goes
+        if (_lifetime.IsStopped)
+        {
+            return; // the stop ended while this waited: no work against a host being stopped
+        }
+
         var deleted = await taskService.DeleteSubtaskAsync(subtask.Id, cancellationToken);
         row.Subtasks.RemoveAll(s => s.Id == deleted.Id);
         row.RefreshSubtaskProgress();
@@ -96,6 +101,11 @@ public sealed partial class MainViewModel
         }
 
         await _pendingSave;
+        if (_lifetime.IsStopped)
+        {
+            return;
+        }
+
         var ordered = await taskService.MoveSubtaskAsync(subtask.Id, newIndex, cancellationToken);
         row.Subtasks.Clear();
         row.Subtasks.AddRange(ordered);

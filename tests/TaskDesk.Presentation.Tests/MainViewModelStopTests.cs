@@ -117,6 +117,91 @@ public sealed class MainViewModelStopTests
             => throw new NotSupportedException();
     }
 
+    // Wraps the fake Task service: a Subtask tick is held until released, and the Subtask deletes and moves
+    // that reach it are recorded.
+    private sealed class GatedSubtaskService(FakeTaskService inner) : ITaskService
+    {
+        private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public List<Guid> Deletes { get; } = [];
+
+        public List<Guid> Moves { get; } = [];
+
+        public void Release() => _gate.SetResult();
+
+        public async Task<Subtask> SetSubtaskCompletedAsync(
+            Guid subtaskId, bool isCompleted, CancellationToken cancellationToken = default)
+        {
+            await _gate.Task;
+            return await inner.SetSubtaskCompletedAsync(subtaskId, isCompleted, cancellationToken);
+        }
+
+        public Task<IReadOnlyList<Subtask>> MoveSubtaskAsync(
+            Guid subtaskId, int newIndex, CancellationToken cancellationToken = default)
+        {
+            Moves.Add(subtaskId);
+            return inner.MoveSubtaskAsync(subtaskId, newIndex, cancellationToken);
+        }
+
+        public Task<Subtask> DeleteSubtaskAsync(Guid subtaskId, CancellationToken cancellationToken = default)
+        {
+            Deletes.Add(subtaskId);
+            return inner.DeleteSubtaskAsync(subtaskId, cancellationToken);
+        }
+
+        public Task<TaskItem> CreateTaskAsync(string title, CancellationToken cancellationToken = default)
+            => inner.CreateTaskAsync(title, cancellationToken);
+
+        public Task<IReadOnlyList<TaskItem>> ListDefaultListTasksAsync(CancellationToken cancellationToken = default)
+            => inner.ListDefaultListTasksAsync(cancellationToken);
+
+        public Task<IReadOnlyList<TaskItem>> ListTasksInListAsync(Guid listId, CancellationToken cancellationToken = default)
+            => inner.ListTasksInListAsync(listId, cancellationToken);
+
+        public Task MoveTaskAsync(Guid taskId, int newIndex, CancellationToken cancellationToken = default)
+            => inner.MoveTaskAsync(taskId, newIndex, cancellationToken);
+
+        public Task<TaskItem> SetCompletedAsync(Guid taskId, bool isCompleted, CancellationToken cancellationToken = default)
+            => inner.SetCompletedAsync(taskId, isCompleted, cancellationToken);
+
+        public Task<TaskItem> UpdateTaskAsync(
+            Guid taskId, string title, string? notes, Priority priority, CancellationToken cancellationToken = default)
+            => inner.UpdateTaskAsync(taskId, title, notes, priority, cancellationToken);
+
+        public Task<DeletedTask> DeleteTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
+            => inner.DeleteTaskAsync(taskId, cancellationToken);
+
+        public Task<TaskItem> RestoreTaskAsync(DeletedTask deleted, CancellationToken cancellationToken = default)
+            => inner.RestoreTaskAsync(deleted, cancellationToken);
+
+        public Task<Subtask> AddSubtaskAsync(Guid taskId, string title, CancellationToken cancellationToken = default)
+            => inner.AddSubtaskAsync(taskId, title, cancellationToken);
+
+        public Task<Subtask> RenameSubtaskAsync(Guid subtaskId, string title, CancellationToken cancellationToken = default)
+            => inner.RenameSubtaskAsync(subtaskId, title, cancellationToken);
+
+        public Task<Subtask> RestoreSubtaskAsync(Subtask deleted, CancellationToken cancellationToken = default)
+            => inner.RestoreSubtaskAsync(deleted, cancellationToken);
+    }
+
+    // A selected Task with two Subtasks and the first one's tick held in flight.
+    private static async Task<(GatedSubtaskService Service, MainViewModel Vm)> StartWithTickInFlightAsync()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 20, 13, 0, 0, TimeSpan.Zero));
+        clock.SetLocalTimeZone(Zone);
+        var fake = new FakeTaskService();
+        var task = await fake.CreateTaskAsync("a", Ct);
+        await fake.AddSubtaskAsync(task.Id, "one", Ct);
+        await fake.AddSubtaskAsync(task.Id, "two", Ct);
+        var gated = new GatedSubtaskService(fake);
+        var vm = new MainViewModel(gated, new CountingTagService(fake), clock, new CountingDueService(fake, clock));
+        await vm.LoadAsync(Ct);
+        vm.SelectedTask = vm.Tasks[0];
+        vm.SubtaskItems[0].IsCompleted = true;
+        Assert.False(vm.PendingSave.IsCompleted);
+        return (gated, vm);
+    }
+
     private sealed record Setup(
         FakeTaskService Service, CountingTagService Tags, CountingDueService Due, FakeTimeProvider Clock, MainViewModel Vm)
     {
@@ -314,6 +399,37 @@ public sealed class MainViewModelStopTests
         Assert.Equal("step", s.Service.All[0].Subtasks[0].Title);
         Assert.False(s.Service.All[0].Subtasks[0].IsCompleted, "A Subtask tick was saved after the stop.");
         Assert.Null(s.Vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task A_Subtask_delete_waiting_on_a_save_does_nothing_once_the_stop_has_ended()
+    {
+        var (service, vm) = await StartWithTickInFlightAsync();
+        var delete = vm.DeleteSubtaskCommand.ExecuteAsync(vm.SubtaskItems[0]);
+        Assert.False(delete.IsCompleted);
+
+        var stop = vm.StopAsync();
+        service.Release();
+        await stop;
+        await delete;
+
+        Assert.Empty(service.Deletes);
+        Assert.Equal(2, vm.SubtaskItems.Count);
+    }
+
+    [Fact]
+    public async Task A_Subtask_move_waiting_on_a_save_does_nothing_once_the_stop_has_ended()
+    {
+        var (service, vm) = await StartWithTickInFlightAsync();
+        var move = vm.MoveSubtaskDownCommand.ExecuteAsync(vm.SubtaskItems[0]);
+        Assert.False(move.IsCompleted);
+
+        var stop = vm.StopAsync();
+        service.Release();
+        await stop;
+        await move;
+
+        Assert.Empty(service.Moves);
     }
 
     [Fact]
