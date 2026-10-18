@@ -429,6 +429,41 @@ public sealed class ListHeaderTests
         }
     }
 
+    [UITestMethod]
+    public async Task The_notification_fallback_shows_as_a_warning_InfoBar_until_dismissed()
+    {
+        using var db = await DatabaseAsync();
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            var bar = VisualTree.Find<InfoBar>(window.View, "NotificationBanner");
+            Assert.IsFalse(bar.IsOpen, "The notification banner shows before notifications fell back.");
+
+            viewModel.ShowNotificationBanner("Reminders show as tray balloons.");
+
+            await UiWait.UntilAsync(() => bar.IsOpen, () => "The notification banner did not open.", Ct);
+            Assert.AreEqual("Notifications unavailable", AutomationProperties.GetName(bar));
+            Assert.AreEqual("Reminders show as tray balloons.", bar.Message);
+            Assert.AreEqual(InfoBarSeverity.Warning, bar.Severity);
+            Assert.IsTrue(bar.IsClosable);
+            await UiWait.UntilAsync(() => FindCloseButton(bar) is not null,
+                () => "The notification banner has no close button.", Ct);
+
+            ((IInvokeProvider)FrameworkElementAutomationPeer.CreatePeerForElement(FindCloseButton(bar)!)).Invoke();
+
+            await UiWait.UntilAsync(() => viewModel.NotificationBanner is null && !bar.IsOpen,
+                () => "Closing the notification banner did not dismiss it.", Ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static Button? FindCloseButton(InfoBar bar) =>
+        VisualTree.Descendants(bar).OfType<Button>().FirstOrDefault(b => b.Name == "CloseButton");
+
     private static void Toggle(ToggleButton button) =>
         ((ToggleButtonAutomationPeer)FrameworkElementAutomationPeer.CreatePeerForElement(button)).Toggle();
 

@@ -71,6 +71,10 @@ public sealed class DetailPaneTests
             var pane = window.Details.Pane;
             await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
 
+            // UI Automation sees the pane itself (a UserControl has no peer of its own), as the UI tests find it.
+            var panePeer = FrameworkElementAutomationPeer.CreatePeerForElement(pane);
+            Assert.IsNotNull(panePeer, "UI Automation does not see the detail pane.");
+            Assert.AreEqual("DetailPane", panePeer.GetAutomationId());
             var check = VisualTree.Find<CheckBox>(pane, "DetailCompletedBox");
             Assert.AreEqual("DetailCompletedBox", AutomationProperties.GetAutomationId(check));
             Assert.AreEqual("Completed", AutomationProperties.GetName(check));
@@ -280,9 +284,11 @@ public sealed class DetailPaneTests
     {
         using var db = await DatabaseAsync();
         await AddAsync(db, "Book dentist");
-        var (window, viewModel) = await OpenAsync(db, width: 1100);
+        var (window, viewModel) = await OpenAsync(db, width: 1000);
         try
         {
+            // 1100 px is the window's width with its frame, as the WPF window measures it.
+            await ResizeWindowAsync(window, 1100);
             var list = await SelectAsync(window, "Book dentist");
             var pane = window.Details.Pane;
             var splitter = VisualTree.Find<GridSplitter>(window.Details, "DetailSplitter");
@@ -490,6 +496,19 @@ public sealed class DetailPaneTests
             window.Close();
             throw;
         }
+    }
+
+    // Resizes the window, its frame included, to `width` device-independent pixels, and waits for the layout.
+    private async Task ResizeWindowAsync(MainWindow window, double width, double height = 600)
+    {
+        var content = (FrameworkElement)window.Content;
+        var scale = content.XamlRoot.RasterizationScale;
+        var physical = WindowLayoutCalculator.ToPhysical(width, scale);
+        window.AppWindow.Resize(new Windows.Graphics.SizeInt32(physical, WindowLayoutCalculator.ToPhysical(height, scale)));
+        await UiWait.UntilAsync(
+            () => window.AppWindow.Size.Width == physical && Math.Abs(content.ActualWidth - content.XamlRoot.Size.Width) < 1,
+            () => $"The window is {window.AppWindow.Size.Width} px wide, not {physical}.", Ct);
+        content.UpdateLayout();
     }
 
     // Resizes the window so its content is `width` device-independent pixels wide, and waits for the layout.

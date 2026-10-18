@@ -35,19 +35,6 @@ public sealed partial class DetailDock : UserControl
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         page.TaskList.DetailFocusRequested += (_, _) => Pane.FocusTitle();
-        Loaded += (_, _) =>
-        {
-            XamlRoot.Changed += OnXamlRootChanged;
-            UpdateDocking();
-        };
-        Unloaded += (_, _) =>
-        {
-            if (XamlRoot is { } root)
-            {
-                root.Changed -= OnXamlRootChanged;
-            }
-        };
-
         // The splitter's own drag runs on manipulation events; a press and release with a single jump in
         // between (some automation input) produces none, so the release applies the drag itself.
         DetailSplitter.AddHandler(PointerPressedEvent, new PointerEventHandler(OnSplitterPressed), true);
@@ -119,17 +106,6 @@ public sealed partial class DetailDock : UserControl
 
     private void OnF2Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) =>
         args.Handled = TryShortcut(VirtualKey.F2, VirtualKeyModifiers.None);
-
-    private void OnXamlRootChanged(XamlRoot sender, XamlRootChangedEventArgs args) => UpdateDocking();
-
-    // The window's content width decides whether the pane docks.
-    private void UpdateDocking()
-    {
-        if (XamlRoot is { } root)
-        {
-            ViewModel.IsDetailDocked = PaneLayout.IsDetailDocked(root.Size.Width);
-        }
-    }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {

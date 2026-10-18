@@ -31,7 +31,8 @@ public sealed class DialogServiceTests
         CollectionAssert.AreEqual(
             new[] { "Archive", "Cancel" }, DialogHost.Buttons(dialog).Select(b => b.Content).ToList());
         Assert.AreEqual(ContentDialogButton.Primary, dialog.DefaultButton);
-        Assert.AreEqual("FluentDialog", AutomationProperties.GetAutomationId(dialog));
+        await UiWait.UntilAsync(() => AutomationProperties.GetAutomationId(dialog) == "FluentDialog",
+            () => "The open dialog has no FluentDialog AutomationId.", ct);
         Assert.AreEqual("Archive list", AutomationProperties.GetName(dialog));
 
         DialogHost.Press(dialog, "PrimaryButton");
@@ -58,12 +59,52 @@ public sealed class DialogServiceTests
         await UiWait.UntilAsync(
             () => ReferenceEquals(FocusManager.GetFocusedElement(dialog.XamlRoot), cancel),
             () => $"Cancel did not take the focus; {FocusManager.GetFocusedElement(dialog.XamlRoot)} has it.", ct);
+        Assert.AreEqual("FluentDialog", AutomationProperties.GetAutomationId(dialog));
 
         DialogHost.Press(dialog, "CloseButton");
         var result = await shown;
 
         Assert.IsTrue(result.IsCancelled);
         Assert.AreEqual(DialogService.CancelIndex, result.ChoiceIndex);
+    }
+
+    [UITestMethod]
+    public async Task UI_Automation_finds_the_dialog_only_once_Cancel_holds_the_focus_so_a_key_pressed_then_reaches_it()
+    {
+        var ct = TestContext.CancellationToken;
+        using var host = await DialogHost.OpenAsync(ct);
+        var service = new DialogService(() => host.Window);
+        var root = host.Window.Content.XamlRoot;
+        // Each layout pass of the opening dialog: whenever it carries its AutomationId, Cancel has the focus.
+        // (Recorded, not asserted: an exception in a layout handler would end the test host.)
+        string? violation = null;
+        void Check(object? sender, object e)
+        {
+            if (DialogHost.OpenDialog(root) is { } open && AutomationProperties.GetAutomationId(open) == "FluentDialog"
+                && FocusManager.GetFocusedElement(root) is not Button { Name: "CloseButton" })
+            {
+                violation ??= $"The dialog had its AutomationId while {FocusManager.GetFocusedElement(root)} had the focus.";
+            }
+        }
+
+        ((Microsoft.UI.Xaml.FrameworkElement)host.Window.Content).LayoutUpdated += Check;
+        try
+        {
+            var shown = service.ShowAsync(
+                new DialogRequest("Delete list", "Delete the list?", ["Delete"]) { IsDestructive = true });
+            var dialog = await DialogHost.OpenDialogAsync(root, ct);
+            await UiWait.UntilAsync(() => AutomationProperties.GetAutomationId(dialog) == "FluentDialog",
+                () => "The open dialog has no FluentDialog AutomationId.", ct);
+            Assert.AreSame(VisualTree.Find<Button>(dialog, "CloseButton"), FocusManager.GetFocusedElement(root));
+            Assert.IsNull(violation, violation);
+
+            DialogHost.Press(dialog, "CloseButton");
+            await shown;
+        }
+        finally
+        {
+            ((Microsoft.UI.Xaml.FrameworkElement)host.Window.Content).LayoutUpdated -= Check;
+        }
     }
 
     [UITestMethod]

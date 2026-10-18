@@ -1,7 +1,6 @@
 using System.Drawing;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
-using FlaUI.Core.Input;
 
 namespace TaskDesk.UiTests;
 
@@ -23,17 +22,7 @@ public sealed class ReorderTests : IDisposable
         }
 
         // Drag "First" onto "Third" in small steps, as a person would.
-        var from = Centre(Row("First"));
-        var to = Centre(Row("Third"));
-        Mouse.Position = from;
-        Mouse.Down(MouseButton.Left);
-        for (var step = 1; step <= 10; step++)
-        {
-            Mouse.Position = new Point(from.X + ((to.X - from.X) * step / 10), from.Y + ((to.Y - from.Y) * step / 10));
-            Thread.Sleep(30);
-        }
-
-        Mouse.Up(MouseButton.Left);
+        AppSession.DragSlowly(Centre(Row("First")), Centre(Row("Third")));
 
         _app.WaitForRows(Ids.OpenTaskList, "Second", "Third", "First");
 

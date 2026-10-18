@@ -364,14 +364,80 @@ public sealed class SidebarListsAndTagsTests
             await RowsAsync(window, "ListsList", 4);
             var c = lists.Lists[3];
 
-            // What a reorder drag leaves: the ListView has moved C up to second place.
-            lists.Lists.Move(3, 1);
-            await window.Navigation.SaveListMoveAsync(c, fromIndex: 3);
+            // C dropped on A takes A's place, as in the WPF sidebar.
+            await window.Navigation.DropListAsync(c, lists.Lists[1]);
 
             await lists.LoadAsync(ct);
             CollectionAssert.AreEqual(new[] { "Inbox", "C", "A", "B" }, lists.Lists.Select(l => l.Name).ToList());
             await UiWait.UntilAsync(() => Names(window, "ListsList").SequenceEqual(["Inbox", "C", "A", "B"]),
                 () => $"Rows were [{string.Join(", ", Names(window, "ListsList"))}].", ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task A_List_dropped_on_an_earlier_or_a_later_List_takes_its_place_and_a_drop_on_itself_or_none_does_nothing()
+    {
+        var ct = TestContext.CancellationToken;
+        using var db = new TempDatabase();
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
+        foreach (var name in new[] { "A", "B", "C" })
+        {
+            await db.Get<IListService>().CreateListAsync(name, ct);
+        }
+
+        var (window, _, lists) = NewWindow(db);
+        try
+        {
+            window.Activate();
+            await lists.LoadAsync(ct);
+            await RowsAsync(window, "ListsList", 4);
+            ListItemViewModel Named(string name) => lists.Lists.Single(l => l.Name == name);
+            List<string> Order() => [.. lists.Lists.Select(l => l.Name)];
+
+            await window.Navigation.DropListAsync(Named("A"), Named("C"));
+            CollectionAssert.AreEqual(new[] { "Inbox", "B", "C", "A" }, Order());
+
+            await window.Navigation.DropListAsync(Named("B"), Named("B"));
+            await window.Navigation.DropListAsync(Named("B"), null);
+            CollectionAssert.AreEqual(new[] { "Inbox", "B", "C", "A" }, Order());
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task A_drop_position_maps_to_the_List_row_under_it_or_to_none_below_the_rows()
+    {
+        var ct = TestContext.CancellationToken;
+        using var db = new TempDatabase();
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
+        foreach (var name in new[] { "A", "B" })
+        {
+            await db.Get<IListService>().CreateListAsync(name, ct);
+        }
+
+        var (window, _, lists) = NewWindow(db);
+        try
+        {
+            window.Activate();
+            await lists.LoadAsync(ct);
+            var rows = await RowsAsync(window, "ListsList", 3);
+            var list = VisualTree.Find<ListView>(window.Navigation, "ListsList");
+
+            foreach (var row in rows)
+            {
+                var top = row.TransformToVisual(list).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+                Assert.AreSame(row.Content, window.Navigation.ListAt(new Windows.Foundation.Point(20, top + 2)));
+                Assert.AreSame(row.Content, window.Navigation.ListAt(new Windows.Foundation.Point(20, top + row.ActualHeight - 2)));
+            }
+
+            Assert.IsNull(window.Navigation.ListAt(new Windows.Foundation.Point(20, list.ActualHeight + 500)));
         }
         finally
         {

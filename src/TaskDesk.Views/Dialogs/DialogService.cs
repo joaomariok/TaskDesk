@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Foundation;
 
 namespace TaskDesk.Views.Dialogs;
 
@@ -40,7 +41,7 @@ public sealed class DialogService(Func<Window?> activeWindow)
         dialog.DefaultButton = request.IsDestructive ? ContentDialogButton.Close : ContentDialogButton.Primary;
 
         var input = request.Input is { } spec ? AddInput(dialog, spec) : null;
-        var outcome = await dialog.ShowAsync();
+        var outcome = await ShowWhenReadyAsync(dialog);
         return outcome switch
         {
             ContentDialogResult.Primary => new DialogResult(request.PrimaryIndex, input?.Text),
@@ -68,7 +69,16 @@ public sealed class DialogService(Func<Window?> activeWindow)
         var dialog = NewDialog(title, body);
         dialog.CloseButtonText = "OK";
         dialog.DefaultButton = ContentDialogButton.Close;
-        await dialog.ShowAsync();
+        await ShowWhenReadyAsync(dialog);
+    }
+
+    // UI Automation finds the dialog by its AutomationId only once the focus is in it (its default button or its
+    // input box), so a key pressed as soon as it is found (Enter, Esc) reaches it, as with the WPF dialog's modal
+    // window. The content dialog shows, and raises Opened, before it moves the focus.
+    private static IAsyncOperation<ContentDialogResult> ShowWhenReadyAsync(ContentDialog dialog)
+    {
+        dialog.GotFocus += (_, _) => AutomationProperties.SetAutomationId(dialog, AutomationId);
+        return dialog.ShowAsync();
     }
 
     private ContentDialog NewDialog(string title, string body)
@@ -89,7 +99,6 @@ public sealed class DialogService(Func<Window?> activeWindow)
             dialog.Style = (Style)style;
         }
 
-        AutomationProperties.SetAutomationId(dialog, AutomationId);
         AutomationProperties.SetName(dialog, title);
         return dialog;
     }

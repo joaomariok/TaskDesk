@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using TaskDesk.Core.Tags;
@@ -167,6 +168,10 @@ public sealed partial class DetailPane : UserControl
 
     /// <summary>The Priority choices, in the order of <see cref="Priority"/>'s values.</summary>
     public static string[] PriorityNames { get; } = Enum.GetNames<Priority>();
+
+    // A UserControl has no automation peer, so UI Automation would skip the pane and its AutomationId (DetailPane)
+    // and show only its fields; the WPF pane is an element of its own.
+    protected override AutomationPeer OnCreateAutomationPeer() => new FrameworkElementAutomationPeer(this);
 
     /// <summary>Focuses the title box with its text selected (F2, or Enter on a row).</summary>
     public void FocusTitle()

@@ -27,7 +27,6 @@ public sealed partial class NavigationPane
     private ListItemViewModel? _menuList;
     private Tag? _menuTag;
     private ListItemViewModel? _dragged;
-    private int _dragFrom = -1;
 
     /// <summary>The Lists section, or null when the pane shows no Lists.</summary>
     public ListsViewModel? Lists { get; }
@@ -67,25 +66,37 @@ public sealed partial class NavigationPane
     }
 
     /// <summary>
-    /// Saves the order a reorder drag left: <paramref name="item"/> was at <paramref name="fromIndex"/> and the
-    /// list has moved it to where it is now. The move goes through the Lists' reorder use case.
+    /// Drops <paramref name="dragged"/> on <paramref name="target"/>: the List takes the target's place, as in the
+    /// WPF sidebar, through the Lists' reorder use case. A drop on itself or on no List does nothing.
     /// </summary>
-    public async Task SaveListMoveAsync(ListItemViewModel item, int fromIndex)
+    public async Task DropListAsync(ListItemViewModel dragged, ListItemViewModel? target)
     {
-        if (Lists is null)
+        if (Lists is null || target is null || ReferenceEquals(dragged, target))
         {
             return;
         }
 
-        var to = Lists.Lists.IndexOf(item);
-        if (fromIndex < 0 || to < 0 || to == fromIndex)
+        await Lists.MoveAsync(dragged, target);
+    }
+
+    /// <summary>The List row under <paramref name="position"/> (relative to the Lists list), or null over none.</summary>
+    public ListItemViewModel? ListAt(Windows.Foundation.Point position)
+    {
+        for (var i = 0; i < ListsList.Items.Count; i++)
         {
-            return;
+            if (ListsList.ContainerFromIndex(i) is not FrameworkElement container)
+            {
+                continue;
+            }
+
+            var top = container.TransformToVisual(ListsList).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+            if (position.Y >= top && position.Y < top + container.ActualHeight)
+            {
+                return ListsList.Items[i] as ListItemViewModel;
+            }
         }
 
-        // MoveAsync takes the List and the one now at its new place, counted from the order before the move.
-        Lists.Lists.Move(to, fromIndex);
-        await Lists.MoveAsync(item, Lists.Lists[to]);
+        return null;
     }
 
     private void InitializeListsAndTags()
@@ -349,24 +360,38 @@ public sealed partial class NavigationPane
         }
     }
 
-    // ---- Drag to reorder Lists ----
+    // ---- Drag to reorder Lists: a List dropped on another takes its place ----
 
     private void OnListDragStarting(object sender, DragItemsStartingEventArgs e)
     {
         _dragged = e.Items.FirstOrDefault() as ListItemViewModel;
-        _dragFrom = _dragged is null || Lists is null ? -1 : Lists.Lists.IndexOf(_dragged);
+        if (_dragged is null || Lists is null)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        e.Data.RequestedOperation = DataPackageOperation.Move;
+    }
+
+    private void OnListDragOver(object sender, DragEventArgs e)
+    {
+        e.AcceptedOperation = _dragged is not null ? DataPackageOperation.Move : DataPackageOperation.None;
+        e.Handled = true;
     }
 
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
-    private async void OnListDragCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
+    private async void OnListDrop(object sender, DragEventArgs e)
     {
-        var item = _dragged;
+        var dragged = _dragged;
         _dragged = null;
-        if (item is not null && args.DropResult == DataPackageOperation.Move)
+        if (dragged is not null)
         {
-            await SaveListMoveAsync(item, _dragFrom);
+            await DropListAsync(dragged, ListAt(e.GetPosition(ListsList)));
         }
     }
+
+    private void OnListDragCompleted(ListViewBase sender, DragItemsCompletedEventArgs args) => _dragged = null;
 
     private static bool TryParseColour(string? hex, out Windows.UI.Color colour)
     {

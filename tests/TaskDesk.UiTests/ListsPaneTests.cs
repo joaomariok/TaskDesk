@@ -1,5 +1,4 @@
 using System.Drawing;
-using System.Runtime.InteropServices;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
@@ -30,7 +29,7 @@ public sealed class ListsPaneTests : IDisposable
 
         var dragged = Row("C").BoundingRectangle;
         var target = Row("A").BoundingRectangle;
-        DragSlowly(
+        AppSession.DragSlowly(
             new Point(dragged.Left + dragged.Width / 2, dragged.Top + dragged.Height / 2),
             new Point(target.Left + target.Width / 2, target.Top + target.Height / 4));
 
@@ -79,77 +78,4 @@ public sealed class ListsPaneTests : IDisposable
         AppSession.Eventually(
             () => _app.Find(Ids.ListsList).FindFirstChild(cf => cf.ByControlType(ControlType.ListItem).And(cf.ByName(name))),
             $"No List row '{name}'.");
-
-    // A drag a person makes: press, move in small steps (drag and drop needs real pointer moves; the cursor jumps
-    // of Mouse.Drag send none), pause over the target, release.
-    private static void DragSlowly(Point from, Point to)
-    {
-        MoveTo(from);
-        Thread.Sleep(100);
-        Mouse.Down(MouseButton.Left);
-        Thread.Sleep(150);
-        const int Steps = 40;
-        for (var i = 1; i <= Steps; i++)
-        {
-            MoveTo(new Point(from.X + (to.X - from.X) * i / Steps, from.Y + (to.Y - from.Y) * i / Steps));
-            Thread.Sleep(15);
-        }
-
-        Thread.Sleep(400);
-        Mouse.Up(MouseButton.Left);
-        Thread.Sleep(200);
-    }
-
-    private static void MoveTo(Point point)
-    {
-        var left = GetSystemMetrics(SmXVirtualScreen);
-        var top = GetSystemMetrics(SmYVirtualScreen);
-        var width = GetSystemMetrics(SmCxVirtualScreen);
-        var height = GetSystemMetrics(SmCyVirtualScreen);
-        var input = new Input
-        {
-            Type = InputMouse,
-            Mouse = new MouseInput
-            {
-                X = (int)Math.Round((point.X - left) * 65535.0 / (width - 1)),
-                Y = (int)Math.Round((point.Y - top) * 65535.0 / (height - 1)),
-                Flags = MouseEventFMove | MouseEventFAbsolute | MouseEventFVirtualDesk,
-            },
-        };
-        Assert.Equal(1u, SendInput(1, [input], Marshal.SizeOf<Input>()));
-    }
-
-    private const int SmXVirtualScreen = 76;
-    private const int SmYVirtualScreen = 77;
-    private const int SmCxVirtualScreen = 78;
-    private const int SmCyVirtualScreen = 79;
-    private const uint InputMouse = 0;
-    private const uint MouseEventFMove = 0x0001;
-    private const uint MouseEventFAbsolute = 0x8000;
-    private const uint MouseEventFVirtualDesk = 0x4000;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MouseInput
-    {
-        public int X;
-        public int Y;
-        public uint MouseData;
-        public uint Flags;
-        public uint Time;
-        public IntPtr ExtraInfo;
-    }
-
-    // INPUT: the type, then a union whose largest member (MOUSEINPUT on x64) is all a mouse move needs.
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Input
-    {
-        public uint Type;
-        public MouseInput Mouse;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern int GetSystemMetrics(int index);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint SendInput(uint count, [In] Input[] inputs, int size);
 }

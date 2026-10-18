@@ -39,6 +39,8 @@ public sealed class SettingsWindowTests : IDisposable
         closeBehavior.Select("HideToTray");
         AppSession.WaitUntil(() => closeBehavior.SelectedItem?.Name == "HideToTray",
             () => $"The close behaviour shows '{closeBehavior.SelectedItem?.Name}'.");
+        // Selecting through UI Automation can leave the WPF drop-down open, and it takes the window's Close.
+        closeBehavior.Collapse();
         settings.Close();
         AppSession.WaitUntil(() => !_app.SettingsWindowShown(), () => "The Settings window did not close.");
 

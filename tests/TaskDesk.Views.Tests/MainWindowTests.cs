@@ -1,19 +1,25 @@
+using System.Runtime.InteropServices;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using TaskDesk.Core.Lists;
+using TaskDesk.Core.Shell;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Data;
 using TaskDesk.Data.Tests;
 using TaskDesk.Presentation;
+using Windows.Graphics;
+using WinRT.Interop;
 
 namespace TaskDesk.Views.Tests;
 
 [TestClass]
-public sealed class MainWindowTests
+public sealed partial class MainWindowTests
 {
     public TestContext TestContext { get; set; } = null!;
 
@@ -47,6 +53,63 @@ public sealed class MainWindowTests
                 rows.Select(AutomationProperties.GetName).ToList());
             Assert.AreEqual("OpenTaskList", AutomationProperties.GetAutomationId(list));
             Assert.AreEqual("TaskDesk", window.Title);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public void The_main_window_opens_at_900_by_600_and_keeps_at_least_800_by_500_as_the_WPF_window_does()
+    {
+        using var db = new TempDatabase();
+        var viewModel = new MainViewModel(
+            db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock, listService: db.Get<IListService>());
+
+        var window = new MainWindow(viewModel);
+        try
+        {
+            var scale = GetDpiForWindow(WindowNative.GetWindowHandle(window)) / 96.0;
+            Assert.AreEqual(WindowLayoutCalculator.ToPhysical(900, scale), window.AppWindow.Size.Width);
+            Assert.AreEqual(WindowLayoutCalculator.ToPhysical(600, scale), window.AppWindow.Size.Height);
+            var presenter = (OverlappedPresenter)window.AppWindow.Presenter;
+            Assert.AreEqual(WindowLayoutCalculator.ToPhysical(800, scale), presenter.PreferredMinimumWidth);
+            Assert.AreEqual(WindowLayoutCalculator.ToPhysical(500, scale), presenter.PreferredMinimumHeight);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task The_window_width_with_its_frame_decides_the_rail_and_the_docked_detail_pane_as_in_WPF()
+    {
+        var ct = TestContext.CancellationToken;
+        using var db = new TempDatabase();
+        var viewModel = new MainViewModel(
+            db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock, listService: db.Get<IListService>());
+
+        var window = new MainWindow(viewModel);
+        try
+        {
+            window.Activate();
+            await UiWait.UntilAsync(() => window.View.IsLoaded, () => "The main view never loaded.", ct);
+            var scale = GetDpiForWindow(WindowNative.GetWindowHandle(window)) / 96.0;
+
+            // The default 900 px window, whose content is narrower than 900 px, shows the full sidebar.
+            Assert.IsTrue(((FrameworkElement)window.Content).ActualWidth < 900);
+            Assert.IsFalse(window.Navigation.IsRail, "The default 900 px window shows the rail.");
+            Assert.IsFalse(viewModel.IsDetailDocked);
+
+            foreach (var (width, rail, docked) in new[] { (899, true, false), (1100, false, false), (1101, false, true), (900, false, false) })
+            {
+                window.AppWindow.Resize(new SizeInt32(
+                    WindowLayoutCalculator.ToPhysical(width, scale), WindowLayoutCalculator.ToPhysical(600, scale)));
+                await UiWait.UntilAsync(() => window.Navigation.IsRail == rail && viewModel.IsDetailDocked == docked,
+                    () => $"At {width} px: rail {window.Navigation.IsRail}, docked {viewModel.IsDetailDocked}.", ct);
+            }
         }
         finally
         {
@@ -101,4 +164,7 @@ public sealed class MainWindowTests
             window.Close();
         }
     }
+
+    [LibraryImport("user32.dll")]
+    private static partial uint GetDpiForWindow(nint hwnd);
 }

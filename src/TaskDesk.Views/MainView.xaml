@@ -22,6 +22,12 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <StackPanel x:Name="ListHeader" Spacing="8">
+            <!-- Shown when Reminders fall back to tray balloons, until dismissed. -->
+            <InfoBar x:Name="NotificationBanner" Severity="Warning" IsClosable="True"
+                     AutomationProperties.Name="Notifications unavailable"
+                     IsOpen="{x:Bind ViewModel.HasNotificationBanner, Mode=OneWay}"
+                     Message="{x:Bind ViewModel.NotificationBanner, Mode=OneWay}"
+                     CloseButtonCommand="{x:Bind ViewModel.DismissNotificationBannerCommand, Mode=OneTime}" />
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />

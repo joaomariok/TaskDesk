@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
@@ -253,6 +254,10 @@ public sealed class AppSession : IDisposable
     {
         Focus(automationId);
         Keyboard.Type(text);
+        // The app can still be working through the keys (the WinUI text box takes longer per key than WPF's); Enter
+        // or a focus change sent before it has would reach another element, or the rest of the text would.
+        WaitUntil(() => TextBox(automationId).Text.Contains(text, StringComparison.Ordinal),
+            () => $"{automationId} did not receive '{text}'; it holds '{TextBox(automationId).Text}'.");
         if (pressEnter)
         {
             Keyboard.Type(VirtualKeyShort.RETURN);
@@ -327,6 +332,79 @@ public sealed class AppSession : IDisposable
     /// <summary>True while the quick-add window is shown.</summary>
     public bool QuickAddWindowShown() =>
         _app!.GetAllTopLevelWindows(_automation).Any(w => w.Title == "TaskDesk quick add");
+
+    /// <summary>A drag a person makes: press, move in small steps (drag and drop needs real pointer moves; the cursor
+    /// jumps of Mouse.Drag and Mouse.Position send none to WinUI), pause over the target, release.</summary>
+    public static void DragSlowly(Point from, Point to)
+    {
+        MoveTo(from);
+        Thread.Sleep(100);
+        Mouse.Down(MouseButton.Left);
+        Thread.Sleep(150);
+        const int Steps = 40;
+        for (var i = 1; i <= Steps; i++)
+        {
+            MoveTo(new Point(from.X + (to.X - from.X) * i / Steps, from.Y + (to.Y - from.Y) * i / Steps));
+            Thread.Sleep(15);
+        }
+
+        Thread.Sleep(400);
+        Mouse.Up(MouseButton.Left);
+        Thread.Sleep(200);
+    }
+
+    private static void MoveTo(Point point)
+    {
+        var left = GetSystemMetrics(SmXVirtualScreen);
+        var top = GetSystemMetrics(SmYVirtualScreen);
+        var width = GetSystemMetrics(SmCxVirtualScreen);
+        var height = GetSystemMetrics(SmCyVirtualScreen);
+        var input = new Input
+        {
+            Type = InputMouse,
+            Mouse = new MouseInput
+            {
+                X = (int)Math.Round((point.X - left) * 65535.0 / (width - 1)),
+                Y = (int)Math.Round((point.Y - top) * 65535.0 / (height - 1)),
+                Flags = MouseEventFMove | MouseEventFAbsolute | MouseEventFVirtualDesk,
+            },
+        };
+        Assert.Equal(1u, SendInput(1, [input], Marshal.SizeOf<Input>()));
+    }
+
+    private const int SmXVirtualScreen = 76;
+    private const int SmYVirtualScreen = 77;
+    private const int SmCxVirtualScreen = 78;
+    private const int SmCyVirtualScreen = 79;
+    private const uint InputMouse = 0;
+    private const uint MouseEventFMove = 0x0001;
+    private const uint MouseEventFAbsolute = 0x8000;
+    private const uint MouseEventFVirtualDesk = 0x4000;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseInput
+    {
+        public int X;
+        public int Y;
+        public uint MouseData;
+        public uint Flags;
+        public uint Time;
+        public IntPtr ExtraInfo;
+    }
+
+    // INPUT: the type, then a union whose largest member (MOUSEINPUT on x64) is all a mouse move needs.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Input
+    {
+        public uint Type;
+        public MouseInput Mouse;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint count, [In] Input[] inputs, int size);
 
     /// <summary>Drags an element (a splitter) horizontally by <paramref name="dx"/> physical pixels.</summary>
     public static void DragBy(AutomationElement element, int dx)
@@ -470,6 +548,10 @@ public sealed class AppSession : IDisposable
         WaitUntil(() => FocusedAutomationId() == Ids.QuickAddBox,
             () => $"Start-up focus never reached quick add; it is on '{FocusedAutomationId()}'.");
     }
+
+    /// <summary>True when the app under test is the WinUI build (TaskDesk.App.WinUI.exe), false for the WPF one.</summary>
+    public static bool IsWinUI =>
+        Path.GetFileName(AppPath()).Equals("TaskDesk.App.WinUI.exe", StringComparison.OrdinalIgnoreCase);
 
     internal static string AppPath()
     {

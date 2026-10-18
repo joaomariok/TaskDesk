@@ -6,7 +6,7 @@ namespace TaskDesk.UiTests;
 /// <summary>
 /// The Smart Views in the WinUI build's navigation pane, with real input in a real process: Ctrl+1 to Ctrl+5,
 /// the compact rail below 900 px, and the sidebar splitter's width surviving a restart. Written for the WinUI
-/// build (ui-tests.ps1 -WinUI); the WPF build's rail is a separate list (RailSmartViewList).
+/// build (ui-tests.ps1 -WinUI) and held by the WPF build too, whose rail is a separate list (RailSmartViewList).
 /// </summary>
 public sealed class SmartViewPaneTests : IDisposable
 {
@@ -42,7 +42,8 @@ public sealed class SmartViewPaneTests : IDisposable
         _app.Find(Ids.SidebarExpandButton);
         AppSession.WaitUntil(() => Width(Ids.NavigationPane) < fullWidth / 2,
             () => $"The pane is {Width(Ids.NavigationPane)} px wide in the rail (full: {fullWidth}).");
-        Assert.Equal(SmartViews, SmartViewNames());
+        // The WinUI rail is the same list, compact; the WPF rail is a list of its own.
+        Assert.Equal(SmartViews, SmartViewNames(AppSession.IsWinUI ? Ids.SmartViewList : Ids.RailSmartViewList));
         AppSession.WaitUntil(() => _app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.SidebarSplitter)) is null,
             () => "The rail shows the sidebar splitter.");
 
@@ -74,8 +75,8 @@ public sealed class SmartViewPaneTests : IDisposable
     private bool IsSelected(string smartView) =>
         _app.Find("SmartView" + smartView).Patterns.SelectionItem.Pattern.IsSelected.Value;
 
-    private List<string> SmartViewNames() =>
-        [.. _app.Find(Ids.SmartViewList).FindAllDescendants(cf => cf.ByControlType(ControlType.ListItem))
+    private List<string> SmartViewNames(string listId = Ids.SmartViewList) =>
+        [.. _app.Find(listId).FindAllDescendants(cf => cf.ByControlType(ControlType.ListItem))
             .Select(i => i.Name).Where(SmartViews.Contains)];
 
     private int Width(string automationId) => _app.Find(automationId).BoundingRectangle.Width;

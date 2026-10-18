@@ -51,7 +51,6 @@ public sealed partial class NavigationPane : UserControl
             SyncSelection();
             QueueCountRefresh();
         };
-        SizeChanged += (_, e) => SetRail(PaneLayout.IsRail(e.NewSize.Width));
         FollowSplitterDragsWithoutMoves();
     }
 

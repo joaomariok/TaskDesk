@@ -203,12 +203,13 @@
                     <ListView x:Name="ListsList"
                               ItemContainerStyle="{StaticResource SidebarListItem}"
                               ItemTemplate="{StaticResource ListRowTemplate}"
-                              SelectionMode="Single" CanDragItems="True" CanReorderItems="True" AllowDrop="True"
+                              SelectionMode="Single" CanDragItems="True" AllowDrop="True"
                               ScrollViewer.VerticalScrollMode="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
                               AutomationProperties.Name="Lists" AutomationProperties.AutomationId="ListsList"
                               ContainerContentChanging="OnListContainerContentChanging"
                               SelectionChanged="OnListSelectionChanged" KeyDown="OnListKeyDown"
-                              DragItemsStarting="OnListDragStarting" DragItemsCompleted="OnListDragCompleted" />
+                              DragItemsStarting="OnListDragStarting" DragItemsCompleted="OnListDragCompleted"
+                              DragOver="OnListDragOver" Drop="OnListDrop" />
                     <StackPanel x:Name="NewListArea">
                         <!-- Takes no room until there is an error, so "+ New List" sits right under the last List. -->
                         <TextBlock Style="{StaticResource CaptionText}" Foreground="{ThemeResource OverdueBrush}"
