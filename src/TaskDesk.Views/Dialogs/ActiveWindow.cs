@@ -5,7 +5,8 @@ namespace TaskDesk.Views.Dialogs;
 /// <summary>
 /// The window dialogs and file pickers open on: the last activated of the registered windows that are still open
 /// (a registered window counts as activated when it registers). WinUI keeps no list of open windows, so each
-/// window that can open a dialog registers itself here once it is created.
+/// window that can open a dialog registers itself here once it is created. A multi-step dialog flow keeps the
+/// window its first step opened on (<see cref="DialogService.ShowOnOwnerAsync{T}"/>).
 /// </summary>
 public sealed class ActiveWindow
 {

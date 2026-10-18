@@ -97,7 +97,7 @@ public sealed partial class QuickAddWindow : Window
         }
 
         var monitor = MonitorFromPoint(cursor, MonitorDefaultToNearest);
-        var scale = GetDpiForMonitor(monitor, MdtEffectiveDpi, out var dpiX, out _) == 0 ? dpiX / 96.0 : 1.0;
+        var scale = WindowScale.OfMonitor(monitor);
         var work = DisplayArea.GetFromPoint(new PointInt32(cursor.X, cursor.Y), DisplayAreaFallback.Nearest).WorkArea;
         var placed = QuickAddPlacement.Centre(
             new PixelRect(work.X, work.Y, work.Width, work.Height), CardWidth, heightDips, scale);
@@ -105,7 +105,6 @@ public sealed partial class QuickAddWindow : Window
     }
 
     private const uint MonitorDefaultToNearest = 2;
-    private const int MdtEffectiveDpi = 0;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint
@@ -120,7 +119,4 @@ public sealed partial class QuickAddWindow : Window
 
     [LibraryImport("user32.dll")]
     private static partial nint MonitorFromPoint(NativePoint point, uint flags);
-
-    [LibraryImport("shcore.dll")]
-    private static partial int GetDpiForMonitor(nint monitor, int type, out uint dpiX, out uint dpiY);
 }

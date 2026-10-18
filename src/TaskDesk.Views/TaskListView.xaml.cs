@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Input;
-using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -11,7 +10,6 @@ using Microsoft.UI.Xaml.Media;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
 using Windows.System;
-using Windows.UI.Core;
 using Windows.UI.ViewManagement;
 
 namespace TaskDesk.Views;
@@ -130,7 +128,7 @@ public sealed partial class TaskListView : UserControl
     // Space and Delete act on a focused row. A row's own checkbox handles Space itself.
     private void OnTaskListPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.OriginalSource is ListViewItem && TryShortcut(e.Key, CurrentModifiers()))
+        if (e.OriginalSource is ListViewItem && TryShortcut(e.Key, KeyboardModifiers.Current()))
         {
             e.Handled = true;
         }
@@ -145,24 +143,6 @@ public sealed partial class TaskListView : UserControl
         }
 
         args.Handled = TryShortcut(VirtualKey.Z, VirtualKeyModifiers.Control);
-    }
-
-    private static VirtualKeyModifiers CurrentModifiers()
-    {
-        var modifiers = VirtualKeyModifiers.None;
-        foreach (var (key, flag) in new[]
-                 {
-                     (VirtualKey.Control, VirtualKeyModifiers.Control), (VirtualKey.Shift, VirtualKeyModifiers.Shift),
-                     (VirtualKey.Menu, VirtualKeyModifiers.Menu),
-                 })
-        {
-            if (InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down))
-            {
-                modifiers |= flag;
-            }
-        }
-
-        return modifiers;
     }
 
     // UI Automation names a row by its Task title (the UI tests find rows by name); the row's checkbox runs

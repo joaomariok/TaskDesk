@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using TaskDesk.Core.Shell;
 using TaskDesk.Views;
@@ -9,10 +9,11 @@ namespace TaskDesk.App.Shell;
 /// <summary>
 /// Restores and saves the main window's size, position and state through the settings store. The stored
 /// layout is in device-independent pixels, as the WPF app writes it; <see cref="AppWindow"/> works in
-/// physical pixels, so values are converted at the window's DPI (<see cref="WindowLayoutCalculator"/>).
+/// physical pixels, so each monitor's rectangle converts at that monitor's own scale
+/// (<see cref="WindowLayoutCalculator.ToLayout"/>, <see cref="WindowLayoutCalculator.Place"/>).
 /// The sidebar's and the detail pane's widths are restored and saved with it (<see cref="PaneLayout"/>).
 /// </summary>
-internal sealed partial class WindowLayoutService(IShellSettingsStore store)
+internal sealed class WindowLayoutService(IShellSettingsStore store)
 {
     // The last size and position the window had while neither minimized nor maximized.
     private RectInt32? _normalBounds;
@@ -25,16 +26,9 @@ internal sealed partial class WindowLayoutService(IShellSettingsStore store)
         window.SetPaneWidths(saved);
         if (saved is not null)
         {
-            var scale = ScaleOf(window);
-            var fitted = WindowLayoutCalculator.Fit(
-                saved,
-                WindowLayoutCalculator.ToDips(GetSystemMetrics(SmXVirtualScreen), scale),
-                WindowLayoutCalculator.ToDips(GetSystemMetrics(SmYVirtualScreen), scale),
-                WindowLayoutCalculator.ToDips(GetSystemMetrics(SmCxVirtualScreen), scale),
-                WindowLayoutCalculator.ToDips(GetSystemMetrics(SmCyVirtualScreen), scale));
-            var bounds = WindowLayoutCalculator.ToPhysical(fitted, scale);
+            var bounds = WindowLayoutCalculator.Place(saved, Monitors());
             appWindow.MoveAndResize(new RectInt32(bounds.Left, bounds.Top, bounds.Width, bounds.Height));
-            if (fitted.Maximized && appWindow.Presenter is OverlappedPresenter presenter)
+            if (saved.Maximized && appWindow.Presenter is OverlappedPresenter presenter)
             {
                 presenter.Maximize();
             }
@@ -52,17 +46,14 @@ internal sealed partial class WindowLayoutService(IShellSettingsStore store)
             return;
         }
 
-        var scale = ScaleOf(window);
         var settings = store.Load();
+        var layout = WindowLayoutCalculator.ToLayout(
+            new PixelRect(bounds.X, bounds.Y, bounds.Width, bounds.Height),
+            appWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized },
+            Monitors());
         store.Save(settings with
         {
-            Layout = new WindowLayout(
-                WindowLayoutCalculator.ToDips(bounds.X, scale),
-                WindowLayoutCalculator.ToDips(bounds.Y, scale),
-                WindowLayoutCalculator.ToDips(bounds.Width, scale),
-                WindowLayoutCalculator.ToDips(bounds.Height, scale),
-                appWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized },
-                PaneLayout.Update(settings.Layout?.PaneWidths, window.MeasurePaneWidths())),
+            Layout = layout with { PaneWidths = PaneLayout.Update(settings.Layout?.PaneWidths, window.MeasurePaneWidths()) },
         });
     }
 
@@ -75,18 +66,32 @@ internal sealed partial class WindowLayoutService(IShellSettingsStore store)
         }
     }
 
-    // 1.0 at 100 % display scale, 1.25 at 125 %.
-    private static double ScaleOf(MainWindow window) =>
-        GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(window)) / 96.0;
+    // Every monitor now attached, with its own scale.
+    private static List<MonitorArea> Monitors()
+    {
+        var areas = DisplayArea.FindAll();
+        var monitors = new List<MonitorArea>(areas.Count);
+        // Indexed: enumerating the FindAll result with foreach is not reliable in the C# projection.
+        for (var i = 0; i < areas.Count; i++)
+        {
+            monitors.Add(ToMonitor(areas[i]));
+        }
 
-    private const int SmXVirtualScreen = 76;
-    private const int SmYVirtualScreen = 77;
-    private const int SmCxVirtualScreen = 78;
-    private const int SmCyVirtualScreen = 79;
+        if (monitors.Count == 0)
+        {
+            monitors.Add(ToMonitor(DisplayArea.Primary));
+        }
 
-    [LibraryImport("user32.dll")]
-    private static partial uint GetDpiForWindow(IntPtr hwnd);
+        return monitors;
+    }
 
-    [LibraryImport("user32.dll")]
-    private static partial int GetSystemMetrics(int index);
+    private static MonitorArea ToMonitor(DisplayArea area)
+    {
+        var bounds = area.OuterBounds;
+        var work = area.WorkArea;
+        return new MonitorArea(
+            new PixelRect(bounds.X, bounds.Y, bounds.Width, bounds.Height),
+            new PixelRect(work.X, work.Y, work.Width, work.Height),
+            WindowScale.OfMonitor(Win32Interop.GetMonitorFromDisplayId(area.DisplayId)));
+    }
 }

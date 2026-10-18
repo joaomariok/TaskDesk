@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -174,5 +175,67 @@ public sealed class DialogServiceTests
 
         DialogHost.Press(dialog, "CloseButton");
         await shown;
+    }
+
+    [UITestMethod]
+    [DataRow(ElementTheme.Light)]
+    [DataRow(ElementTheme.Dark)]
+    public async Task A_dialog_takes_the_theme_of_the_window_it_opens_on(ElementTheme theme)
+    {
+        var ct = TestContext.CancellationToken;
+        using var host = await DialogHost.OpenAsync(ct);
+        // The theme service sets the chosen theme on the window's content root, not on the application.
+        ((FrameworkElement)host.Window.Content).RequestedTheme = theme;
+        var service = new DialogService(() => host.Window);
+
+        var shown = service.ShowMessageAsync("TaskDesk", "Something to read.");
+        var dialog = await DialogHost.OpenDialogAsync(host.Window.Content.XamlRoot, ct);
+        var actual = dialog.ActualTheme;
+        DialogHost.Press(dialog, "CloseButton");
+        await shown;
+
+        Assert.AreEqual(theme, actual);
+    }
+
+    [UITestMethod]
+    public async Task Dialogs_opened_one_after_another_stay_on_the_window_the_first_opened_on()
+    {
+        var ct = TestContext.CancellationToken;
+        using var settings = await DialogHost.OpenAsync(ct);
+        using var main = await DialogHost.OpenAsync(ct);
+        var active = settings.Window;
+        var service = new DialogService(() => active);
+        try
+        {
+            // An import: the mode choice, then the Replace confirmation straight after it.
+            async Task<bool> Import()
+            {
+                var mode = await service.ShowAsync(new DialogRequest("Import", "How?", ["Merge", "Replace"]));
+                return mode.ChoiceIndex == 1
+                    && await service.ConfirmAsync("Replace all data", "Sure?", "Replace", destructive: true);
+            }
+
+            var import = Import();
+            var choice = await DialogHost.OpenDialogAsync(settings.Window.Content.XamlRoot, ct);
+            active = main.Window; // The owner clicks the main window while the choice is open.
+            DialogHost.Press(choice, "SecondaryButton");
+
+            var confirm = await DialogHost.OpenDialogAsync(settings.Window.Content.XamlRoot, ct);
+            Assert.IsNull(DialogHost.OpenDialog(main.Window.Content.XamlRoot), "The confirmation jumped windows.");
+            DialogHost.Press(confirm, "PrimaryButton");
+            Assert.IsTrue(await import);
+
+            // Once the flow has settled, the next dialog opens on the window that is active then.
+            await Task.Delay(100, ct);
+            var next = service.ShowMessageAsync("TaskDesk", "Imported.");
+            var message = await DialogHost.OpenDialogAsync(main.Window.Content.XamlRoot, ct);
+            DialogHost.Press(message, "CloseButton");
+            await next;
+        }
+        finally
+        {
+            DialogHost.OpenDialog(settings.Window.Content.XamlRoot)?.Hide();
+            DialogHost.OpenDialog(main.Window.Content.XamlRoot)?.Hide();
+        }
     }
 }

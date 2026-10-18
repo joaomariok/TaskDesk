@@ -36,6 +36,8 @@ public partial class App : Application
         InitializeComponent();
         // The exit steps (flush, stop the host) run after the main window has closed; ShellController ends the app.
         DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
+        // Logged, then the app ends (Handled stays false): the WPF app has no DispatcherUnhandledException
+        // handler either, so an unhandled UI exception ends it too. The log file sink is unbuffered.
         UnhandledException += (_, e) =>
             _host?.Services.GetRequiredService<ILogger<App>>().LogCritical(e.Exception, "Unhandled UI exception");
     }
@@ -149,6 +151,7 @@ public partial class App : Application
             await new StartupFailureWindow().ShowAsync(
                 StartupFailureText.Describe(ex.Message, ex.LogsDirectory, ex.BackupsDirectory));
             await _host.StopAsync();
+            _host.Dispose();
             singleInstance.Dispose();
             Environment.ExitCode = 1;
             Exit();
@@ -226,6 +229,22 @@ public partial class App : Application
         var reminders = _host.Services.GetRequiredService<ReminderScheduler>();
         _ = reminders.StartAsync();
         StartSystemHooks(shell, reminders, notifications);
+
+        // The last exit step, as the WPF app's OnExit: release the global hotkey, then the shell (tray,
+        // single-instance guard) and the host, which closes the database and the log file.
+        shell.AddExitStep(async () =>
+        {
+            hotkeys.Dispose();
+            shell.Dispose();
+            if (host is IAsyncDisposable asyncHost)
+            {
+                await asyncHost.DisposeAsync();
+            }
+            else
+            {
+                host.Dispose();
+            }
+        });
     }
 
     // Session end and resume from sleep reach top-level windows only, so they get a hidden one of their own.

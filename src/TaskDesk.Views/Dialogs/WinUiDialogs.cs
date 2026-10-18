@@ -69,9 +69,12 @@ public sealed class WinUiDialogs(DialogService dialogs) : IListDialogs, IOccurre
     {
         var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
         picker.FileTypeFilter.Add(".json");
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(dialogs.OwnerWindow()));
-        var file = await picker.PickSingleFileAsync();
-        return file?.Path;
+        return await dialogs.ShowOnOwnerAsync(async owner =>
+        {
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(owner));
+            var file = await picker.PickSingleFileAsync();
+            return file?.Path;
+        });
     }
 
     public async Task<string?> PickExportPathAsync(ExportFormat format, string suggestedFileName)
@@ -85,8 +88,11 @@ public sealed class WinUiDialogs(DialogService dialogs) : IListDialogs, IOccurre
             DefaultFileExtension = extension,
         };
         picker.FileTypeChoices.Add(json ? "JSON file" : "CSV file", [extension]);
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(dialogs.OwnerWindow()));
-        var file = await picker.PickSaveFileAsync();
-        return file?.Path;
+        return await dialogs.ShowOnOwnerAsync(async owner =>
+        {
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(owner));
+            var file = await picker.PickSaveFileAsync();
+            return file?.Path;
+        });
     }
 }

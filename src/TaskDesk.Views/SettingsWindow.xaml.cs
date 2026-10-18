@@ -1,10 +1,8 @@
-using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using TaskDesk.Core.Shell;
 using TaskDesk.Presentation;
 using Windows.Graphics;
-using WinRT.Interop;
 
 namespace TaskDesk.Views;
 
@@ -25,7 +23,7 @@ public sealed partial class SettingsWindow : Window
         View = new SettingsView(viewModel);
         Content = View;
 
-        var scale = GetDpiForWindow(WindowNative.GetWindowHandle(this)) is var dpi and > 0 ? dpi / 96.0 : 1.0;
+        var scale = WindowScale.Of(this);
         var presenter = OverlappedPresenter.Create();
         presenter.PreferredMinimumWidth = WindowLayoutCalculator.ToPhysical(MinimumWidth, scale);
         presenter.PreferredMinimumHeight = WindowLayoutCalculator.ToPhysical(MinimumHeight, scale);
@@ -42,7 +40,4 @@ public sealed partial class SettingsWindow : Window
     }
 
     public SettingsView View { get; }
-
-    [LibraryImport("user32.dll")]
-    private static partial uint GetDpiForWindow(nint hwnd);
 }

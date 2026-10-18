@@ -1,11 +1,9 @@
-using System.Globalization;
 using System.Windows.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
-using Windows.UI;
 using Windows.UI.Text;
 
 namespace TaskDesk.Views;
@@ -39,16 +37,8 @@ public sealed partial class TaskRow : UserControl
     }
 
     /// <summary>The List's colour ("#RRGGBB") as a brush; null (no fill) when the List has none.</summary>
-    public static Brush? StripeBrush(string? hex)
-    {
-        if (hex is not { Length: 7 } || hex[0] != '#'
-            || !uint.TryParse(hex.AsSpan(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
-        {
-            return null;
-        }
-
-        return new SolidColorBrush(Color.FromArgb(255, (byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb));
-    }
+    public static Brush? StripeBrush(string? hex) =>
+        ListColour.TryParse(hex, out var colour) ? new SolidColorBrush(colour) : null;
 
     public static double StripeOpacity(bool hasListColor) => hasListColor ? 1.0 : 0.0;
 

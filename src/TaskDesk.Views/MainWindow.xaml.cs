@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
@@ -7,8 +5,6 @@ using TaskDesk.Core.Shell;
 using TaskDesk.Presentation;
 using Windows.Graphics;
 using Windows.System;
-using Windows.UI.Core;
-using WinRT.Interop;
 
 namespace TaskDesk.Views;
 
@@ -36,7 +32,7 @@ public sealed partial class MainWindow : Window
         // The page with the detail pane beside it or over it.
         Details = new DetailDock(View);
         // The sidebar's NavigationView hosts the page as its content. Deleting a Tag asks on this window.
-        Navigation = new NavigationPane(viewModel, lists, new Dialogs.DialogService(() => this)) { PageContent = Details };
+        Navigation = new NavigationPane(viewModel, new Dialogs.DialogService(() => this), lists) { PageContent = Details };
         if (lists is not null)
         {
 #pragma warning disable VSTHRD101 // Event handlers; a failed reload reaches the app's UnhandledException log
@@ -130,10 +126,7 @@ public sealed partial class MainWindow : Window
     }
 
     // 1.0 at 100 % display scale, 1.25 at 125 %.
-    private double Scale() => GetDpiForWindow(WindowNative.GetWindowHandle(this)) is var dpi and > 0 ? dpi / 96.0 : 1.0;
-
-    [LibraryImport("user32.dll")]
-    private static partial uint GetDpiForWindow(nint hwnd);
+    private double Scale() => WindowScale.Of(this);
 
     /// <summary>
     /// Runs the window-wide shortcut for a key: Ctrl+comma opens Settings. Returns false when the key is not it.
@@ -155,27 +148,9 @@ public sealed partial class MainWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == SettingsKey && TryShortcut(e.Key, CurrentModifiers()))
+        if (e.Key == SettingsKey && TryShortcut(e.Key, KeyboardModifiers.Current()))
         {
             e.Handled = true;
         }
-    }
-
-    private static VirtualKeyModifiers CurrentModifiers()
-    {
-        var modifiers = VirtualKeyModifiers.None;
-        foreach (var (key, flag) in new[]
-                 {
-                     (VirtualKey.Control, VirtualKeyModifiers.Control), (VirtualKey.Shift, VirtualKeyModifiers.Shift),
-                     (VirtualKey.Menu, VirtualKeyModifiers.Menu),
-                 })
-        {
-            if (InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down))
-            {
-                modifiers |= flag;
-            }
-        }
-
-        return modifiers;
     }
 }

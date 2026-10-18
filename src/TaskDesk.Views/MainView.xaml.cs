@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Windows.Input;
-using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -9,7 +8,6 @@ using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
 using Windows.System;
-using Windows.UI.Core;
 using DispatcherQueueTimer = Microsoft.UI.Dispatching.DispatcherQueueTimer;
 
 namespace TaskDesk.Views;
@@ -120,7 +118,7 @@ public sealed partial class MainView : UserControl
     // Esc bubbles here only when nothing inside (an open drop-down, say) used it first.
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Escape && TryShortcut(e.Key, CurrentModifiers()))
+        if (e.Key == VirtualKey.Escape && TryShortcut(e.Key, KeyboardModifiers.Current()))
         {
             e.Handled = true;
         }
@@ -128,28 +126,10 @@ public sealed partial class MainView : UserControl
 
     private void OnQuickAddKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Enter && TryShortcut(e.Key, CurrentModifiers()))
+        if (e.Key == VirtualKey.Enter && TryShortcut(e.Key, KeyboardModifiers.Current()))
         {
             e.Handled = true;
         }
-    }
-
-    private static VirtualKeyModifiers CurrentModifiers()
-    {
-        var modifiers = VirtualKeyModifiers.None;
-        foreach (var (key, flag) in new[]
-                 {
-                     (VirtualKey.Control, VirtualKeyModifiers.Control), (VirtualKey.Shift, VirtualKeyModifiers.Shift),
-                     (VirtualKey.Menu, VirtualKeyModifiers.Menu),
-                 })
-        {
-            if (InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down))
-            {
-                modifiers |= flag;
-            }
-        }
-
-        return modifiers;
     }
 
     // ---- Search and Filters ----

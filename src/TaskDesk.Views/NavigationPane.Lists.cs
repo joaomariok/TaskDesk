@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -21,7 +20,7 @@ namespace TaskDesk.Views;
 // and the Tags move behind the # button.
 public sealed partial class NavigationPane
 {
-    private readonly Dialogs.DialogService? _dialogs;
+    private readonly Dialogs.DialogService _dialogs;
     private bool _compact;
     private bool _selectionSyncQueued;
     private ListItemViewModel? _menuList;
@@ -33,17 +32,17 @@ public sealed partial class NavigationPane
 
     /// <summary>The colour of a List (#RRGGBB) as a brush; transparent for none.</summary>
     public static Brush ColourBrush(string? colorHex) =>
-        TryParseColour(colorHex, out var colour)
+        ListColour.TryParse(colorHex, out var colour)
             ? new SolidColorBrush(colour)
             : new SolidColorBrush(Colors.Transparent);
 
     /// <summary>Shown only for a List with a colour.</summary>
     public static Visibility ShownWithColour(string? colorHex) =>
-        TryParseColour(colorHex, out _) ? Visibility.Visible : Visibility.Collapsed;
+        ListColour.TryParse(colorHex, out _) ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>Shown only for a List without a colour (the hollow ring).</summary>
     public static Visibility ShownWithoutColour(string? colorHex) =>
-        TryParseColour(colorHex, out _) ? Visibility.Collapsed : Visibility.Visible;
+        ListColour.TryParse(colorHex, out _) ? Visibility.Collapsed : Visibility.Visible;
 
     /// <summary>Shown only while there is text, such as an error message.</summary>
     public static Visibility ShownWithText(string? text) =>
@@ -289,7 +288,7 @@ public sealed partial class NavigationPane
     // Deleting a Tag removes it from every Task and cannot be undone, so it asks first.
     private async Task DeleteTagAsync(Tag tag)
     {
-        if (_dialogs is not null && await _dialogs.ConfirmAsync(
+        if (await _dialogs.ConfirmAsync(
                 "Delete tag",
                 $"Delete the tag #{tag.Name}? It is removed from all tasks. This cannot be undone.",
                 "Delete",
@@ -392,17 +391,4 @@ public sealed partial class NavigationPane
     }
 
     private void OnListDragCompleted(ListViewBase sender, DragItemsCompletedEventArgs args) => _dragged = null;
-
-    private static bool TryParseColour(string? hex, out Windows.UI.Color colour)
-    {
-        colour = default;
-        if (hex is not { Length: 7 } || hex[0] != '#'
-            || !uint.TryParse(hex.AsSpan(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
-        {
-            return false;
-        }
-
-        colour = ColorHelper.FromArgb(255, (byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
-        return true;
-    }
 }

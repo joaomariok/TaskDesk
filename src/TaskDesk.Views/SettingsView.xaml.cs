@@ -1,12 +1,10 @@
 using System.Globalization;
-using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using TaskDesk.Core.Shell;
 using TaskDesk.Presentation;
 using Windows.System;
-using Windows.UI.Core;
 
 namespace TaskDesk.Views;
 
@@ -49,36 +47,7 @@ public sealed partial class SettingsView : UserControl
     public static string VersionText(string version) => string.Format(CultureInfo.InvariantCulture, "Version {0}", version);
 
     private void OnHotkeyKeyDown(object sender, KeyRoutedEventArgs e) =>
-        e.Handled = CaptureHotkey(e.Key, CurrentModifiers());
-
-    private static VirtualKeyModifiers CurrentModifiers()
-    {
-        var modifiers = VirtualKeyModifiers.None;
-        if (IsDown(VirtualKey.Control))
-        {
-            modifiers |= VirtualKeyModifiers.Control;
-        }
-
-        if (IsDown(VirtualKey.Menu))
-        {
-            modifiers |= VirtualKeyModifiers.Menu;
-        }
-
-        if (IsDown(VirtualKey.Shift))
-        {
-            modifiers |= VirtualKeyModifiers.Shift;
-        }
-
-        if (IsDown(VirtualKey.LeftWindows) || IsDown(VirtualKey.RightWindows))
-        {
-            modifiers |= VirtualKeyModifiers.Windows;
-        }
-
-        return modifiers;
-    }
-
-    private static bool IsDown(VirtualKey key) =>
-        InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);
+        e.Handled = CaptureHotkey(e.Key, KeyboardModifiers.Current(withWindows: true));
 
     private static HotkeyModifiers ToHotkeyModifiers(VirtualKeyModifiers modifiers)
     {

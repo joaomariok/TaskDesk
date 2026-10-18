@@ -1,7 +1,7 @@
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
-using Windows.Foundation;
 
 namespace TaskDesk.Views.Dialogs;
 
@@ -13,6 +13,10 @@ namespace TaskDesk.Views.Dialogs;
 /// <param name="activeWindow">The window the dialog opens on; it must be shown.</param>
 public sealed class DialogService(Func<Window?> activeWindow)
 {
+    // The window of the dialog flow under way, and which dialog of it opened last.
+    private Window? _flowOwner;
+    private int _flowGeneration;
+
     /// <summary>The <see cref="DialogResult.ChoiceIndex"/> of Cancel and Esc.</summary>
     public const int CancelIndex = -1;
 
@@ -29,7 +33,8 @@ public sealed class DialogService(Func<Window?> activeWindow)
         }
 
         var secondaryIndex = request.Choices.Count == 2 ? 1 - request.PrimaryIndex : CancelIndex;
-        var dialog = NewDialog(request.Title, request.Body);
+        var owner = OwnerWindow();
+        var dialog = NewDialog(owner, request.Title, request.Body);
         dialog.PrimaryButtonText = request.Choices[request.PrimaryIndex];
         if (secondaryIndex != CancelIndex)
         {
@@ -59,14 +64,51 @@ public sealed class DialogService(Func<Window?> activeWindow)
     public async Task<bool> ConfirmAsync(string title, string body, string primaryText, bool destructive = false) =>
         !(await ShowAsync(new DialogRequest(title, body, [primaryText]) { IsDestructive = destructive })).IsCancelled;
 
-    /// <summary>The window dialogs and file pickers open on.</summary>
+    /// <summary>
+    /// The window dialogs and file pickers open on: the active window, except while a flow of dialogs runs
+    /// (see <see cref="ShowOnOwnerAsync{T}"/>), which keeps the window its first dialog opened on.
+    /// </summary>
     public Window OwnerWindow() =>
-        activeWindow() ?? throw new InvalidOperationException("No window is shown to open a dialog on.");
+        _flowOwner ?? activeWindow() ?? throw new InvalidOperationException("No window is shown to open a dialog on.");
+
+    /// <summary>
+    /// Shows a dialog or a file picker on <see cref="OwnerWindow"/>. A dialog or picker opened as soon as this
+    /// one closes (the next step of the same operation, such as Import's file, then its Merge/Replace choice,
+    /// then the Replace confirmation) opens on the same window, even if the owner activated another one meanwhile.
+    /// </summary>
+    public async Task<T> ShowOnOwnerAsync<T>(Func<Window, Task<T>> show)
+    {
+        ArgumentNullException.ThrowIfNull(show);
+        var owner = OwnerWindow();
+        _flowOwner = owner;
+        var generation = ++_flowGeneration;
+        try
+        {
+            return await show(owner);
+        }
+        finally
+        {
+            // The operation's next step runs before the dispatcher turns to low-priority work, so the flow ends
+            // when no other dialog has opened by then.
+            if (owner.DispatcherQueue?.TryEnqueue(DispatcherQueuePriority.Low, () => EndFlow(generation)) != true)
+            {
+                EndFlow(generation);
+            }
+        }
+    }
+
+    private void EndFlow(int generation)
+    {
+        if (generation == _flowGeneration)
+        {
+            _flowOwner = null;
+        }
+    }
 
     /// <summary>Shows a message with an OK button only, and returns when the owner closes it.</summary>
     public async Task ShowMessageAsync(string title, string body)
     {
-        var dialog = NewDialog(title, body);
+        var dialog = NewDialog(OwnerWindow(), title, body);
         dialog.CloseButtonText = "OK";
         dialog.DefaultButton = ContentDialogButton.Close;
         await ShowWhenReadyAsync(dialog);
@@ -75,18 +117,20 @@ public sealed class DialogService(Func<Window?> activeWindow)
     // UI Automation finds the dialog by its AutomationId only once the focus is in it (its default button or its
     // input box), so a key pressed as soon as it is found (Enter, Esc) reaches it, as with the WPF dialog's modal
     // window. The content dialog shows, and raises Opened, before it moves the focus.
-    private static IAsyncOperation<ContentDialogResult> ShowWhenReadyAsync(ContentDialog dialog)
+    private Task<ContentDialogResult> ShowWhenReadyAsync(ContentDialog dialog)
     {
         dialog.GotFocus += (_, _) => AutomationProperties.SetAutomationId(dialog, AutomationId);
-        return dialog.ShowAsync();
+        return ShowOnOwnerAsync(_ => dialog.ShowAsync().AsTask());
     }
 
-    private ContentDialog NewDialog(string title, string body)
+    // The dialog sits in the popup layer, outside the window's content, so it takes the theme the theme service
+    // set on that content explicitly.
+    private static ContentDialog NewDialog(Window owner, string title, string body)
     {
-        var window = OwnerWindow();
         var dialog = new ContentDialog
         {
-            XamlRoot = window.Content.XamlRoot,
+            XamlRoot = owner.Content.XamlRoot,
+            RequestedTheme = owner.Content is FrameworkElement root ? root.ActualTheme : ElementTheme.Default,
             Title = title,
             Content = new StackPanel
             {

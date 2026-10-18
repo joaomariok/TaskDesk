@@ -25,8 +25,8 @@ public sealed partial class NavigationPane : UserControl
 
     /// <param name="viewModel">The page's view model: Smart Views, counts and Tags.</param>
     /// <param name="lists">The Lists section; null shows no Lists.</param>
-    /// <param name="dialogs">Confirms deleting a Tag; null deletes without asking (tests of other parts).</param>
-    public NavigationPane(MainViewModel viewModel, ListsViewModel? lists = null, Dialogs.DialogService? dialogs = null)
+    /// <param name="dialogs">Confirms deleting a Tag (Lists confirm through their own dialogs).</param>
+    public NavigationPane(MainViewModel viewModel, Dialogs.DialogService dialogs, ListsViewModel? lists = null)
     {
         ViewModel = viewModel;
         Lists = lists;

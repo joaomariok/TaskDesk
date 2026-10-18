@@ -28,4 +28,12 @@ public sealed class QuickAddPlacementTests
 
         Assert.Equal(new PixelRect(190, 40, 420, 400), placed);
     }
+
+    [Fact]
+    public void A_card_wider_than_the_work_area_starts_at_its_left_edge()
+    {
+        var placed = QuickAddPlacement.Centre(new PixelRect(-1280, 0, 300, 800), 420, 200, 1.0);
+
+        Assert.Equal(new PixelRect(-1280, 300, 420, 200), placed);
+    }
 }
