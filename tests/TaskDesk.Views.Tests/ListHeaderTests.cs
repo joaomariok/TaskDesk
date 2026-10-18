@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tags;
@@ -170,6 +171,71 @@ public sealed class ListHeaderTests
             Toggle(filter);
             Assert.AreEqual(Visibility.Visible, bar.Visibility, "The Filter bar hid while a Filter is on.");
             Assert.IsTrue(filter.IsChecked, "Filter was released while a Filter is on.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // At the narrowest window (800 px with its frame) the heading row keeps the 32 px of a text box: the compact
+    // command bar sits right after the heading, and the search box, as tall as quick add, is centred in the row.
+    [UITestMethod]
+    public async Task The_heading_row_is_32_px_with_its_commands_right_after_the_heading_and_search_centred()
+    {
+        using var db = await DatabaseAsync();
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var content = (FrameworkElement)window.Content;
+            var scale = content.XamlRoot.RasterizationScale;
+            window.AppWindow.Resize(new Windows.Graphics.SizeInt32(
+                (int)Math.Round(800 * scale), (int)Math.Round(500 * scale)));
+            await UiWait.UntilAsync(() => Math.Abs(content.ActualWidth - content.XamlRoot.Size.Width) < 1
+                    && window.AppWindow.Size.Width == (int)Math.Round(800 * scale),
+                () => $"The window is {window.AppWindow.Size.Width} px wide.", Ct);
+            await viewModel.LoadAsync(Ct);
+            var bar = VisualTree.Find<CommandBar>(window.View, "HeadingCommands");
+            var more = await WaitForAsync(
+                () => VisualTree.Descendants(bar).OfType<Button>()
+                    .FirstOrDefault(b => AutomationProperties.GetAutomationId(b) == "ListMenuButton" && b.ActualWidth > 0),
+                "The List settings overflow does not show on the Default List's page.");
+            window.View.UpdateLayout();
+            var heading = VisualTree.Find<TextBlock>(window.View, "PageHeading");
+            var filter = VisualTree.Find<AppBarToggleButton>(window.View, "FilterButton");
+            var search = VisualTree.Find<TextBox>(window.View, "SearchBox");
+            var quickAdd = VisualTree.Find<TextBox>(window.View, "QuickAddBox");
+            var row = (FrameworkElement)VisualTreeHelper.GetParent(search);
+            Rect Bounds(FrameworkElement e) =>
+                e.TransformToVisual(window.View).TransformBounds(new Rect(0, 0, e.ActualWidth, e.ActualHeight));
+
+            Assert.IsLessThanOrEqualTo(32.5, row.ActualHeight, $"The heading row is {row.ActualHeight} px tall.");
+            Assert.IsLessThanOrEqualTo(32.5, bar.ActualHeight, $"The command bar is {bar.ActualHeight} px tall.");
+            Assert.IsLessThanOrEqualTo(32.5, filter.ActualHeight, $"Filter is {filter.ActualHeight} px tall.");
+            Assert.IsLessThanOrEqualTo(32.5, more.ActualHeight, $"List settings is {more.ActualHeight} px tall.");
+
+            var label = VisualTree.Descendants(filter).OfType<TextBlock>().Single(t => t.Name == "TextLabel");
+            var icon = VisualTree.Descendants(filter).OfType<FrameworkElement>().Single(e => e.Name == "ContentViewbox");
+            Assert.IsGreaterThanOrEqualTo(Bounds(icon).Right - 0.5, Bounds(label).Left, "Filter's label is not right of its icon.");
+            Assert.IsGreaterThanOrEqualTo(Bounds(filter).Top - 0.5, Bounds(label).Top, "Filter's label is cut at the top.");
+            Assert.IsLessThanOrEqualTo(Bounds(filter).Bottom + 0.5, Bounds(label).Bottom, "Filter's label is cut at the bottom.");
+
+            Assert.AreEqual(quickAdd.ActualHeight, search.ActualHeight, 0.5, "Search is not as tall as quick add.");
+            var rowBounds = Bounds(row);
+            var searchBounds = Bounds(search);
+            Assert.AreEqual(rowBounds.Top + rowBounds.Height / 2, searchBounds.Top + searchBounds.Height / 2, 0.5,
+                "Search is not centred in the heading row.");
+
+            var headingRight = Bounds(heading).Right;
+            var barBounds = Bounds(bar);
+            Assert.IsGreaterThanOrEqualTo(headingRight - 0.5, barBounds.Left, "The command bar starts over the heading.");
+            Assert.IsLessThanOrEqualTo(headingRight + 12, barBounds.Left,
+                $"The command bar starts at {barBounds.Left}, not right after the heading ending at {headingRight}.");
+            Assert.IsLessThanOrEqualTo(searchBounds.Left + 0.5, Bounds(more).Right, "List settings runs into search.");
+            Assert.IsLessThanOrEqualTo(searchBounds.Left + 0.5, Bounds(filter).Right, "Filter runs into search.");
+            Assert.IsLessThanOrEqualTo(window.View.ActualWidth + 0.5, searchBounds.Right, "Search runs past the page.");
+            Assert.AreEqual(viewModel.PageHeading, heading.Text);
+            Assert.IsFalse(heading.IsTextTrimmed, "The heading is trimmed in the narrowest window.");
         }
         finally
         {

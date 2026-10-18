@@ -31,49 +31,64 @@
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" MinWidth="160" MaxWidth="280" />
                 </Grid.ColumnDefinitions>
-                <!-- Left-aligned, so the star column is as wide as the heading until space runs out. -->
-                <TextBlock x:Name="PageHeading" Style="{StaticResource SubtitleText}" VerticalAlignment="Center"
-                           HorizontalAlignment="Left" TextTrimming="CharacterEllipsis"
-                           AutomationProperties.AutomationId="PageHeading"
-                           Text="{x:Bind ViewModel.PageHeading, Mode=OneWay}"
-                           ToolTipService.ToolTip="{x:Bind ViewModel.PageHeading, Mode=OneWay}" />
-                <!-- The page's actions: Filter, and on a List's page the "⋯" overflow ("List settings", named in
-                     OnHeadingCommandsLoaded) with Rename and Colour for the shown List. -->
-                <CommandBar x:Name="HeadingCommands" Grid.Column="1" VerticalAlignment="Center"
-                            Background="Transparent" DefaultLabelPosition="Right" IsDynamicOverflowEnabled="False"
-                            OverflowButtonVisibility="{x:Bind local:MainView.ListOverflow(ViewModel.IsListPage), Mode=OneWay, FallbackValue=Collapsed}"
-                            Loaded="OnHeadingCommandsLoaded">
-                    <local:CommandAppBarToggleButton x:Name="FilterButton" Label="Filter"
-                                                     AutomationProperties.Name="Filter"
-                                                     AutomationProperties.AutomationId="FilterButton"
-                                                     ToolTipService.ToolTip="Show or hide the Filters"
-                                                     IsChecked="{x:Bind ViewModel.IsFilterBarShown, Mode=OneWay}"
-                                                     Command="{x:Bind ViewModel.ToggleFilterBarCommand, Mode=OneTime}">
-                        <local:CommandAppBarToggleButton.Icon>
-                            <FontIcon Glyph="&#xE71C;" />
-                        </local:CommandAppBarToggleButton.Icon>
-                    </local:CommandAppBarToggleButton>
-                    <CommandBar.SecondaryCommands>
-                        <AppBarButton Label="Rename" Click="OnListRenameClick" />
-                        <AppBarButton Label="Colour">
-                            <AppBarButton.Flyout>
-                                <MenuFlyout>
-                                    <MenuFlyoutItem Text="None" Tag="" Click="OnListColourClick" />
-                                    <MenuFlyoutItem Text="Red" Tag="#D13438" Click="OnListColourClick" />
-                                    <MenuFlyoutItem Text="Orange" Tag="#F7630C" Click="OnListColourClick" />
-                                    <MenuFlyoutItem Text="Yellow" Tag="#FFB900" Click="OnListColourClick" />
-                                    <MenuFlyoutItem Text="Green" Tag="#107C10" Click="OnListColourClick" />
-                                    <MenuFlyoutItem Text="Blue" Tag="#0078D4" Click="OnListColourClick" />
-                                    <MenuFlyoutItem Text="Purple" Tag="#744DA9" Click="OnListColourClick" />
-                                </MenuFlyout>
-                            </AppBarButton.Flyout>
-                        </AppBarButton>
-                    </CommandBar.SecondaryCommands>
-                </CommandBar>
-                <TextBox x:Name="SearchBox" Grid.Column="2"
+                <!-- Left-aligned, so the star column is as wide as the heading and its commands until space runs out;
+                     then the heading ends with an ellipsis. The commands follow the heading, so the detail pane,
+                     which overlays the list's right side at 1100 px or less, leaves them in view. -->
+                <Grid HorizontalAlignment="Left" VerticalAlignment="Center" ColumnSpacing="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="PageHeading" Style="{StaticResource SubtitleText}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               AutomationProperties.AutomationId="PageHeading"
+                               Text="{x:Bind ViewModel.PageHeading, Mode=OneWay}"
+                               ToolTipService.ToolTip="{x:Bind ViewModel.PageHeading, Mode=OneWay}" />
+                    <!-- The page's actions: Filter, and on a List's page the "⋯" overflow ("List settings", named in
+                         OnHeadingCommandsLoaded) with Rename and Colour for the shown List. -->
+                    <CommandBar x:Name="HeadingCommands" Grid.Column="1" VerticalAlignment="Center"
+                                Background="Transparent" DefaultLabelPosition="Right" IsDynamicOverflowEnabled="False"
+                                OverflowButtonVisibility="{x:Bind local:MainView.ListOverflow(ViewModel.IsListPage), Mode=OneWay, FallbackValue=Collapsed}"
+                                Loaded="OnHeadingCommandsLoaded">
+                        <!-- Compact: Fluent's CommandBar is 48 px tall; these template resources fit it, the Filter
+                             button (icon, label on its right) and the "⋯" button into the 32 px of a text box. -->
+                        <CommandBar.Resources>
+                            <x:Double x:Key="AppBarThemeCompactHeight">32</x:Double>
+                            <Thickness x:Key="AppBarButtonContentViewboxMargin">12,8,0,8</Thickness>
+                            <Thickness x:Key="AppBarToggleButtonTextLabelOnRightMargin">8,8,12,8</Thickness>
+                            <Thickness x:Key="CommandBarMoreButtonMargin">14,14,14,0</Thickness>
+                        </CommandBar.Resources>
+                        <local:CommandAppBarToggleButton x:Name="FilterButton" Label="Filter"
+                                                         AutomationProperties.Name="Filter"
+                                                         AutomationProperties.AutomationId="FilterButton"
+                                                         ToolTipService.ToolTip="Show or hide the Filters"
+                                                         IsChecked="{x:Bind ViewModel.IsFilterBarShown, Mode=OneWay}"
+                                                         Command="{x:Bind ViewModel.ToggleFilterBarCommand, Mode=OneTime}">
+                            <local:CommandAppBarToggleButton.Icon>
+                                <FontIcon Glyph="&#xE71C;" />
+                            </local:CommandAppBarToggleButton.Icon>
+                        </local:CommandAppBarToggleButton>
+                        <CommandBar.SecondaryCommands>
+                            <AppBarButton Label="Rename" Click="OnListRenameClick" />
+                            <AppBarButton Label="Colour">
+                                <AppBarButton.Flyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="None" Tag="" Click="OnListColourClick" />
+                                        <MenuFlyoutItem Text="Red" Tag="#D13438" Click="OnListColourClick" />
+                                        <MenuFlyoutItem Text="Orange" Tag="#F7630C" Click="OnListColourClick" />
+                                        <MenuFlyoutItem Text="Yellow" Tag="#FFB900" Click="OnListColourClick" />
+                                        <MenuFlyoutItem Text="Green" Tag="#107C10" Click="OnListColourClick" />
+                                        <MenuFlyoutItem Text="Blue" Tag="#0078D4" Click="OnListColourClick" />
+                                        <MenuFlyoutItem Text="Purple" Tag="#744DA9" Click="OnListColourClick" />
+                                    </MenuFlyout>
+                                </AppBarButton.Flyout>
+                            </AppBarButton>
+                        </CommandBar.SecondaryCommands>
+                    </CommandBar>
+                </Grid>
+                <TextBox x:Name="SearchBox" Grid.Column="1" VerticalAlignment="Center"
                          AutomationProperties.Name="Search (Ctrl+F)"
                          AutomationProperties.AutomationId="SearchBox"
                          ToolTipService.ToolTip="Search (Ctrl+F). Esc clears."
