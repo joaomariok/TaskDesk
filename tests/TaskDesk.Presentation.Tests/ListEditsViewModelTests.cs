@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using FakeDialogs = TaskDesk.Presentation.Tests.ListsViewModelTests.FakeDialogs;
 using FakeListService = TaskDesk.Presentation.Tests.ListsViewModelTests.FakeListService;
 using FakeTagService = TaskDesk.Presentation.Tests.MainViewModelTests.FakeTagService;
@@ -26,7 +27,7 @@ public class ListEditsViewModelTests
         var dialogs = new FakeDialogs();
         var lists = new ListsViewModel(listService, dialogs);
         await lists.LoadAsync(Ct);
-        var vm = new MainViewModel(tasks, new FakeTagService(tasks), listService: listService);
+        var vm = new MainViewModel(tasks, new FakeTagService(tasks), new FakeTimeProvider(), listService: listService);
         await vm.LoadAsync(Ct);
         return new Setup(listService, dialogs, lists, vm);
     }
@@ -48,7 +49,7 @@ public class ListEditsViewModelTests
     public async Task Without_a_List_service_the_Default_List_name_is_kept()
     {
         var tasks = new FakeTaskService();
-        var vm = new MainViewModel(tasks, new FakeTagService(tasks)) { DefaultListName = "Work" };
+        var vm = new MainViewModel(tasks, new FakeTagService(tasks), new FakeTimeProvider()) { DefaultListName = "Work" };
 
         await vm.LoadAsync(Ct);
 

@@ -12,7 +12,7 @@ namespace TaskDesk.Presentation;
 public sealed partial class MainViewModel(
     ITaskService taskService,
     ITagService tagService,
-    TimeProvider? timeProvider = null,
+    TimeProvider timeProvider,
     IDueService? dueService = null,
     ITaskSearchService? searchService = null,
     IRecurrenceService? recurrenceService = null,
@@ -28,7 +28,8 @@ public sealed partial class MainViewModel(
     /// <summary>How long the "Task deleted" bar stays visible.</summary>
     public static readonly TimeSpan UndoBarDuration = TimeSpan.FromSeconds(10);
 
-    private readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
+    // Required, so a test can never arm a real timer by leaving the clock out.
+    private readonly TimeProvider _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     // Needed for Due edits and Smart Views only.
     private IDueService Due => dueService

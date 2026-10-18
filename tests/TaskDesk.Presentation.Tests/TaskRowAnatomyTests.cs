@@ -202,7 +202,7 @@ public class TaskRowAnatomyTests
     {
         var (service, vm, _) = await StartAsync();
         var tags = new FakeTagService(service);
-        vm = new MainViewModel(service, tags, listService: new FakeListService(Work, Plain));
+        vm = new MainViewModel(service, tags, new FakeTimeProvider(), listService: new FakeListService(Work, Plain));
         await tags.AddTagToTaskAsync(service.All.Single().Id, "home", Ct);
         await vm.LoadAsync(Ct);
 

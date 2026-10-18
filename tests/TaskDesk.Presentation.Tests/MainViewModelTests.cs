@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
@@ -9,12 +10,20 @@ public class MainViewModelTests
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
+    public void The_view_model_needs_a_clock()
+    {
+        var service = new FakeTaskService();
+
+        Assert.Throws<ArgumentNullException>(() => new MainViewModel(service, new FakeTagService(service), null!));
+    }
+
+    [Fact]
     public async Task Load_shows_the_existing_Tasks_in_order()
     {
         var service = new FakeTaskService();
         await service.CreateTaskAsync("one", Ct);
         await service.CreateTaskAsync("two", Ct);
-        var vm = new MainViewModel(service, new FakeTagService(service));
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider());
 
         await vm.LoadAsync(Ct);
 
@@ -25,7 +34,7 @@ public class MainViewModelTests
     public async Task Quick_add_creates_the_Task_clears_the_box_and_shows_it()
     {
         var service = new FakeTaskService();
-        var vm = new MainViewModel(service, new FakeTagService(service)) { QuickAddTitle = "Buy milk" };
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider()) { QuickAddTitle = "Buy milk" };
 
         await vm.AddTaskCommand.ExecuteAsync(null);
 
@@ -40,7 +49,7 @@ public class MainViewModelTests
     public async Task Quick_add_rejects_an_empty_title(string title)
     {
         var service = new FakeTaskService();
-        var vm = new MainViewModel(service, new FakeTagService(service)) { QuickAddTitle = title };
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider()) { QuickAddTitle = title };
 
         Assert.False(vm.AddTaskCommand.CanExecute(null));
         await vm.AddTaskCommand.ExecuteAsync(null);
@@ -52,7 +61,7 @@ public class MainViewModelTests
     [Fact]
     public void Quick_add_command_becomes_executable_once_a_title_is_typed()
     {
-        var vm = new MainViewModel(new FakeTaskService(), new FakeTagService(new FakeTaskService()));
+        var vm = new MainViewModel(new FakeTaskService(), new FakeTagService(new FakeTaskService()), new FakeTimeProvider());
         var changes = 0;
         vm.AddTaskCommand.CanExecuteChanged += (_, _) => changes++;
 
@@ -69,7 +78,7 @@ public class MainViewModelTests
         await service.CreateTaskAsync("a", Ct);
         await service.CreateTaskAsync("b", Ct);
         await service.CreateTaskAsync("c", Ct);
-        var vm = new MainViewModel(service, new FakeTagService(service));
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider());
         await vm.LoadAsync(Ct);
         var a = vm.Tasks[0];
 
@@ -85,7 +94,7 @@ public class MainViewModelTests
         var service = new FakeTaskService();
         await service.CreateTaskAsync("a", Ct);
         await service.CreateTaskAsync("b", Ct);
-        var vm = new MainViewModel(service, new FakeTagService(service)) { IsReorderEnabled = false };
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider()) { IsReorderEnabled = false };
         await vm.LoadAsync(Ct);
 
         await vm.MoveTaskAsync(0, 1, Ct);
@@ -103,7 +112,7 @@ public class MainViewModelTests
         var service = new FakeTaskService();
         await service.CreateTaskAsync("a", Ct);
         await service.CreateTaskAsync("b", Ct);
-        var vm = new MainViewModel(service, new FakeTagService(service));
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider());
         await vm.LoadAsync(Ct);
 
         await vm.MoveTaskAsync(from, to, Ct);
@@ -117,7 +126,7 @@ public class MainViewModelTests
     {
         var service = new FakeTaskService();
         var task = await service.CreateTaskAsync("one", Ct);
-        var vm = new MainViewModel(service, new FakeTagService(service));
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider());
         await vm.LoadAsync(Ct);
         vm.SelectedTask = vm.Tasks.Single();
         vm.NewTagName = "work";
@@ -138,7 +147,7 @@ public class MainViewModelTests
     {
         var service = new FakeTaskService();
         await service.CreateTaskAsync("one", Ct);
-        var vm = new MainViewModel(service, new FakeTagService(service));
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider());
         await vm.LoadAsync(Ct);
         vm.SelectedTask = vm.Tasks.Single();
         vm.NewTagName = name;
@@ -153,7 +162,7 @@ public class MainViewModelTests
         var tags = new FakeTagService(service);
         var task = await service.CreateTaskAsync("one", Ct);
         var tag = await tags.AddTagToTaskAsync(task.Id, "work", Ct);
-        var vm = new MainViewModel(service, tags);
+        var vm = new MainViewModel(service, tags, new FakeTimeProvider());
         await vm.LoadAsync(Ct);
         vm.SelectedTask = vm.Tasks.Single();
 
@@ -171,7 +180,7 @@ public class MainViewModelTests
         var tagged = await service.CreateTaskAsync("tagged", Ct);
         await service.CreateTaskAsync("plain", Ct);
         await tags.AddTagToTaskAsync(tagged.Id, "work", Ct);
-        var vm = new MainViewModel(service, tags);
+        var vm = new MainViewModel(service, tags, new FakeTimeProvider());
         await vm.LoadAsync(Ct);
 
         await vm.FilterByTagAsync(vm.Tags.Single(), Ct);
@@ -189,7 +198,7 @@ public class MainViewModelTests
         var tagged = await service.CreateTaskAsync("tagged", Ct);
         await service.CreateTaskAsync("plain", Ct);
         await tags.AddTagToTaskAsync(tagged.Id, "work", Ct);
-        var vm = new MainViewModel(service, tags);
+        var vm = new MainViewModel(service, tags, new FakeTimeProvider());
         await vm.LoadAsync(Ct);
         await vm.FilterByTagAsync(vm.Tags.Single(), Ct);
 
@@ -204,7 +213,7 @@ public class MainViewModelTests
     public async Task Adding_completing_un_completing_deleting_and_restoring_a_Task_signal_open_count_changes()
     {
         var service = new FakeTaskService();
-        var vm = new MainViewModel(service, new FakeTagService(service));
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider());
         await vm.LoadAsync(Ct);
         var signals = 0;
         vm.OpenTaskCountsChanged += (_, _) => signals++;
@@ -233,7 +242,7 @@ public class MainViewModelTests
         var tags = new FakeTagService(service);
         var task = await service.CreateTaskAsync("tagged", Ct);
         await tags.AddTagToTaskAsync(task.Id, "work", Ct);
-        var vm = new MainViewModel(service, tags);
+        var vm = new MainViewModel(service, tags, new FakeTimeProvider());
         await vm.LoadAsync(Ct);
 
         await vm.ToggleCompleteCommand.ExecuteAsync(vm.Tasks.Single());
@@ -253,7 +262,7 @@ public class MainViewModelTests
         var tags = new FakeTagService(service);
         var task = await service.CreateTaskAsync("tagged", Ct);
         await tags.AddTagToTaskAsync(task.Id, "work", Ct);
-        var vm = new MainViewModel(service, tags);
+        var vm = new MainViewModel(service, tags, new FakeTimeProvider());
         await vm.LoadAsync(Ct);
 
         await vm.DeleteCommand.ExecuteAsync(vm.Tasks.Single());
@@ -267,7 +276,7 @@ public class MainViewModelTests
     {
         var service = new FakeTaskService();
         await service.CreateTaskAsync("one", Ct);
-        var vm = new MainViewModel(service, new FakeTagService(service));
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider());
         await vm.LoadAsync(Ct);
         vm.SelectedTask = vm.Tasks.Single();
         vm.CloseDetailPaneCommand.Execute(null);

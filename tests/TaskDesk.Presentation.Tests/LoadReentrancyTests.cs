@@ -75,7 +75,7 @@ public sealed class LoadReentrancyTests
         await inner.AddTagToTaskAsync(a.Id, "work", Ct);
         await inner.AddTagToTaskAsync(a.Id, "home", Ct);
         var tags = new GatedTagService(inner);
-        var vm = new MainViewModel(tasks, tags);
+        var vm = new MainViewModel(tasks, tags, new FakeTimeProvider());
         await vm.LoadAsync(Ct);
 
         tags.Hold = true;
@@ -119,7 +119,7 @@ public sealed class LoadReentrancyTests
         await tasks.CreateTaskAsync("a", Ct);
         await tasks.CreateTaskAsync("b", Ct);
         var tags = new GatedTagService(new FakeTagService(tasks));
-        var vm = new MainViewModel(tasks, tags);
+        var vm = new MainViewModel(tasks, tags, new FakeTimeProvider());
         await vm.LoadAsync(Ct);
         vm.SelectedTask = vm.Tasks[1];
 
