@@ -224,4 +224,36 @@ public sealed class MainViewModelStopTests
 
         await Assert.ThrowsAsync<ObjectDisposedException>(() => load);
     }
+
+    [Fact]
+    public async Task The_stop_saves_a_pending_detail_edit_before_it_completes_and_a_second_stop_saves_nothing_more()
+    {
+        var s = await StartAsync("a");
+        var a = s.Vm.Tasks[0];
+        s.Vm.SelectedTask = a;
+        s.Vm.DetailTitle = "renamed";
+
+        await s.Vm.StopAsync();
+
+        Assert.Equal([(a.Id, "renamed", (string?)"", Priority.None)], s.Service.Updates);
+        await s.Vm.StopAsync();
+        s.Clock.Advance(MainViewModel.SaveDebounce);
+        await s.Vm.PendingSave;
+        Assert.Single(s.Service.Updates);
+    }
+
+    [Fact]
+    public async Task After_the_stop_a_detail_edit_starts_no_save_debounce()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        await s.Vm.StopAsync();
+
+        s.Vm.DetailTitle = "renamed";
+
+        Assert.True(s.Vm.PendingSave.IsCompleted, "A save debounce was armed after the stop.");
+        s.Clock.Advance(MainViewModel.SaveDebounce);
+        await s.Vm.PendingSave;
+        Assert.Empty(s.Service.Updates);
+    }
 }

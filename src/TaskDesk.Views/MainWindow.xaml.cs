@@ -101,10 +101,11 @@ public sealed partial class MainWindow : Window
     public MainViewModel ViewModel => View.ViewModel;
 
     /// <summary>
-    /// Call when the exit starts, before its flush and host stop: the window stays open until the exit has run, so
-    /// its Closed comes too late. The sidebar, page and detail pane take no more input, so nothing there starts a
-    /// reload, and both view models stop (<see cref="MainViewModel.StopAsync"/>, <see cref="ListsViewModel.StopAsync"/>);
-    /// completes once the work they cancelled has ended.
+    /// Call when the exit starts, before its host stop: the window stays open until the exit has run, so its Closed
+    /// comes too late. The sidebar, page and detail pane take no more input, so nothing there starts a reload, and
+    /// both view models stop (<see cref="MainViewModel.StopAsync"/>, which saves a pending detail edit first, and
+    /// <see cref="ListsViewModel.StopAsync"/>); completes once the save has landed and the work they cancelled has
+    /// ended.
     /// </summary>
     public Task PrepareForExitAsync()
     {

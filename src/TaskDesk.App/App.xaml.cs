@@ -37,7 +37,7 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
-        // The exit steps (flush, stop the host) run after the main window has closed; ShellController ends the app.
+        // The exit steps (stop the window's view models, which saves a pending edit, then stop the host) run after the main window has closed; ShellController ends the app.
         DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
         // Logged, then the app ends (Handled stays false): an unhandled UI exception ends the app. The log file
         // sink is unbuffered.
@@ -178,10 +178,9 @@ public partial class App : Application
 
         var shell = _host.Services.GetRequiredService<ShellController>();
         // Exit waits for these, in order, before it ends the app. The window closes only once they have run, so it
-        // first takes no more input and its search ends: a reload during the flush or the host stop would query a
-        // host being stopped.
+        // first takes no more input and stops both view models, which saves a pending detail edit: a reload during
+        // the host stop would query a host being stopped.
         shell.AddExitStep(window.PrepareForExitAsync);
-        shell.AddExitStep(() => window.ViewModel.FlushPendingSaveAsync());
         var host = _host;
         shell.AddExitStep(() => host.StopAsync());
         // Closing hides to the tray or exits, per the close-behaviour setting.
@@ -257,7 +256,7 @@ public partial class App : Application
     private void StartSystemHooks(ShellController shell, ReminderScheduler reminders, INotificationService notifications)
     {
         var systemWindow = new MessageWindow(topLevel: true);
-        // Windows signing out or shutting down: exit now (flush the pending edit, stop the host), then answer.
+        // Windows signing out or shutting down: exit now (save the pending edit, stop the host), then answer.
         var sessionEnd = new SessionEndHook(systemWindow, shell.ExitAsync);
         var resume = new PowerResumeHook(systemWindow, () => _ = reminders.RequestCheck());
         var logger = _host!.Services.GetRequiredService<ILogger<App>>();

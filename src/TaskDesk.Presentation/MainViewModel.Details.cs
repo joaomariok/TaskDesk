@@ -249,8 +249,14 @@ public sealed partial class MainViewModel
         }
     }
 
+    // Once the view model has stopped, an edit saves nothing: the stop has saved the pending one already.
     private void ScheduleSave(TaskRowViewModel row, bool immediate)
     {
+        if (_lifetime.IsStopped)
+        {
+            return;
+        }
+
         _debounce?.Cancel();
         _debounce = null;
         var token = CancellationToken.None;
@@ -271,14 +277,27 @@ public sealed partial class MainViewModel
     {
         if (!immediate)
         {
-            // Start the delay before awaiting anything, so the timer exists as soon as the edit is made.
+            // Start the delay before awaiting anything, so the timer exists as soon as the edit is made. It runs
+            // through the lifetime: a stop ends it quietly, and once stopped it is never armed.
+            var waited = false;
             try
             {
-                await Task.Delay(SaveDebounce, _clock, token);
+                await _lifetime.RunAsync(
+                    async cancellationToken =>
+                    {
+                        await Task.Delay(SaveDebounce, _clock, cancellationToken);
+                        waited = true;
+                    },
+                    token);
             }
             catch (OperationCanceledException)
             {
                 return; // superseded by a later edit, a flush or a delete
+            }
+
+            if (!waited)
+            {
+                return; // the view model stopped
             }
 
             _debounce = null;

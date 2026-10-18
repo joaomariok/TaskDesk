@@ -28,18 +28,21 @@ public sealed partial class MainViewModel
     public bool IsSearchPending => _searchTimer is not null;
 
     /// <summary>
-    /// Stops the view model's deferred work: from now on nothing starts, and work still running is cancelled and
-    /// ends quietly. That is the search (waiting or loading), <see cref="LoadAsync"/>, the Smart View count refresh,
-    /// the due refresh timer (disposed, never armed again), the Undo bar timer and the completion hold. Idempotent;
-    /// the stop itself happens before this returns, and the task completes once the cancelled work has ended,
-    /// however it ended.
+    /// Saves a pending detail edit, then stops the view model's deferred work: from now on nothing starts, and work
+    /// still running is cancelled and ends quietly. That is the search (waiting or loading), <see cref="LoadAsync"/>,
+    /// the Smart View count refresh, the due refresh timer (disposed, never armed again), the detail save debounce,
+    /// the Undo bar timer and the completion hold. Idempotent; the save starts and the stop happens before this
+    /// returns, and the task completes once the save has landed and the cancelled work has ended, however it ended.
+    /// A failed save shows in <see cref="ErrorMessage"/>, as any detail save does.
     /// </summary>
     public Task StopAsync()
     {
+        // First: once the lifetime has stopped, an edit saves nothing.
+        var saving = FlushPendingSaveAsync();
         var stopping = _lifetime.StopAsync();
         DropQueuedSearch();
         StopDueRefresh();
-        return stopping;
+        return Task.WhenAll(saving, stopping);
     }
 
     /// <summary>The search text, matched against titles, notes and Subtask titles of the current view.</summary>
