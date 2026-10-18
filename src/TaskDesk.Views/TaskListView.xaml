@@ -9,7 +9,8 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:TaskDesk.Views"
-    xmlns:presentation="using:TaskDesk.Presentation">
+    xmlns:presentation="using:TaskDesk.Presentation"
+    KeyboardAcceleratorPlacementMode="Hidden">
     <UserControl.Resources>
         <!-- Fluent's list item, one compact line instead of Fluent's 40 px. -->
         <Style x:Key="TaskRowContainer" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">

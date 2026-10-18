@@ -2,15 +2,14 @@ using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using TrayMessageWindow = H.NotifyIcon.Core.MessageWindow;
 using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml.Controls;
 using TaskDesk.Core.Shell;
 
 namespace TaskDesk.App.Shell;
 
 /// <summary>
-/// Tray icon built on H.NotifyIcon.WinUI: left click, and a menu with Open TaskDesk, Quick add, Settings and Exit,
-/// and the Reminder balloons that stand in for toasts in sandbox mode. Create it on the UI thread. Covered by
-/// manual checks only.
+/// Tray icon built on H.NotifyIcon.WinUI: left click, the menu built by <see cref="TrayMenu"/> (Open TaskDesk,
+/// Quick add, Settings and Exit), and the Reminder balloons that stand in for toasts in sandbox mode. Create it on
+/// the UI thread. The menu's items are covered in-process; the icon itself by manual checks only.
 /// </summary>
 internal sealed class WinUiTrayIcon : ITrayIcon, IBalloonTray
 {
@@ -23,12 +22,12 @@ internal sealed class WinUiTrayIcon : ITrayIcon, IBalloonTray
 
     public WinUiTrayIcon()
     {
-        var menu = new MenuFlyout();
-        menu.Items.Add(Item("Open TaskDesk", () => OpenRequested?.Invoke()));
-        menu.Items.Add(Item("Quick add", () => QuickAddRequested?.Invoke()));
-        menu.Items.Add(Item("Settings", () => SettingsRequested?.Invoke()));
-        menu.Items.Add(new MenuFlyoutSeparator());
-        menu.Items.Add(Item("Exit", () => ExitRequested?.Invoke()));
+        // The popup menu runs an item's command inside its own message loop; act once that has returned.
+        var menu = TrayMenu.Build(
+            () => Later(() => OpenRequested?.Invoke()),
+            () => Later(() => QuickAddRequested?.Invoke()),
+            () => Later(() => SettingsRequested?.Invoke()),
+            () => Later(() => ExitRequested?.Invoke()));
         _icon = new TaskbarIcon
         {
             ToolTipText = "TaskDesk",
@@ -99,10 +98,5 @@ internal sealed class WinUiTrayIcon : ITrayIcon, IBalloonTray
         }
     }
 
-    private static MenuFlyoutItem Item(string text, Action action)
-    {
-        var item = new MenuFlyoutItem { Text = text };
-        item.Click += (_, _) => action();
-        return item;
-    }
+    private void Later(Action action) => _dispatcher.TryEnqueue(() => action());
 }

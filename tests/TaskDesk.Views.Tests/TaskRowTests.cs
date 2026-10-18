@@ -12,7 +12,7 @@ using TaskDesk.Presentation;
 namespace TaskDesk.Views.Tests;
 
 /// <summary>
-/// A Task row read at a glance: the round checkbox, the List colour stripe, the title, the Due chip and the Tag
+/// A Task row read at a glance: the Completed checkbox, the List colour stripe, the title, the Due chip and the Tag
 /// chips. The row is shown alone in a live window, as a Task list shows it.
 /// </summary>
 [TestClass]
@@ -25,7 +25,7 @@ public sealed class TaskRowTests
     public TestContext TestContext { get; set; } = null!;
 
     [UITestMethod]
-    public async Task A_row_shows_the_round_Completed_checkbox_the_List_stripe_and_the_title()
+    public async Task A_row_shows_the_Completed_checkbox_the_List_stripe_and_the_title()
     {
         var list = new TaskList { Id = Guid.NewGuid(), Name = "Home", ColorHex = "#107C10" };
         var row = Row(new TaskItem { Id = Guid.NewGuid(), Title = "Water plants", ListId = list.Id }, list);
@@ -43,7 +43,7 @@ public sealed class TaskRowTests
     }
 
     [UITestMethod]
-    public async Task The_row_checkbox_is_Fluents_box_made_round_without_label_room()
+    public async Task The_row_checkbox_is_Fluents_box_with_4px_corners_whole_and_without_label_room()
     {
         var view = new TaskRow { Row = Row(new TaskItem { Id = Guid.NewGuid(), Title = "Call the bank" }) };
         using var host = await Hosted.ShowAsync(view, TestContext.CancellationToken);
@@ -52,13 +52,17 @@ public sealed class TaskRowTests
         // Fluent's template: its 20 px box is the rectangle named NormalRectangle.
         var box = VisualTree.Find<Microsoft.UI.Xaml.Shapes.Rectangle>(check, "NormalRectangle");
         Assert.AreEqual(20, box.ActualWidth);
+        Assert.AreEqual(20, box.ActualHeight);
+        // As in the WPF app (DESIGN.md "Task Checkbox"): Fluent's square box with its 4 px corners, not a circle.
         // The template binds the radius to the CheckBox's CornerRadius; that binding settles after the first layout.
-        await UiWait.UntilAsync(() => box.RadiusX > 0, () => "The box has square corners.", TestContext.CancellationToken);
-        Assert.AreEqual(box.ActualWidth / 2, box.RadiusX, "The box is not round.");
-        Assert.AreEqual(box.ActualHeight / 2, box.RadiusY, "The box is not round.");
-        // Fluent's CheckBox otherwise reserves 32 px of height and 120 px of width for a label.
-        Assert.IsTrue(check.ActualWidth <= 20 && check.ActualHeight <= 20,
-            $"The checkbox takes {check.ActualWidth} x {check.ActualHeight} px.");
+        await UiWait.UntilAsync(() => box.RadiusX == 4 && box.RadiusY == 4,
+            () => $"The box's corners are {box.RadiusX} x {box.RadiusY} px, not Fluent's 4 px.", TestContext.CancellationToken);
+        // The whole box lies inside the checkbox (the older CheckBox template cut it).
+        var at = box.TransformToVisual(check).TransformPoint(default);
+        Assert.IsTrue(at.Y >= 0 && at.Y + box.ActualHeight <= check.ActualHeight,
+            $"The box spans {at.Y} to {at.Y + box.ActualHeight} px in a {check.ActualHeight} px checkbox.");
+        // Fluent's CheckBox otherwise reserves 120 px of width for a label.
+        Assert.AreEqual(20, check.ActualWidth, "The checkbox keeps room for a label.");
     }
 
     [UITestMethod]

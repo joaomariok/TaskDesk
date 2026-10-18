@@ -11,6 +11,7 @@ using TaskDesk.Core.Tasks;
 using TaskDesk.Data;
 using TaskDesk.Data.Tests;
 using TaskDesk.Presentation;
+using Windows.Foundation;
 using Windows.System;
 
 namespace TaskDesk.Views.Tests;
@@ -241,6 +242,45 @@ public sealed class QuickAddWindowTests
             await UiWait.UntilAsync(() => window.View.ActualTheme == ElementTheme.Dark, () => "Dark did not apply.", ct);
             await UiWait.UntilAsync(() => Background() != light,
                 () => $"The card background stayed {light} in Dark.", ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task The_card_window_has_no_frame_and_fits_the_whole_card_at_its_scale()
+    {
+        var ct = TestContext.CancellationToken;
+        using var db = new TempDatabase();
+        var (window, _) = await OpenAsync(db, ct);
+        try
+        {
+            var view = window.View;
+            var scale = view.XamlRoot.RasterizationScale;
+            view.Measure(new Size(QuickAddWindow.CardWidth, double.PositiveInfinity));
+            var needed = view.DesiredSize;
+            Size Client() => new(window.AppWindow.ClientSize.Width / scale, window.AppWindow.ClientSize.Height / scale);
+            // The card sizes its window once the content has loaded.
+            await UiWait.UntilAsync(
+                () => Client().Width >= needed.Width - 0.5 && Client().Height >= needed.Height - 0.5,
+                () => $"The card needs {needed.Width} x {needed.Height} DIPs; its window shows {Client().Width} x " +
+                    $"{Client().Height} at scale {scale}.", ct);
+            Assert.AreEqual(QuickAddWindow.CardWidth, Client().Width, 1 / scale, "The card is not 420 DIPs wide.");
+
+            // No frame around the content: the window is all client area, as the WPF card is.
+            Assert.AreEqual(window.AppWindow.Size.Width, window.AppWindow.ClientSize.Width, "frame width");
+            Assert.AreEqual(window.AppWindow.Size.Height, window.AppWindow.ClientSize.Height, "frame height");
+            // Windows does not report the window border colour (DWMWA_BORDER_COLOR cannot be read back), so the
+            // border Windows 11 draws round the window is checked by eye only.
+
+            // The last line of the card is inside the window, not cut off.
+            await UiWait.UntilAsync(() => Math.Abs(view.ActualHeight - Client().Height) < 1,
+                () => $"The card is {view.ActualHeight} DIPs tall in a {Client().Height} DIP window.", ct);
+            var hint = VisualTree.Descendants(view).OfType<TextBlock>().Single(t => t.Text.StartsWith("Enter to add"));
+            var bottom = hint.TransformToVisual(view).TransformPoint(new Point(0, hint.ActualHeight)).Y;
+            Assert.IsTrue(bottom <= view.ActualHeight, $"The hint ends at {bottom}, below the card's {view.ActualHeight}.");
         }
         finally
         {

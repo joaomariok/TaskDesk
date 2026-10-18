@@ -9,7 +9,8 @@
     x:Class="TaskDesk.Views.DetailDock"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:ctk="using:CommunityToolkit.WinUI.Controls">
+    xmlns:ctk="using:CommunityToolkit.WinUI.Controls"
+    KeyboardAcceleratorPlacementMode="Hidden">
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="F2" Invoked="OnF2Invoked" />
     </UserControl.KeyboardAccelerators>

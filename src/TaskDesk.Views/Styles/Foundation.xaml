@@ -7,7 +7,8 @@
 -->
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TaskDesk.Views">
 
     <!-- Meaning-named brushes, use through ThemeResource:
            OverdueBrush     Overdue Due text, icons and badges (Fluent's critical colour)
@@ -61,4 +62,11 @@
         <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
+
+    <!-- The command-driven check box and toggle button draw Fluent's CheckBox and ToggleButton, as the base controls
+         do. An implicit style applies to its exact type only, so without these the subclasses fall back to the
+         framework's older templates: square corners, and a check box whose box sits 6 px down a 32 px cell (a
+         shorter check box cuts it). -->
+    <Style TargetType="local:CommandCheckBox" BasedOn="{StaticResource DefaultCheckBoxStyle}" />
+    <Style TargetType="local:CommandToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}" />
 </ResourceDictionary>

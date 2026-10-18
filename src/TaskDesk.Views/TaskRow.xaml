@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    One Task row, read at a glance: the List colour stripe, the round Completed checkbox, the title and, on the
+    One Task row, read at a glance: the List colour stripe, the Completed checkbox, the title and, on the
     right, the Repeats icon, Subtask progress, Tag chips, the List caption, the Priority flag and the Due chip.
     A completed row is dimmed and struck through until it moves into "Completed (N)", except on the Completed
     Smart View. Colours come from theme resources only, so Light, Dark and high contrast follow the theme.
@@ -85,9 +85,9 @@
         <Border x:Name="ListStripe" Width="3" CornerRadius="1.5" Margin="0,4"
                 Background="{x:Bind local:TaskRow.StripeBrush(Row.ListColorHex), Mode=OneWay}"
                 Opacity="{x:Bind local:TaskRow.StripeOpacity(Row.HasListColor), Mode=OneWay}" />
-        <!-- Fluent's box made round, without the room Fluent reserves for a label, so the row stays compact. -->
+        <!-- Fluent's own box with its 4 px corners, as in the WPF app, without the room Fluent reserves for a label. -->
         <local:CommandCheckBox x:Name="CompletedBox" Grid.Column="1"
-                               MinWidth="0" MinHeight="0" Height="20" Padding="0" CornerRadius="10"
+                               MinWidth="0" MinHeight="0" Padding="0"
                                VerticalAlignment="Center"
                                AutomationProperties.Name="Completed"
                                IsChecked="{x:Bind Row.IsCompleted, Mode=OneWay}"

@@ -106,7 +106,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <local:CommandCheckBox x:Name="DetailCompletedBox" VerticalAlignment="Center"
-                                               CornerRadius="10" Height="20" MinWidth="0" MinHeight="0" Padding="0"
+                                               MinWidth="0" MinHeight="0" Padding="0"
                                                AutomationProperties.Name="Completed"
                                                AutomationProperties.AutomationId="DetailCompletedBox"
                                                IsChecked="{x:Bind ViewModel.DetailTask.IsCompleted, Mode=OneWay, FallbackValue=False}"
@@ -149,7 +149,7 @@
                                     </Grid.ColumnDefinitions>
                                     <!-- The Toggle pattern runs the command once; the bound state shows the tick. -->
                                     <local:CommandCheckBox VerticalAlignment="Center" Margin="0,0,4,0"
-                                                           MinWidth="0" MinHeight="0" Height="20" Padding="0"
+                                                           MinWidth="0" MinHeight="0" Padding="0"
                                                            AutomationProperties.Name="Subtask done"
                                                            IsChecked="{x:Bind IsCompleted, Mode=OneWay}"
                                                            Command="{x:Bind local:DetailPane.ToggleSubtaskCommand, Mode=OneTime}"
