@@ -419,7 +419,7 @@ public class DueViewModelTests
         var (_, vm, _) = await SelectedAsync(Day(24), new TimeOnly(9, 5));
 
         Assert.Equal(new DateTime(2026, 10, 24), vm.DetailDueDate);
-        Assert.Equal("09:05", vm.DetailDueTime);
+        Assert.Equal(new TimeSpan(9, 5, 0), vm.DetailDueTime);
     }
 
     [Fact]
@@ -429,8 +429,17 @@ public class DueViewModelTests
         await vm.PendingSave;
 
         Assert.Null(vm.DetailDueDate);
-        Assert.Equal("", vm.DetailDueTime);
+        Assert.Null(vm.DetailDueTime);
         Assert.Empty(due.SetCalls);
+    }
+
+    [Fact]
+    public async Task Selecting_a_date_only_Task_shows_an_empty_Due_time()
+    {
+        var (_, vm, _) = await SelectedAsync(Day(24));
+
+        Assert.Equal(new DateTime(2026, 10, 24), vm.DetailDueDate);
+        Assert.Null(vm.DetailDueTime);
     }
 
     [Fact]
@@ -446,18 +455,30 @@ public class DueViewModelTests
         Assert.Null(vm.ErrorMessage);
     }
 
-    [Theory]
-    [InlineData("14:30", 14, 30)]
-    [InlineData("9:05", 9, 5)]
-    [InlineData(" 07:00 ", 7, 0)]
-    public async Task A_Due_time_is_saved_with_the_Due_date(string text, int hour, int minute)
+    [Fact]
+    public async Task A_picked_Due_time_is_saved_with_the_Due_date_to_the_minute()
     {
         var (due, vm, row) = await SelectedAsync(Day(25));
 
-        vm.DetailDueTime = text;
+        vm.DetailDueTime = new TimeSpan(14, 7, 0);
         await vm.PendingSave;
 
-        Assert.Equal([(row.Id, (DateOnly?)Day(25), (TimeOnly?)new TimeOnly(hour, minute))], due.SetCalls);
+        Assert.Equal([(row.Id, (DateOnly?)Day(25), (TimeOnly?)new TimeOnly(14, 7))], due.SetCalls);
+        Assert.Equal(new TimeOnly(14, 7), row.Item.DueTime);
+        Assert.Equal($"{Weekday(25)} 14:07", row.DueText);
+    }
+
+    [Fact]
+    public async Task A_saved_Due_time_round_trips_to_the_picker()
+    {
+        var (_, vm, row) = await SelectedAsync(Day(25));
+        vm.DetailDueTime = new TimeSpan(14, 7, 0);
+        await vm.PendingSave;
+
+        vm.SelectedTask = null;
+        vm.SelectedTask = row;
+
+        Assert.Equal(new TimeSpan(14, 7, 0), vm.DetailDueTime);
     }
 
     [Fact]
@@ -465,7 +486,7 @@ public class DueViewModelTests
     {
         var (due, vm, row) = await SelectedAsync();
 
-        vm.DetailDueTime = "14:30";
+        vm.DetailDueTime = new TimeSpan(14, 30, 0);
         await vm.PendingSave;
 
         Assert.Equal("A Due time needs a Due date.", vm.ErrorMessage);
@@ -477,7 +498,7 @@ public class DueViewModelTests
     public async Task A_rejected_Due_time_is_saved_once_a_Due_date_is_picked()
     {
         var (due, vm, row) = await SelectedAsync();
-        vm.DetailDueTime = "14:30";
+        vm.DetailDueTime = new TimeSpan(14, 30, 0);
 
         vm.DetailDueDate = new DateTime(2026, 10, 25);
         await vm.PendingSave;
@@ -486,33 +507,15 @@ public class DueViewModelTests
         Assert.Null(vm.ErrorMessage);
     }
 
-    [Theory]
-    [InlineData("25:00")]
-    [InlineData("abc")]
-    [InlineData("1430")]
-    public async Task An_unreadable_Due_time_is_rejected_and_not_saved(string text)
+    [Fact]
+    public async Task A_rejected_Due_time_is_shown_under_the_Due_field()
     {
-        var (due, vm, _) = await SelectedAsync(Day(25));
+        var (_, vm, _) = await SelectedAsync();
 
-        vm.DetailDueTime = text;
+        vm.DetailDueTime = new TimeSpan(14, 30, 0);
         await vm.PendingSave;
 
-        Assert.NotNull(vm.ErrorMessage);
-        Assert.Empty(due.SetCalls);
-    }
-
-    [Theory]
-    [InlineData("abc", null)]
-    [InlineData("14:30", "A Due time needs a Due date.")]
-    public async Task A_rejected_Due_time_is_shown_under_the_Due_field(string text, string? expected)
-    {
-        var (_, vm, _) = await SelectedAsync(expected is null ? Day(25) : (DateOnly?)null);
-
-        vm.DetailDueTime = text;
-        await vm.PendingSave;
-
-        Assert.Equal(expected ?? vm.ErrorMessage, vm.DueError);
-        Assert.NotNull(vm.DueError);
+        Assert.Equal("A Due time needs a Due date.", vm.DueError);
         Assert.Null(vm.ReminderError);
         Assert.Null(vm.RepeatError);
         Assert.Null(vm.GeneralError);
@@ -521,8 +524,8 @@ public class DueViewModelTests
     [Fact]
     public async Task A_later_failure_replaces_a_Due_field_error_as_a_general_error()
     {
-        var (_, vm, _) = await SelectedAsync(Day(25));
-        vm.DetailDueTime = "abc";
+        var (_, vm, _) = await SelectedAsync();
+        vm.DetailDueTime = new TimeSpan(14, 30, 0);
         await vm.PendingSave;
 
         vm.ErrorMessage = "Could not save the changes: disk full";
@@ -532,13 +535,13 @@ public class DueViewModelTests
     }
 
     [Fact]
-    public async Task Fixing_the_Due_time_clears_its_error()
+    public async Task Clearing_a_rejected_Due_time_clears_its_error()
     {
-        var (_, vm, _) = await SelectedAsync(Day(25));
-        vm.DetailDueTime = "abc";
+        var (_, vm, _) = await SelectedAsync();
+        vm.DetailDueTime = new TimeSpan(14, 30, 0);
         await vm.PendingSave;
 
-        vm.DetailDueTime = "14:30";
+        vm.DetailDueTime = null;
         await vm.PendingSave;
 
         Assert.Null(vm.DueError);
@@ -553,7 +556,7 @@ public class DueViewModelTests
         vm.DetailDueDate = null;
         await vm.PendingSave;
 
-        Assert.Equal("", vm.DetailDueTime);
+        Assert.Null(vm.DetailDueTime);
         Assert.Equal([(row.Id, (DateOnly?)null, (TimeOnly?)null)], due.SetCalls);
     }
 
@@ -562,10 +565,38 @@ public class DueViewModelTests
     {
         var (due, vm, row) = await SelectedAsync(Day(25), new TimeOnly(14, 30));
 
-        vm.DetailDueTime = "";
+        vm.DetailDueTime = null;
         await vm.PendingSave;
 
         Assert.Equal([(row.Id, (DateOnly?)Day(25), (TimeOnly?)null)], due.SetCalls);
+    }
+
+    [Fact]
+    public async Task The_clear_Due_time_command_makes_the_Due_date_only()
+    {
+        var (due, vm, row) = await SelectedAsync(Day(25), new TimeOnly(14, 30));
+        Assert.True(vm.ClearDetailDueTimeCommand.CanExecute(null));
+
+        vm.ClearDetailDueTimeCommand.Execute(null);
+        await vm.PendingSave;
+
+        Assert.Null(vm.DetailDueTime);
+        Assert.Equal([(row.Id, (DateOnly?)Day(25), (TimeOnly?)null)], due.SetCalls);
+        Assert.Null(row.Item.DueTime);
+        Assert.Equal(Weekday(25), row.DueText);
+        Assert.False(vm.ClearDetailDueTimeCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task The_clear_Due_time_command_is_unavailable_without_a_Due_time()
+    {
+        var (_, vm, _) = await SelectedAsync(Day(25));
+
+        Assert.False(vm.ClearDetailDueTimeCommand.CanExecute(null));
+
+        vm.DetailDueTime = new TimeSpan(8, 0, 0);
+
+        Assert.True(vm.ClearDetailDueTimeCommand.CanExecute(null));
     }
 
     [Fact]
@@ -673,7 +704,7 @@ public class DueViewModelTests
         vm.SelectedTask = row;
 
         vm.DetailDueDate = new DateTime(2026, 10, 20);
-        vm.DetailDueTime = "10:15";
+        vm.DetailDueTime = new TimeSpan(10, 15, 0);
         await vm.PendingSave;
         Assert.False(row.IsOverdue);
 

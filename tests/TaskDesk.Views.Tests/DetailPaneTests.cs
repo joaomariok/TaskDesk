@@ -82,6 +82,8 @@ public sealed class DetailPaneTests
             AssertIds(pane, "DetailTitleBox", "Task title");
             AssertIds(pane, "DetailNotesBox", "Task notes");
             AssertIds(pane, "DetailDueDatePicker", "Due date");
+            AssertIds(pane, "DueTimePicker", "Due time");
+            AssertIds(pane, "ClearDueTimeButton", "Clear Due time");
             var splitter = VisualTree.Find<GridSplitter>(window.Details, "DetailSplitter");
             Assert.AreEqual("DetailSplitter", AutomationProperties.GetAutomationId(splitter));
             Assert.AreEqual("Resize detail pane", AutomationProperties.GetName(splitter));
@@ -110,11 +112,11 @@ public sealed class DetailPaneTests
             VisualTree.Find<ComboBox>(pane, "PriorityBox").SelectedIndex = (int)Priority.Medium;
             VisualTree.Find<CalendarDatePicker>(pane, "DetailDueDatePicker").Date =
                 new DateTimeOffset(new DateTime(2030, 10, 25, 9, 0, 0, DateTimeKind.Local));
-            // The time box saves when it loses focus, as when typing moves on to the next field.
-            Box(pane, "DueTimeBox").Focus(FocusState.Programmatic);
-            Box(pane, "DueTimeBox").Text = "14:30";
-            Box(pane, "DetailNotesBox").Focus(FocusState.Programmatic);
-            await UiWait.UntilAsync(() => viewModel.DetailDueTime == "14:30", () => "The Due time was not taken.", Ct);
+            var time = VisualTree.Find<TimePicker>(pane, "DueTimePicker");
+            await UiWait.UntilAsync(() => time.IsEnabled, () => "The Due time picker stayed disabled with a Due date.", Ct);
+            time.SelectedTime = new TimeSpan(14, 30, 0);
+            await UiWait.UntilAsync(() => viewModel.DetailDueTime == new TimeSpan(14, 30, 0),
+                () => "The Due time was not taken.", Ct);
             await viewModel.FlushPendingSaveAsync();
 
             var saved = (await db.QueryAsync(c => c.Tasks)).Single();
@@ -219,7 +221,17 @@ public sealed class DetailPaneTests
             await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
 
             // Each error shows, then clears; a cleared error takes no room.
-            await ShowThenClearAsync(pane, "DueErrorText", () => viewModel.DetailDueTime = "abc", () => viewModel.DetailDueTime = "");
+            await ShowThenClearAsync(pane, "DueErrorText",
+                () =>
+                {
+                    viewModel.DetailDueDate = null;
+                    viewModel.DetailDueTime = new TimeSpan(14, 30, 0);
+                },
+                () =>
+                {
+                    viewModel.DetailDueTime = null;
+                    viewModel.DetailDueDate = new DateTime(2030, 10, 25);
+                });
             await ShowThenClearAsync(pane, "ReminderErrorText",
                 () => viewModel.DetailReminderTime = "noon", () => viewModel.DetailReminderTime = "");
             await ShowThenClearAsync(pane, "RepeatErrorText",
@@ -271,19 +283,19 @@ public sealed class DetailPaneTests
     public async Task A_Due_time_error_shows_right_under_the_Due_field_above_the_Priority_label()
     {
         using var db = await DatabaseAsync();
-        await AddAsync(db, "Book dentist", due: new DateOnly(2030, 10, 25));
+        await AddAsync(db, "Book dentist");
         var (window, viewModel) = await OpenAsync(db, width: 1200, height: 1000);
         try
         {
             await SelectAsync(window, "Book dentist");
             var pane = window.Details.Pane;
 
-            viewModel.DetailDueTime = "abc";
+            viewModel.DetailDueTime = new TimeSpan(14, 30, 0);
             pane.UpdateLayout();
 
-            var error = ShownText(pane, "Enter the Due time as HH:mm, for example 14:30.");
-            var picker = VisualTree.Find<CalendarDatePicker>(pane, "DetailDueDatePicker");
-            Assert.IsTrue(Top(error, pane) >= Bottom(picker, pane) - 0.5, "The error is above the Due field.");
+            var error = ShownText(pane, "A Due time needs a Due date.");
+            var picker = VisualTree.Find<TimePicker>(pane, "DueTimePicker");
+            Assert.IsTrue(Top(error, pane) >= Bottom(picker, pane) - 0.5, "The error is above the Due time field.");
             Assert.IsTrue(Bottom(error, pane) <= Top(Label(pane, "Priority"), pane) + 0.5, "The error is below the Priority label.");
         }
         finally
@@ -320,19 +332,127 @@ public sealed class DetailPaneTests
     }
 
     [UITestMethod]
-    public async Task The_empty_Due_time_box_shows_its_format_as_a_hint()
+    public async Task The_Due_time_picker_has_a_visible_label_steps_by_the_minute_and_needs_a_Due_date()
     {
         using var db = await DatabaseAsync();
         await AddAsync(db, "Book dentist");
-        var (window, _) = await OpenAsync(db, width: 1200);
+        var (window, viewModel) = await OpenAsync(db, width: 1200);
         try
         {
             await SelectAsync(window, "Book dentist");
-            var box = Box(window.Details.Pane, "DueTimeBox");
+            var pane = window.Details.Pane;
+            await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
+            var time = VisualTree.Find<TimePicker>(pane, "DueTimePicker");
+            var clear = VisualTree.Find<Button>(pane, "ClearDueTimeButton");
 
-            Assert.AreEqual("Due time", AutomationProperties.GetName(box));
-            Assert.AreEqual("HH:mm", box.PlaceholderText);
-            StringAssert.Contains(AutomationProperties.GetHelpText(box), "HH:mm");
+            Assert.IsTrue(Label(pane, "Due time").ActualHeight > 0, "The Due time has no visible label.");
+            Assert.AreEqual(1, time.MinuteIncrement);
+            Assert.IsNull(time.SelectedTime);
+            Assert.IsFalse(time.IsEnabled, "The Due time picker is enabled without a Due date.");
+            Assert.IsFalse(clear.IsEnabled, "The clear button is enabled without a Due time.");
+
+            VisualTree.Find<CalendarDatePicker>(pane, "DetailDueDatePicker").Date =
+                new DateTimeOffset(new DateTime(2030, 10, 25, 0, 0, 0, DateTimeKind.Local));
+            await UiWait.UntilAsync(() => time.IsEnabled, () => "Picking a Due date did not enable the Due time.", Ct);
+            Assert.IsFalse(clear.IsEnabled, "The clear button is enabled for a date-only Due.");
+            await viewModel.FlushPendingSaveAsync();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task The_Due_time_picker_shows_each_Tasks_saved_time_to_the_minute()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Timed", due: new DateOnly(2030, 10, 25), dueTime: new TimeOnly(14, 7));
+        await AddAsync(db, "Date only", due: new DateOnly(2030, 10, 26));
+        var (window, viewModel) = await OpenAsync(db, width: 1200);
+        try
+        {
+            await SelectAsync(window, "Timed");
+            var pane = window.Details.Pane;
+            await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
+            var time = VisualTree.Find<TimePicker>(pane, "DueTimePicker");
+            await UiWait.UntilAsync(() => time.SelectedTime == new TimeSpan(14, 7, 0),
+                () => $"The timed Task shows {time.SelectedTime}.", Ct);
+
+            await SelectAsync(window, "Date only");
+            await UiWait.UntilAsync(() => time.SelectedTime is null,
+                () => $"The date-only Task shows {time.SelectedTime}.", Ct);
+
+            await SelectAsync(window, "Timed");
+            await UiWait.UntilAsync(() => time.SelectedTime == new TimeSpan(14, 7, 0),
+                () => $"The timed Task shows {time.SelectedTime} again.", Ct);
+
+            await viewModel.FlushPendingSaveAsync();
+            var saved = (await db.QueryAsync(c => c.Tasks)).ToDictionary(t => t.Title);
+            Assert.AreEqual(new TimeOnly(14, 7), saved["Timed"].DueTime, "Moving between Tasks changed a Due time.");
+            Assert.IsNull(saved["Date only"].DueTime);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Picking_a_Due_time_saves_it_and_the_clear_button_makes_the_Due_date_only()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Book dentist", due: new DateOnly(2030, 10, 25));
+        var (window, viewModel) = await OpenAsync(db, width: 1200);
+        try
+        {
+            await SelectAsync(window, "Book dentist");
+            var pane = window.Details.Pane;
+            await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
+            var time = VisualTree.Find<TimePicker>(pane, "DueTimePicker");
+            var clear = VisualTree.Find<Button>(pane, "ClearDueTimeButton");
+
+            time.SelectedTime = new TimeSpan(14, 7, 0);
+            await UiWait.UntilAsync(() => clear.IsEnabled, () => "Picking a Due time did not enable its clear button.", Ct);
+            await viewModel.FlushPendingSaveAsync();
+            Assert.AreEqual(new TimeOnly(14, 7), (await db.QueryAsync(c => c.Tasks)).Single().DueTime);
+
+            ((IInvokeProvider)FrameworkElementAutomationPeer.CreatePeerForElement(clear)).Invoke();
+            await UiWait.UntilAsync(() => time.SelectedTime is null, () => "The clear button left the picker set.", Ct);
+            await viewModel.FlushPendingSaveAsync();
+
+            var saved = (await db.QueryAsync(c => c.Tasks)).Single();
+            Assert.AreEqual(new DateOnly(2030, 10, 25), saved.DueDate);
+            Assert.IsNull(saved.DueTime);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Clearing_the_Due_date_picker_clears_the_Due_time_picker()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Book dentist", due: new DateOnly(2030, 10, 25), dueTime: new TimeOnly(14, 30));
+        var (window, viewModel) = await OpenAsync(db, width: 1200);
+        try
+        {
+            await SelectAsync(window, "Book dentist");
+            var pane = window.Details.Pane;
+            var time = VisualTree.Find<TimePicker>(pane, "DueTimePicker");
+            await UiWait.UntilAsync(() => time.SelectedTime == new TimeSpan(14, 30, 0),
+                () => $"The picker shows {time.SelectedTime}.", Ct);
+
+            VisualTree.Find<CalendarDatePicker>(pane, "DetailDueDatePicker").Date = null;
+            await UiWait.UntilAsync(() => time.SelectedTime is null && !time.IsEnabled,
+                () => $"Clearing the Due date left the time picker at {time.SelectedTime} ({time.IsEnabled}).", Ct);
+            await viewModel.FlushPendingSaveAsync();
+
+            var saved = (await db.QueryAsync(c => c.Tasks)).Single();
+            Assert.IsNull(saved.DueDate);
+            Assert.IsNull(saved.DueTime);
         }
         finally
         {
@@ -687,7 +807,7 @@ public sealed class DetailPaneTests
 
     private static async Task AddAsync(
         TempDatabase db, string title, string notes = "", Priority priority = Priority.None, DateOnly? due = null,
-        DateTime? reminderUtc = null, Guid? listId = null)
+        DateTime? reminderUtc = null, Guid? listId = null, TimeOnly? dueTime = null)
     {
         listId ??= (await db.QueryAsync(c => c.Lists.Where(l => l.IsDefault))).Single().Id;
         var order = (await db.QueryAsync(c => c.Tasks)).Count;
@@ -702,6 +822,7 @@ public sealed class DetailPaneTests
             Notes = notes,
             Priority = priority,
             DueDate = due,
+            DueTime = dueTime,
             ReminderUtc = reminderUtc,
             SortOrder = order,
             CreatedUtc = now,

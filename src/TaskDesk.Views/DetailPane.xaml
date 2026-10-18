@@ -193,22 +193,35 @@
                                 Command="{x:Bind ViewModel.AddSubtaskCommand, Mode=OneTime}" />
                     </Grid>
 
-                    <!-- Due: a calendar date and an optional time. -->
+                    <!-- Due: a calendar date, then an optional time picked once the date is set. -->
                     <TextBlock Text="Due" Style="{StaticResource FieldLabel}" />
-                    <Grid Margin="{StaticResource FieldMargin}" ColumnSpacing="6">
+                    <CalendarDatePicker x:Name="DetailDueDatePicker" HorizontalAlignment="Stretch"
+                                        Margin="{StaticResource FieldMargin}"
+                                        AutomationProperties.Name="Due date"
+                                        AutomationProperties.AutomationId="DetailDueDatePicker"
+                                        Date="{x:Bind local:DetailPane.ToPickerDate(ViewModel.DetailDueDate), BindBack=SetDueDate, Mode=TwoWay, FallbackValue={x:Null}}" />
+                    <!-- The clock follows the system 12/24-hour setting (no ClockIdentifier). MinWidth 0 lets the
+                         picker fit the pane's narrowest width; the Fluent default is 242. -->
+                    <TextBlock Text="Due time" Style="{StaticResource FieldLabel}" />
+                    <Grid Margin="{StaticResource FieldMargin}" ColumnSpacing="4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="72" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <CalendarDatePicker x:Name="DetailDueDatePicker" HorizontalAlignment="Stretch"
-                                            AutomationProperties.Name="Due date"
-                                            AutomationProperties.AutomationId="DetailDueDatePicker"
-                                            Date="{x:Bind local:DetailPane.ToPickerDate(ViewModel.DetailDueDate), BindBack=SetDueDate, Mode=TwoWay, FallbackValue={x:Null}}" />
-                        <TextBox x:Name="DueTimeBox" Grid.Column="1" MaxLength="5" PlaceholderText="HH:mm"
-                                 AutomationProperties.Name="Due time"
-                                 AutomationProperties.HelpText="Time as HH:mm; needs a Due date"
-                                 ToolTipService.ToolTip="Due time as HH:mm (needs a Due date)"
-                                 Text="{x:Bind ViewModel.DetailDueTime, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                        <TimePicker x:Name="DueTimePicker" HorizontalAlignment="Stretch" MinWidth="0"
+                                    MinuteIncrement="1"
+                                    AutomationProperties.Name="Due time"
+                                    AutomationProperties.AutomationId="DueTimePicker"
+                                    AutomationProperties.HelpText="Needs a Due date"
+                                    IsEnabled="{x:Bind ViewModel.HasDetailDue, Mode=OneWay}"
+                                    SelectedTime="{x:Bind ViewModel.DetailDueTime, Mode=TwoWay}" />
+                        <Button x:Name="ClearDueTimeButton" Grid.Column="1" Style="{StaticResource SmallIconButton}"
+                                ToolTipService.ToolTip="Clear Due time"
+                                AutomationProperties.Name="Clear Due time"
+                                AutomationProperties.AutomationId="ClearDueTimeButton"
+                                Command="{x:Bind ViewModel.ClearDetailDueTimeCommand, Mode=OneTime}">
+                            <FontIcon Glyph="&#xE711;" FontSize="12" />
+                        </Button>
                     </Grid>
                     <TextBlock x:Name="DueErrorText" Style="{StaticResource FieldErrorText}"
                                Text="{x:Bind ViewModel.DueError, Mode=OneWay}"

@@ -1,4 +1,3 @@
-using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TaskDesk.Core.Tasks;
@@ -59,9 +58,13 @@ public sealed partial class MainViewModel
     /// <summary>Repeat only applies once the Task has a Due date, so the pane hides it until then.</summary>
     public bool HasDetailDue => DetailDueDate is not null;
 
-    /// <summary>The Due time of the shown Task as "H:mm" text; empty when it has none.</summary>
+    /// <summary>
+    /// The Due time of the shown Task as a time of day, bindable to a time picker's selected time; null when it
+    /// has none (a date-only Due, or no Due).
+    /// </summary>
     [ObservableProperty]
-    private string _detailDueTime = "";
+    [NotifyCanExecuteChangedFor(nameof(ClearDetailDueTimeCommand))]
+    private TimeSpan? _detailDueTime;
 
     /// <summary>Completes when every save started so far has finished.</summary>
     public Task PendingSave => _pendingSave;
@@ -112,7 +115,7 @@ public sealed partial class MainViewModel
         DetailNotes = value?.Item.Notes ?? "";
         DetailPriority = value?.Priority ?? Priority.None;
         DetailDueDate = value?.Item.DueDate?.ToDateTime(TimeOnly.MinValue);
-        DetailDueTime = value?.Item.DueTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "";
+        DetailDueTime = value?.Item.DueTime?.ToTimeSpan();
         LoadReminderDetail(value?.Item);
         _loadingDetail = false;
         Repeat.Load(value?.Item.Recurrence, value?.Item.DueDate);
@@ -132,18 +135,24 @@ public sealed partial class MainViewModel
             return;
         }
 
-        if (value is null && DetailDueTime.Length > 0)
+        if (value is null && DetailDueTime is not null)
         {
             // A Due time cannot outlive its Due date.
             _loadingDetail = true;
-            DetailDueTime = "";
+            DetailDueTime = null;
             _loadingDetail = false;
         }
 
         ScheduleDueSave();
     }
 
-    partial void OnDetailDueTimeChanged(string value) => ScheduleDueSave();
+    partial void OnDetailDueTimeChanged(TimeSpan? value) => ScheduleDueSave();
+
+    /// <summary>Clears the Due time (the pane's "Clear Due time" button): the Due becomes date-only.</summary>
+    [RelayCommand(CanExecute = nameof(CanClearDetailDueTime))]
+    private void ClearDetailDueTime() => DetailDueTime = null;
+
+    private bool CanClearDetailDueTime() => DetailDueTime is not null;
 
     private void ScheduleDueSave()
     {
@@ -152,21 +161,8 @@ public sealed partial class MainViewModel
             return;
         }
 
-        DateOnly? date = DetailDueDate is { } picked ? DateOnly.FromDateTime(picked) : null;
-        TimeOnly? time = null;
-        var text = DetailDueTime?.Trim() ?? "";
-        if (text.Length > 0)
-        {
-            if (!TimeOnly.TryParseExact(
-                    text, ["H:mm", "HH:mm"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
-            {
-                ShowFieldError(ErrorPlace.Due, "Enter the Due time as HH:mm, for example 14:30.");
-                return;
-            }
-
-            time = parsed;
-        }
-
+        DateOnly? date = DetailDueDate is { } day ? DateOnly.FromDateTime(day) : null;
+        TimeOnly? time = DetailDueTime is { } picked ? TimeOnly.FromTimeSpan(picked) : null;
         if (time is not null && date is null)
         {
             ShowFieldError(ErrorPlace.Due, "A Due time needs a Due date.");
