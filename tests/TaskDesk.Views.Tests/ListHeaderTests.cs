@@ -19,7 +19,8 @@ using Windows.System;
 namespace TaskDesk.Views.Tests;
 
 /// <summary>
-/// The header of the list area over a real database: the page heading and List menu, the Filter button and
+/// The header of the list area over a real database: the page heading and its command bar (Filter and the
+/// List settings overflow), the Filter button and
 /// Filter bar, search (Ctrl+F, Esc), quick add (Enter, Ctrl+N), the empty state and "Load more completed".
 /// </summary>
 [TestClass]
@@ -58,9 +59,10 @@ public sealed class ListHeaderTests
     }
 
     [UITestMethod]
-    public async Task The_List_menu_shows_on_a_List_page_and_renames_and_colours_the_List()
+    public async Task The_heading_overflow_shows_on_a_List_page_and_renames_and_colours_the_List()
     {
         using var db = await DatabaseAsync();
+        var home = await db.Get<ITagService>().CreateTagAsync("home", Ct);
         var (window, viewModel) = await OpenAsync(db);
         var dialogs = new RenamingDialogs("Home");
         var lists = new ListsViewModel(db.Get<IListService>(), dialogs);
@@ -69,40 +71,61 @@ public sealed class ListHeaderTests
             await lists.LoadAsync(Ct);
             window.View.Lists = lists;
             await viewModel.LoadAsync(Ct);
-            var button = VisualTree.Find<Button>(window.View, "ListMenuButton");
-            Assert.AreEqual("List settings", AutomationProperties.GetName(button));
-            Assert.AreEqual(Visibility.Visible, button.Visibility);
+            var bar = VisualTree.Find<CommandBar>(window.View, "HeadingCommands");
+            Assert.AreEqual(CommandBarDefaultLabelPosition.Right, bar.DefaultLabelPosition);
+            var more = await WaitForAsync(
+                () => VisualTree.Descendants(bar).OfType<Button>()
+                    .FirstOrDefault(b => AutomationProperties.GetAutomationId(b) == "ListMenuButton"),
+                "The command bar has no overflow button with the id ListMenuButton.");
+            Assert.AreEqual("List settings", FrameworkElementAutomationPeer.CreatePeerForElement(more).GetName());
+            await UiWait.UntilAsync(() => more.Visibility == Visibility.Visible,
+                () => "A List page has no List settings overflow.", Ct);
 
-            var menu = (MenuFlyout)button.Flyout;
-            Assert.AreEqual("Rename", ((MenuFlyoutItem)menu.Items[0]).Text);
-            var colour = (MenuFlyoutSubItem)menu.Items[1];
-            Assert.AreEqual("Colour", colour.Text);
+            ((IInvokeProvider)FrameworkElementAutomationPeer.CreatePeerForElement(more)).Invoke();
+            await UiWait.UntilAsync(() => bar.IsOpen, () => "List settings did not open the overflow.", Ct);
+            bar.IsOpen = false;
+            await UiWait.UntilAsync(() => !bar.IsOpen, () => "The overflow did not close.", Ct);
+            Assert.AreEqual("List settings", FrameworkElementAutomationPeer.CreatePeerForElement(more).GetName(),
+                "Opening the overflow renamed it.");
+            Assert.IsTrue(more.IsTabStop, "Tab does not reach List settings.");
+
+            var commands = bar.SecondaryCommands.Cast<AppBarButton>().ToList();
+            CollectionAssert.AreEqual(new[] { "Rename", "Colour" }, commands.Select(c => c.Label).ToList());
+            var colours = ((MenuFlyout)commands[1].Flyout).Items.Cast<MenuFlyoutItem>().ToList();
             CollectionAssert.AreEqual(
                 new[] { "None", "Red", "Orange", "Yellow", "Green", "Blue", "Purple" },
-                colour.Items.Cast<MenuFlyoutItem>().Select(i => i.Text).ToList());
+                colours.Select(i => i.Text).ToList());
 
-            Invoke((MenuFlyoutItem)menu.Items[0]);
+            ((IInvokeProvider)FrameworkElementAutomationPeer.CreatePeerForElement(commands[0])).Invoke();
             await UiWait.UntilAsync(() => lists.Lists.Single(l => l.IsDefault).Name == "Home",
                 () => "Rename did not rename the shown List.", Ct);
 
-            Invoke(colour.Items.Cast<MenuFlyoutItem>().Single(i => i.Text == "Green"));
+            Invoke(colours.Single(i => i.Text == "Green"));
             await UiWait.UntilAsync(() => lists.Lists.Single(l => l.IsDefault).ColorHex == "#107C10",
                 () => "Colour did not colour the shown List.", Ct);
 
-            Invoke(colour.Items.Cast<MenuFlyoutItem>().Single(i => i.Text == "None"));
+            Invoke(colours.Single(i => i.Text == "None"));
             await UiWait.UntilAsync(() => lists.Lists.Single(l => l.IsDefault).ColorHex is null,
                 () => "None did not remove the shown List's colour.", Ct);
 
             var work = await db.Get<IListService>().CreateListAsync("Work", Ct);
             await lists.LoadAsync(Ct);
             await viewModel.ShowListAsync(work.Id, Ct);
-            Invoke(colour.Items.Cast<MenuFlyoutItem>().Single(i => i.Text == "Green"));
+            Invoke(colours.Single(i => i.Text == "Green"));
             await UiWait.UntilAsync(() => lists.Lists.Single(l => l.Name == "Work").ColorHex == "#107C10",
                 () => "Colour did not colour Work, the shown List.", Ct);
             Assert.IsNull(lists.Lists.Single(l => l.IsDefault).ColorHex, "Colour also changed the Default List.");
 
             await viewModel.ShowSmartViewAsync(SmartView.Today, Ct);
-            Assert.AreEqual(Visibility.Collapsed, button.Visibility, "A Smart View has no List menu.");
+            await UiWait.UntilAsync(() => more.Visibility == Visibility.Collapsed,
+                () => "A Smart View shows the List settings overflow.", Ct);
+
+            await viewModel.ShowListAsync(work.Id, Ct);
+            await UiWait.UntilAsync(() => more.Visibility == Visibility.Visible,
+                () => "Going back to a List page did not show the List settings overflow.", Ct);
+            await viewModel.ShowAsync(new TaskListPage.TagPage(home), Ct);
+            await UiWait.UntilAsync(() => more.Visibility == Visibility.Collapsed,
+                () => "A Tag's page shows the List settings overflow.", Ct);
         }
         finally
         {
@@ -118,9 +141,15 @@ public sealed class ListHeaderTests
         try
         {
             await viewModel.LoadAsync(Ct);
-            var filter = VisualTree.Find<ToggleButton>(window.View, "FilterButton");
+            var filter = VisualTree.Find<AppBarToggleButton>(window.View, "FilterButton");
             var bar = VisualTree.Find<FrameworkElement>(window.View, "FilterBar");
             Assert.AreEqual("Filter", AutomationProperties.GetName(filter));
+            Assert.AreEqual("Filter", filter.Label);
+            Assert.IsInstanceOfType<FontIcon>(filter.Icon);
+            Assert.IsTrue(filter.IsTabStop, "Tab does not reach Filter.");
+            CollectionAssert.Contains(
+                VisualTree.Find<CommandBar>(window.View, "HeadingCommands").PrimaryCommands.ToList(), filter,
+                "Filter is not a command of the heading's command bar.");
             Assert.AreEqual("FilterBar", AutomationProperties.GetAutomationId(bar));
             Assert.AreEqual("Filters", AutomationProperties.GetName(bar));
             Assert.AreEqual(Visibility.Collapsed, bar.Visibility);

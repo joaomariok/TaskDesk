@@ -2,8 +2,10 @@ using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Windows.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
@@ -13,11 +15,16 @@ using DispatcherQueueTimer = Microsoft.UI.Dispatching.DispatcherQueueTimer;
 namespace TaskDesk.Views;
 
 /// <summary>
-/// The main window's content: the list header (page heading, List menu, Filter button and Filter bar, search,
+/// The main window's content: the list header (page heading, its command bar with Filter and the List's
+/// settings, Filter bar, search,
 /// quick add, empty state) over the Task list area of the page the view model shows.
 /// </summary>
 public sealed partial class MainView : UserControl
 {
+    // The heading's "⋯" overflow keeps the id and name of the List menu button it replaced.
+    private const string ListMenuId = "ListMenuButton";
+    private const string ListMenuName = "List settings";
+
     // Search reloads once typing pauses, so each keystroke does not query the database.
     private static readonly TimeSpan SearchDelay = TimeSpan.FromMilliseconds(250);
 
@@ -219,7 +226,60 @@ public sealed partial class MainView : UserControl
         }
     }
 
-    // ---- The List's menu beside the heading ----
+    // ---- The heading's command bar: Filter, and the "⋯" overflow with the shown List's settings ----
+
+    /// <summary>The overflow holds only List commands, so it shows on a List's page only.</summary>
+    public static CommandBarOverflowButtonVisibility ListOverflow(bool isListPage) =>
+        isListPage ? CommandBarOverflowButtonVisibility.Visible : CommandBarOverflowButtonVisibility.Collapsed;
+
+    // The overflow button is a template part with no property of its own: name it here, so a screen reader and
+    // the UI suite find "List settings" as before. CommandBar names it "More options" when its template applies
+    // and again each time it opens or closes, so the name is put back whenever CommandBar changes it.
+    private void OnHeadingCommandsLoaded(object sender, RoutedEventArgs e)
+    {
+        if (FindByName<Button>((DependencyObject)sender, "MoreButton") is not { } more
+            || AutomationProperties.GetAutomationId(more) == ListMenuId)
+        {
+            return;
+        }
+
+        AutomationProperties.SetAutomationId(more, ListMenuId);
+        NameListMenu(more);
+        more.RegisterPropertyChangedCallback(AutomationProperties.NameProperty, (d, _) => NameListMenu((Button)d));
+        more.RegisterPropertyChangedCallback(ToolTipService.ToolTipProperty, (d, _) => NameListMenu((Button)d));
+    }
+
+    private static void NameListMenu(Button more)
+    {
+        if (AutomationProperties.GetName(more) != ListMenuName)
+        {
+            AutomationProperties.SetName(more, ListMenuName);
+        }
+
+        if (ToolTipService.GetToolTip(more) as string != ListMenuName)
+        {
+            ToolTipService.SetToolTip(more, ListMenuName);
+        }
+    }
+
+    private static T? FindByName<T>(DependencyObject root, string name) where T : FrameworkElement
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if ((child as T)?.Name == name)
+            {
+                return (T)child;
+            }
+
+            if (FindByName<T>(child, name) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
 
     private ListItemViewModel? ShownList => Lists?.ListOrDefault(ViewModel.CurrentListId);
 

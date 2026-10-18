@@ -15,7 +15,8 @@ using Windows.UI;
 namespace TaskDesk.Views.Tests;
 
 /// <summary>
-/// The command-driven toggles of the main window (<see cref="CommandToggleButton"/> and
+/// The command-driven toggles of the main window (<see cref="CommandToggleButton"/>,
+/// <see cref="CommandAppBarToggleButton"/> and
 /// <see cref="CommandCheckBox"/>): a screen reader's Toggle runs their Command once without flipping them, and the
 /// text inside a pressed one takes Fluent's checked foreground.
 /// </summary>
@@ -102,18 +103,24 @@ public sealed class CommandToggleTests
             await viewModel.ToggleHasDueFilterCommand.ExecuteAsync(null);
             await viewModel.ToggleFilterTagCommand.ExecuteAsync(viewModel.FilterTagChips.Single().Tag);
             List<ToggleButton> Pressed() =>
-                [.. CommandToggles(window).Where(b => b is CommandToggleButton && b.IsChecked == true)];
+                [.. CommandToggles(window)
+                    .Where(b => b is CommandToggleButton or CommandAppBarToggleButton && b.IsChecked == true)];
             await UiWait.UntilAsync(() => Pressed().Count == 3,
                 () => $"Pressed: [{string.Join(", ", Pressed().Select(Describe))}].", Ct);
 
             foreach (var button in Pressed())
             {
                 var label = Describe(button);
-                // The text and icon the button draws, as each one's colour.
+                // The text and icon the button draws, as each one's colour. An app-bar toggle's template also holds
+                // label variants it does not draw (the label below the icon, the overflow label, accelerator text),
+                // so only for it are the undrawn ones skipped; every other toggle has all its text checked.
+                bool Checked(FrameworkElement element) => button is not CommandAppBarToggleButton || IsDrawn(element, button);
                 List<(string Text, Color Colour)> Drawn() =>
                 [
-                    .. VisualTree.Descendants(button).OfType<TextBlock>().Select(t => (t.Text, Colour(t.Foreground))),
-                    .. VisualTree.Descendants(button).OfType<FontIcon>().Select(i => ($"icon {i.Glyph}", Colour(i.Foreground))),
+                    .. VisualTree.Descendants(button).OfType<TextBlock>().Where(Checked)
+                        .Select(t => (t.Text, Colour(t.Foreground))),
+                    .. VisualTree.Descendants(button).OfType<FontIcon>().Where(Checked)
+                        .Select(i => ($"icon {i.Glyph}", Colour(i.Foreground))),
                 ];
                 await UiWait.UntilAsync(() => Drawn().Count > 0 && Drawn().All(d => d.Colour == ink),
                     () => $"{theme}: in pressed '{label}', " + string.Join(", ", Drawn().Select(d => $"'{d.Text}' is {d.Colour}"))
@@ -128,10 +135,29 @@ public sealed class CommandToggleTests
 
     private static Color Colour(Brush brush) => ((SolidColorBrush)brush).Color;
 
+    // Laid out with a size, and neither it nor anything up to the button is collapsed or transparent.
+    private static bool IsDrawn(FrameworkElement element, UIElement button)
+    {
+        if (element.ActualWidth <= 0 || element.ActualHeight <= 0)
+        {
+            return false;
+        }
+
+        for (DependencyObject? node = element; node is not null && node != button; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is UIElement { Visibility: Visibility.Collapsed } or UIElement { Opacity: <= 0 })
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     // The command-driven toggles shown in the window; a container kept for recycling holds no item and is skipped.
     private static List<ToggleButton> CommandToggles(MainWindow window) =>
         [.. VisualTree.Descendants(window.Content).OfType<ToggleButton>()
-            .Where(b => b is CommandToggleButton or CommandCheckBox)
+            .Where(b => b is CommandToggleButton or CommandAppBarToggleButton or CommandCheckBox)
             .Where(b => b.XamlRoot is not null && !InRecycledContainer(b))];
 
     private static bool InRecycledContainer(DependencyObject element)

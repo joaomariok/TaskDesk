@@ -69,4 +69,5 @@
          shorter check box cuts it). -->
     <Style TargetType="local:CommandCheckBox" BasedOn="{StaticResource DefaultCheckBoxStyle}" />
     <Style TargetType="local:CommandToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}" />
+    <Style TargetType="local:CommandAppBarToggleButton" BasedOn="{StaticResource DefaultAppBarToggleButtonStyle}" />
 </ResourceDictionary>
