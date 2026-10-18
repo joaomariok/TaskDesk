@@ -133,15 +133,48 @@ public class ListsViewModelTests
     }
 
     [Fact]
-    public async Task Moving_a_List_onto_another_reorders_them()
+    public async Task Moving_a_List_into_a_gap_reorders_them()
     {
         var (vm, _, _) = await StartAsync(("A", 0), ("B", 0));
 
-        await vm.MoveAsync(vm.Lists[2], vm.Lists[0], Ct);
+        await vm.MoveToGapAsync(vm.Lists[2], 0, Ct);
         Assert.Equal(["B", "Inbox", "A"], vm.Lists.Select(l => l.Name));
 
-        await vm.MoveAsync(vm.Lists[0], vm.Lists[2], Ct);
+        await vm.MoveToGapAsync(vm.Lists[0], 3, Ct);
         Assert.Equal(["Inbox", "A", "B"], vm.Lists.Select(l => l.Name));
+    }
+
+    [Theory]
+    [InlineData("C", 0, new[] { "C", "Inbox", "A", "B" })]
+    [InlineData("Inbox", 4, new[] { "A", "B", "C", "Inbox" })]
+    [InlineData("C", 4, new[] { "Inbox", "A", "B", "C" })]
+    [InlineData("C", 2, new[] { "Inbox", "A", "C", "B" })]
+    [InlineData("A", 3, new[] { "Inbox", "B", "A", "C" })]
+    [InlineData("Inbox", 2, new[] { "A", "Inbox", "B", "C" })]
+    public async Task Moving_a_List_into_the_first_last_or_a_middle_gap_saves_that_order(
+        string name, int gap, string[] expected)
+    {
+        var (vm, service, _) = await StartAsync(("A", 0), ("B", 0), ("C", 0));
+
+        await vm.MoveToGapAsync(vm.Lists.Single(l => l.Name == name), gap, Ct);
+
+        Assert.Equal(expected, vm.Lists.Select(l => l.Name));
+        var reloaded = new ListsViewModel(service, new FakeDialogs());
+        await reloaded.LoadAsync(Ct);
+        Assert.Equal(expected, reloaded.Lists.Select(l => l.Name));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Moving_a_List_into_its_own_gap_changes_nothing(int gap)
+    {
+        var (vm, service, _) = await StartAsync(("A", 0), ("B", 0));
+
+        await vm.MoveToGapAsync(vm.Lists[1], gap, Ct);
+
+        Assert.Equal(["Inbox", "A", "B"], vm.Lists.Select(l => l.Name));
+        Assert.Equal(0, service.Reorders);
     }
 
     private static async Task<(ListsViewModel Vm, FakeListService Service, FakeDialogs Dialogs)> StartAsync(
@@ -214,8 +247,11 @@ public class ListsViewModelTests
             return Task.CompletedTask;
         }
 
+        public int Reorders { get; private set; }
+
         public Task ReorderListsAsync(IReadOnlyList<Guid> orderedListIds, CancellationToken cancellationToken = default)
         {
+            Reorders++;
             var byId = _lists.ToDictionary(l => l.Id);
             _lists.Clear();
             _lists.AddRange(orderedListIds.Select(id => byId[id]));

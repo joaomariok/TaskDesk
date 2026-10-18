@@ -200,16 +200,22 @@
                 <StackPanel>
                     <Rectangle Height="1" Margin="12,4,12,0" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
                     <TextBlock x:Name="ListsHeader" Style="{StaticResource SidebarSectionHeader}" Text="Lists" />
-                    <ListView x:Name="ListsList"
-                              ItemContainerStyle="{StaticResource SidebarListItem}"
-                              ItemTemplate="{StaticResource ListRowTemplate}"
-                              SelectionMode="Single" IsItemClickEnabled="True" CanDragItems="True" AllowDrop="True"
-                              ScrollViewer.VerticalScrollMode="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                              AutomationProperties.Name="Lists" AutomationProperties.AutomationId="ListsList"
-                              ContainerContentChanging="OnListContainerContentChanging"
-                              SelectionChanged="OnListSelectionChanged" ItemClick="OnListItemClick" KeyDown="OnListKeyDown"
-                              DragItemsStarting="OnListDragStarting" DragItemsCompleted="OnListDragCompleted"
-                              DragOver="OnListDragOver" Drop="OnListDrop" />
+                    <!-- The insertion line shows where a dragged List lands; it overlays the rows and takes no input. -->
+                    <Grid>
+                        <ListView x:Name="ListsList"
+                                  ItemContainerStyle="{StaticResource SidebarListItem}"
+                                  ItemTemplate="{StaticResource ListRowTemplate}"
+                                  SelectionMode="Single" IsItemClickEnabled="True" CanDragItems="True" AllowDrop="True"
+                                  ScrollViewer.VerticalScrollMode="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                  AutomationProperties.Name="Lists" AutomationProperties.AutomationId="ListsList"
+                                  ContainerContentChanging="OnListContainerContentChanging"
+                                  SelectionChanged="OnListSelectionChanged" ItemClick="OnListItemClick" KeyDown="OnListKeyDown"
+                                  DragItemsStarting="OnListDragStarting" DragItemsCompleted="OnListDragCompleted"
+                                  DragOver="OnListDragOver" DragLeave="OnListDragLeave" Drop="OnListDrop" />
+                        <Rectangle x:Name="ListInsertionLine" Height="2" RadiusX="1" RadiusY="1" VerticalAlignment="Top"
+                                   Fill="{ThemeResource AccentFillColorDefaultBrush}" IsHitTestVisible="False"
+                                   Visibility="Collapsed" />
+                    </Grid>
                     <StackPanel x:Name="NewListArea">
                         <!-- Takes no room until there is an error, so "+ New List" sits right under the last List. -->
                         <TextBlock Style="{StaticResource CaptionText}" Foreground="{ThemeResource OverdueBrush}"

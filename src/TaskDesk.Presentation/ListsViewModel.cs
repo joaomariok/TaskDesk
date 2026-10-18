@@ -124,20 +124,22 @@ public sealed partial class ListsViewModel(IListService listService, IListDialog
     public ListItemViewModel? ListOrDefault(Guid? listId) =>
         Lists.FirstOrDefault(l => l.Id == listId) ?? Lists.FirstOrDefault(l => l.IsDefault);
 
-    /// <summary>Moves a List to the position currently held by <paramref name="target"/>.</summary>
-    public Task MoveAsync(ListItemViewModel item, ListItemViewModel target, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Moves a List into the gap <paramref name="gap"/> (0 is before the first List, <c>Lists.Count</c> after the
+    /// last) and saves the new order. Its own gap (its index or the one after) and a gap out of range change nothing.
+    /// </summary>
+    public Task MoveToGapAsync(ListItemViewModel item, int gap, CancellationToken cancellationToken = default)
         => GuardedAsync(async () =>
         {
             var from = Lists.IndexOf(item);
-            var to = Lists.IndexOf(target);
-            if (from < 0 || to < 0 || from == to)
+            if (from < 0 || gap < 0 || gap > Lists.Count || gap == from || gap == from + 1)
             {
                 return;
             }
 
             var ids = Lists.Select(l => l.Id).ToList();
             ids.RemoveAt(from);
-            ids.Insert(to, item.Id);
+            ids.Insert(gap > from ? gap - 1 : gap, item.Id);
 
             await listService.ReorderListsAsync(ids, cancellationToken);
             await LoadAsync(cancellationToken);

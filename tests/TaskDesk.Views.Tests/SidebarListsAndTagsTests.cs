@@ -465,7 +465,7 @@ public sealed class SidebarListsAndTagsTests
     }
 
     [UITestMethod]
-    public async Task A_List_dropped_at_a_new_place_keeps_that_order_after_a_reload()
+    public async Task A_List_dropped_into_a_gap_lands_there_and_keeps_that_order_after_a_reload()
     {
         var ct = TestContext.CancellationToken;
         using var db = new TempDatabase();
@@ -483,8 +483,8 @@ public sealed class SidebarListsAndTagsTests
             await RowsAsync(window, "ListsList", 4);
             var c = lists.Lists[3];
 
-            // C dropped on A takes A's place, as in the WPF sidebar.
-            await window.Navigation.DropListAsync(c, lists.Lists[1]);
+            // C dropped into the gap between Inbox and A.
+            await window.Navigation.DropListAsync(c, 1);
 
             await lists.LoadAsync(ct);
             CollectionAssert.AreEqual(new[] { "Inbox", "C", "A", "B" }, lists.Lists.Select(l => l.Name).ToList());
@@ -498,7 +498,7 @@ public sealed class SidebarListsAndTagsTests
     }
 
     [UITestMethod]
-    public async Task A_List_dropped_on_an_earlier_or_a_later_List_takes_its_place_and_a_drop_on_itself_or_none_does_nothing()
+    public async Task A_List_dropped_before_the_first_or_after_the_last_List_moves_there_and_its_own_gap_does_nothing()
     {
         var ct = TestContext.CancellationToken;
         using var db = new TempDatabase();
@@ -517,12 +517,16 @@ public sealed class SidebarListsAndTagsTests
             ListItemViewModel Named(string name) => lists.Lists.Single(l => l.Name == name);
             List<string> Order() => [.. lists.Lists.Select(l => l.Name)];
 
-            await window.Navigation.DropListAsync(Named("A"), Named("C"));
+            await window.Navigation.DropListAsync(Named("A"), 4);
             CollectionAssert.AreEqual(new[] { "Inbox", "B", "C", "A" }, Order());
 
-            await window.Navigation.DropListAsync(Named("B"), Named("B"));
-            await window.Navigation.DropListAsync(Named("B"), null);
-            CollectionAssert.AreEqual(new[] { "Inbox", "B", "C", "A" }, Order());
+            await window.Navigation.DropListAsync(Named("A"), 0);
+            CollectionAssert.AreEqual(new[] { "A", "Inbox", "B", "C" }, Order());
+
+            // B sits at index 2: the gaps right above and right below it are its own.
+            await window.Navigation.DropListAsync(Named("B"), 2);
+            await window.Navigation.DropListAsync(Named("B"), 3);
+            CollectionAssert.AreEqual(new[] { "A", "Inbox", "B", "C" }, Order());
         }
         finally
         {
@@ -531,7 +535,7 @@ public sealed class SidebarListsAndTagsTests
     }
 
     [UITestMethod]
-    public async Task A_drop_position_maps_to_the_List_row_under_it_or_to_none_below_the_rows()
+    public async Task A_drop_position_maps_to_the_gap_above_a_row_over_its_top_half_below_it_over_its_bottom_half_and_to_the_end_past_the_rows()
     {
         var ct = TestContext.CancellationToken;
         using var db = new TempDatabase();
@@ -546,17 +550,25 @@ public sealed class SidebarListsAndTagsTests
         {
             window.Activate();
             await lists.LoadAsync(ct);
-            var rows = await RowsAsync(window, "ListsList", 3);
-            var list = VisualTree.Find<ListView>(window.Navigation, "ListsList");
+            await RowsAsync(window, "ListsList", 3);
 
-            foreach (var row in rows)
+            foreach (var rail in new[] { false, true })
             {
-                var top = row.TransformToVisual(list).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
-                Assert.AreSame(row.Content, window.Navigation.ListAt(new Windows.Foundation.Point(20, top + 2)));
-                Assert.AreSame(row.Content, window.Navigation.ListAt(new Windows.Foundation.Point(20, top + row.ActualHeight - 2)));
-            }
+                window.Navigation.SetRail(rail);
+                var id = rail ? "RailListsList" : "ListsList";
+                var rows = await RowsAsync(window, id, 3);
+                var list = VisualTree.Find<ListView>(window.Navigation, "ListsList");
 
-            Assert.IsNull(window.Navigation.ListAt(new Windows.Foundation.Point(20, list.ActualHeight + 500)));
+                for (var i = 0; i < rows.Count; i++)
+                {
+                    var row = rows[i];
+                    var top = row.TransformToVisual(list).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+                    Assert.AreEqual(i, window.Navigation.GapAt(new Windows.Foundation.Point(20, top + 2)), $"{id} row {i}, top half");
+                    Assert.AreEqual(i + 1, window.Navigation.GapAt(new Windows.Foundation.Point(20, top + row.ActualHeight - 2)), $"{id} row {i}, bottom half");
+                }
+
+                Assert.AreEqual(3, window.Navigation.GapAt(new Windows.Foundation.Point(20, list.ActualHeight + 500)), $"{id} past the rows");
+            }
         }
         finally
         {

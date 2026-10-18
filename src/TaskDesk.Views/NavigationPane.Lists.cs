@@ -65,38 +65,64 @@ public sealed partial class NavigationPane
     }
 
     /// <summary>
-    /// Drops <paramref name="dragged"/> on <paramref name="target"/>: the List takes the target's place, as in the
-    /// WPF sidebar, through the Lists' reorder use case. A drop on itself or on no List does nothing.
+    /// Drops <paramref name="dragged"/> into the gap <paramref name="gap"/> (0 is before the first List, the number
+    /// of Lists after the last) through the Lists' reorder use case. Its own gap, above or below it, does nothing.
     /// </summary>
-    public async Task DropListAsync(ListItemViewModel dragged, ListItemViewModel? target)
+    public async Task DropListAsync(ListItemViewModel dragged, int gap)
     {
-        if (Lists is null || target is null || ReferenceEquals(dragged, target))
+        if (Lists is not null)
         {
-            return;
+            await Lists.MoveToGapAsync(dragged, gap);
         }
-
-        await Lists.MoveAsync(dragged, target);
     }
 
-    /// <summary>The List row under <paramref name="position"/> (relative to the Lists list), or null over none.</summary>
-    public ListItemViewModel? ListAt(Windows.Foundation.Point position)
+    /// <summary>
+    /// The gap a drop at <paramref name="position"/> (relative to the Lists list) lands in: over a row's top half
+    /// the gap before it, over its bottom half the gap after it, and past the rows the last gap.
+    /// </summary>
+    public int GapAt(Windows.Foundation.Point position)
     {
         for (var i = 0; i < ListsList.Items.Count; i++)
         {
-            if (ListsList.ContainerFromIndex(i) is not FrameworkElement container)
+            if (RowBounds(i) is { } row && position.Y < row.Top + row.Height / 2)
             {
-                continue;
-            }
-
-            var top = container.TransformToVisual(ListsList).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
-            if (position.Y >= top && position.Y < top + container.ActualHeight)
-            {
-                return ListsList.Items[i] as ListItemViewModel;
+                return i;
             }
         }
 
-        return null;
+        return ListsList.Items.Count;
     }
+
+    // The top and height of row i in the Lists list, or null while it has no container.
+    private (double Top, double Height)? RowBounds(int index)
+    {
+        if (ListsList.ContainerFromIndex(index) is not FrameworkElement container)
+        {
+            return null;
+        }
+
+        var top = container.TransformToVisual(ListsList).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+        return (top, container.ActualHeight);
+    }
+
+    // The insertion line sits on the gap: at the top of the row after it, or at the bottom of the last row.
+    private void ShowInsertionLine(int gap)
+    {
+        var count = ListsList.Items.Count;
+        var y = gap < count ? RowBounds(gap)?.Top
+            : count > 0 && RowBounds(count - 1) is { } last ? last.Top + last.Height
+            : null;
+        if (y is not { } top)
+        {
+            HideInsertionLine();
+            return;
+        }
+
+        ListInsertionLine.Margin = new Thickness(_compact ? 6 : 12, Math.Max(0, top - ListInsertionLine.Height / 2), _compact ? 6 : 12, 0);
+        ListInsertionLine.Visibility = Visibility.Visible;
+    }
+
+    private void HideInsertionLine() => ListInsertionLine.Visibility = Visibility.Collapsed;
 
     private void InitializeListsAndTags()
     {
@@ -362,7 +388,7 @@ public sealed partial class NavigationPane
         }
     }
 
-    // ---- Drag to reorder Lists: a List dropped on another takes its place ----
+    // ---- Drag to reorder Lists: an insertion line shows the gap under the pointer, and the drop lands there ----
 
     private void OnListDragStarting(object sender, DragItemsStartingEventArgs e)
     {
@@ -380,6 +406,25 @@ public sealed partial class NavigationPane
     {
         e.AcceptedOperation = _dragged is not null ? DataPackageOperation.Move : DataPackageOperation.None;
         e.Handled = true;
+        if (_dragged is not null)
+        {
+            ShowInsertionLine(GapAt(e.GetPosition(ListsList)));
+        }
+        else
+        {
+            HideInsertionLine();
+        }
+    }
+
+    // Moving between rows raises a row's DragLeave too, which bubbles here: hide only once the pointer has left
+    // the Lists.
+    private void OnListDragLeave(object sender, DragEventArgs e)
+    {
+        var position = e.GetPosition(ListsList);
+        if (position.X < 0 || position.Y < 0 || position.X >= ListsList.ActualWidth || position.Y >= ListsList.ActualHeight)
+        {
+            HideInsertionLine();
+        }
     }
 
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
@@ -387,11 +432,16 @@ public sealed partial class NavigationPane
     {
         var dragged = _dragged;
         _dragged = null;
+        HideInsertionLine();
         if (dragged is not null)
         {
-            await DropListAsync(dragged, ListAt(e.GetPosition(ListsList)));
+            await DropListAsync(dragged, GapAt(e.GetPosition(ListsList)));
         }
     }
 
-    private void OnListDragCompleted(ListViewBase sender, DragItemsCompletedEventArgs args) => _dragged = null;
+    private void OnListDragCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
+    {
+        _dragged = null;
+        HideInsertionLine();
+    }
 }
