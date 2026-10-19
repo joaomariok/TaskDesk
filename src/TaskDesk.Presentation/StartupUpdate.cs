@@ -15,7 +15,8 @@ public static class StartupUpdate
     /// applying, and also when applying failed (a locked file, a corrupt package), which leaves the update pending:
     /// a process with this flag never applies at start, or it would try again at every start. The rest of start-up
     /// ignores it, and it is never written to the Run key or forwarded to a running copy, so a later normal start
-    /// (logon, the Start menu) still applies.
+    /// (logon, the Start menu) still applies. Restart to update also passes it when it starts the current version
+    /// again without applying (<see cref="ShellController.RestartToUpdateAsync"/>).
     /// </summary>
     public const string RestartedFlag = "--restarted-by-updater";
 

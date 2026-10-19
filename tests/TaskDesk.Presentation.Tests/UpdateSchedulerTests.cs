@@ -344,4 +344,19 @@ internal sealed class FakeAppUpdates : IAppUpdates
         Restarts++;
         RestartArguments = restartArguments;
     }
+
+    public int Relaunches { get; private set; }
+
+    /// <summary>The arguments the last restart without applying passed on.</summary>
+    public IReadOnlyList<string>? RelaunchArguments { get; private set; }
+
+    /// <summary>Runs when a restart without applying starts the app again.</summary>
+    public Action? Relaunching { get; set; }
+
+    public void RestartWithoutApplying(IReadOnlyList<string> restartArguments)
+    {
+        Relaunching?.Invoke();
+        Relaunches++;
+        RelaunchArguments = restartArguments;
+    }
 }

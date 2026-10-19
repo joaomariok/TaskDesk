@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using TaskDesk.Core.Shell;
 using Velopack;
@@ -50,5 +51,15 @@ internal sealed class VelopackAppUpdates : IAppUpdates
     {
         var manager = _manager.Value;
         manager.ApplyUpdatesAndRestart(manager.UpdatePendingRestart, [.. restartArguments]);
+    }
+
+    public void RestartWithoutApplying(IReadOnlyList<string> restartArguments)
+    {
+        var start = new ProcessStartInfo(
+            Environment.ProcessPath ?? throw new InvalidOperationException("No process path."), restartArguments)
+        {
+            UseShellExecute = false,
+        };
+        using var _ = Process.Start(start);
     }
 }

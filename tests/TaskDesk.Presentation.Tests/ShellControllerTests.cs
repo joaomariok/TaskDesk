@@ -430,6 +430,68 @@ public sealed class ShellControllerTests
         download.SetResult();
     }
 
+    // The owner asked for a restart: TaskDesk starts again on the current version, so Reminders keep running, and
+    // the update applies at its next normal start (review M5).
+    [Fact]
+    public async Task Restart_to_update_restarts_the_current_version_when_the_check_does_not_end_in_time()
+    {
+        var (controller, _, download) = await StartedWithRunningCheckAsync();
+        var guardReleasedFirst = false;
+        _updates.Relaunching = () => guardReleasedFirst = _single.DisposeCount > 0;
+
+        var restart = controller.RestartToUpdateAsync();
+        _clock.Advance(UpdateScheduler.StopTimeout);
+        await restart.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, _updates.Relaunches);
+        Assert.Equal([StartupUpdate.RestartedFlag], _updates.RelaunchArguments);
+        Assert.True(guardReleasedFirst);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+        download.SetResult();
+    }
+
+    // The timed wait gave up during the exit steps, but the download ended before they did (review round 3, low).
+    [Fact]
+    public async Task Restart_to_update_applies_when_the_check_ends_during_the_exit_steps()
+    {
+        var (controller, checks, download) = await StartedWithRunningCheckAsync();
+        var flush = new TaskCompletionSource();
+        controller.AddExitStep(() => flush.Task);
+
+        var restart = controller.RestartToUpdateAsync();
+        _clock.Advance(UpdateScheduler.StopTimeout);
+        download.SetResult();
+        await checks.CurrentCheck.WaitAsync(TestContext.Current.CancellationToken);
+        flush.SetResult();
+        await restart.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, _updates.Restarts);
+        Assert.Equal(0, _updates.Relaunches);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task Restart_to_update_that_applies_does_not_also_restart_the_current_version()
+    {
+        var controller = await StartedAsync();
+
+        await controller.RestartToUpdateAsync();
+
+        Assert.Equal(1, _updates.Restarts);
+        Assert.Equal(0, _updates.Relaunches);
+    }
+
+    [Fact]
+    public async Task Exit_does_not_restart_the_app()
+    {
+        var (controller, _, download) = await StartedWithRunningCheckAsync();
+
+        await controller.ExitAsync().WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, _updates.Relaunches);
+        download.SetResult();
+    }
+
     // Only Restart to update waits: a plain exit or a session end just cancels the check.
     [Fact]
     public async Task Exit_cancels_the_running_check_without_waiting_for_it()

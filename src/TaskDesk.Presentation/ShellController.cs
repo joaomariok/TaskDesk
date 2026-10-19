@@ -238,9 +238,10 @@ public sealed class ShellController(
     /// <summary>
     /// Runs the exit (see <see cref="ExitAsync"/>: the Reminder activations, then every exit step, which saves the
     /// pending edit), then applies the downloaded update, which ends the process and starts the new version. The
-    /// exit waits up to <see cref="UpdateScheduler.StopTimeout"/> for a running update check; when one still runs,
-    /// it skips the apply and shuts down as usual, and the update applies at the next start. Once an exit has started
-    /// it only returns that exit. When applying fails, the app shuts down as usual.
+    /// exit waits up to <see cref="UpdateScheduler.StopTimeout"/> for a running update check, or until its steps end
+    /// if they take longer; when one still runs, it skips the apply and starts the current version again, and the
+    /// update applies at the next normal start. Once an exit has started it only returns that exit. When applying
+    /// fails, the app shuts down as usual.
     /// </summary>
     public Task RestartToUpdateAsync()
     {
@@ -317,27 +318,48 @@ public sealed class ShellController(
             }
         }
 
+        // Releases the single-instance guard, so the restarted process becomes the running copy.
         Dispose();
-        if (_restartToUpdate && !await checksEnded)
+        if (_restartToUpdate)
         {
-            _logger.LogWarning("An update check was still running; the update applies at the next start");
-        }
-        else if (_restartToUpdate)
-        {
-            try
-            {
-                // Ends the process at once when it works.
-                // The new version opens its window: a restart the owner asked for is not a logon start. The
-                // restarted process never applies at start, even when this apply failed (StartupUpdate.RestartedFlag).
-                updates!.RestartToApply(StartupUpdate.RestartArguments([]));
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                _logger.LogError(ex, "Applying the update failed; exiting");
-            }
+            await RestartAsync(checksEnded);
         }
 
         lifetime.Shutdown();
+    }
+
+    // Restart to update, after the exit. Either restart opens the window (a restart the owner asked for is not a
+    // logon start) and carries StartupUpdate.RestartedFlag, so the restarted process never applies at start.
+    private async Task RestartAsync(Task<bool> checksEnded)
+    {
+        // The timed wait may have given up while the exit steps still ran; a check that ended since then is done.
+        if (!await checksEnded && _updateChecks is { CurrentCheck.IsCompleted: false })
+        {
+            // A download may still write to the packages folder: start this version again, so Reminders keep
+            // running, and the update applies at the next normal start.
+            _logger.LogWarning(
+                "An update check was still running; restarting without the update, which applies at the next start");
+            try
+            {
+                updates!.RestartWithoutApplying(StartupUpdate.RestartArguments([]));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                _logger.LogError(ex, "Restarting the app failed; exiting");
+            }
+
+            return;
+        }
+
+        try
+        {
+            // Ends the process at once when it works.
+            updates!.RestartToApply(StartupUpdate.RestartArguments([]));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogError(ex, "Applying the update failed; exiting");
+        }
     }
 
     public void Dispose()

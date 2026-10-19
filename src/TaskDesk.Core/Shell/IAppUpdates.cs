@@ -29,4 +29,11 @@ public interface IAppUpdates
     /// <paramref name="restartArguments"/>. Run the app's exit path first: nothing after this call runs.
     /// </summary>
     void RestartToApply(IReadOnlyList<string> restartArguments);
+
+    /// <summary>
+    /// Starts the running version again with <paramref name="restartArguments"/> and returns, leaving the downloaded
+    /// update pending; the caller then shuts this process down. Call it once this process has released the
+    /// single-instance guard, so the new process becomes the running copy.
+    /// </summary>
+    void RestartWithoutApplying(IReadOnlyList<string> restartArguments);
 }
