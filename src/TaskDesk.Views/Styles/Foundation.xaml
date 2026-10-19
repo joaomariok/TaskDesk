@@ -13,7 +13,7 @@
     <!-- Meaning-named brushes, use through ThemeResource:
            OverdueBrush     Overdue Due text, icons and badges (Fluent's critical colour)
            TodayBrush       Due-today text and icons (the system accent, readable accent-text shade)
-           ListStripeBrush  the ring of a colourless List; stands in for List colours in high contrast
+           ListStripeBrush  the outline of a colourless List (ring or rail square); stands in for List colours in high contrast
          Each theme takes the colours Fluent gives SystemFillColorCriticalBrush, AccentTextFillColorPrimaryBrush and
          ControlStrongStrokeColorDefaultBrush in that theme. A StaticResource alias to those brushes would resolve
          once, in the app's theme, and not follow a window's requested theme. -->
