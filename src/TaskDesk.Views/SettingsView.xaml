@@ -143,6 +143,12 @@
                 <ctk:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE946;" />
                 </ctk:SettingsCard.HeaderIcon>
+                <!-- Only while a downloaded update is pending: exits as usual, then starts the new version. -->
+                <Button Content="Restart to update"
+                        AutomationProperties.Name="Restart to update"
+                        AutomationProperties.AutomationId="RestartToUpdateButton"
+                        Visibility="{x:Bind ViewModel.IsUpdatePending, Mode=OneWay}"
+                        Command="{x:Bind ViewModel.RestartToUpdateCommand, Mode=OneTime}" />
             </ctk:SettingsCard>
             <ctk:SettingsCard Header="Log folder" Description="{x:Bind ViewModel.LogFolder, Mode=OneTime}">
                 <ctk:SettingsCard.HeaderIcon>

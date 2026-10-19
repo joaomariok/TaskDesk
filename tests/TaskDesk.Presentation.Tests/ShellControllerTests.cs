@@ -5,63 +5,6 @@ namespace TaskDesk.Presentation.Tests;
 
 public sealed class ShellControllerTests
 {
-    private sealed class FakeTray : ITrayIcon
-    {
-        public event Action? LeftClicked;
-        public event Action? OpenRequested;
-        public event Action? QuickAddRequested;
-        public event Action? SettingsRequested;
-        public event Action? ExitRequested;
-
-        public bool Shown { get; private set; }
-        public int DisposeCount { get; private set; }
-        public List<string> Hints { get; } = [];
-
-        public void Show() => Shown = true;
-        public void ShowHint(string message) => Hints.Add(message);
-        public void Dispose() => DisposeCount++;
-
-        public void ClickLeft() => LeftClicked?.Invoke();
-        public void ClickOpen() => OpenRequested?.Invoke();
-        public void ClickQuickAdd() => QuickAddRequested?.Invoke();
-        public void ClickSettings() => SettingsRequested?.Invoke();
-        public void ClickExit() => ExitRequested?.Invoke();
-    }
-
-    private sealed class FakeWindow : IMainWindow
-    {
-        public bool IsVisible { get; private set; }
-        public int FocusCount { get; private set; }
-
-        public void ShowAndFocus()
-        {
-            IsVisible = true;
-            FocusCount++;
-        }
-
-        public void Hide() => IsVisible = false;
-    }
-
-    private sealed class FakeSingleInstance : ISingleInstance
-    {
-        public bool IsFirst { get; set; } = true;
-        public int SignalCount { get; private set; }
-        public List<IReadOnlyList<string>> Signals { get; } = [];
-        public int DisposeCount { get; private set; }
-        public Action<IReadOnlyList<string>>? OnSecondLaunch { get; private set; }
-
-        public bool TryAcquire() => IsFirst;
-        public Task SignalExistingAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
-        {
-            SignalCount++;
-            Signals.Add(arguments);
-            return Task.CompletedTask;
-        }
-
-        public void Listen(Action<IReadOnlyList<string>> onSecondLaunch) => OnSecondLaunch = onSecondLaunch;
-        public void Dispose() => DisposeCount++;
-    }
-
     private sealed class FakeSettings : IShellSettingsStore
     {
         public ShellSettings Current { get; set; } = new();
@@ -77,22 +20,17 @@ public sealed class ShellControllerTests
         public void Remove(string name) => Values.Remove(name);
     }
 
-    private sealed class FakeLifetime : IAppShutdown
-    {
-        public int ShutdownCount { get; private set; }
-        public void Shutdown() => ShutdownCount++;
-    }
-
     private readonly FakeTray _tray = new();
     private readonly FakeWindow _window = new();
     private readonly FakeSingleInstance _single = new();
     private readonly FakeSettings _settings = new();
     private readonly FakeRunKey _runKey = new();
     private readonly FakeLifetime _lifetime = new();
+    private readonly FakeAppUpdates _updates = new();
     private const string Exe = @"C:\TaskDesk\TaskDesk.exe";
 
     private ShellController Create() =>
-        new(_tray, _window, _single, _settings, new AutoStartService(_runKey), _lifetime);
+        new(_tray, _window, _single, _settings, new AutoStartService(_runKey), _lifetime, updates: _updates);
 
     private async Task<ShellController> StartedAsync(bool minimized = false)
     {
@@ -384,6 +322,74 @@ public sealed class ShellControllerTests
         Assert.Equal(["flush started", "flush done", "stop host"], log);
         Assert.Equal(1, _tray.DisposeCount);
         Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task Restart_to_update_runs_the_exit_steps_then_applies_the_update()
+    {
+        var controller = await StartedAsync();
+        var flush = new TaskCompletionSource();
+        var restartsDuringStep = -1;
+        controller.AddExitStep(async () =>
+        {
+            await flush.Task;
+            restartsDuringStep = _updates.Restarts;
+        });
+
+        var restart = controller.RestartToUpdateAsync();
+        Assert.Equal(0, _updates.Restarts);
+
+        flush.SetResult();
+        await restart;
+
+        Assert.Equal(0, restartsDuringStep);
+        Assert.Equal(1, _updates.Restarts);
+        Assert.Equal(1, _tray.DisposeCount);
+    }
+
+    [Fact]
+    public async Task Tray_restart_to_update_runs_the_exit_then_applies_the_update()
+    {
+        var controller = await StartedAsync();
+        var steps = 0;
+        controller.AddExitStep(() =>
+        {
+            steps++;
+            return Task.CompletedTask;
+        });
+
+        _tray.ClickRestartToUpdate();
+        await controller.ExitAsync();
+
+        Assert.Equal(1, steps);
+        Assert.Equal(1, _updates.Restarts);
+    }
+
+    [Fact]
+    public async Task Restart_to_update_once_an_exit_has_started_only_exits()
+    {
+        var controller = await StartedAsync();
+        var flush = new TaskCompletionSource();
+        controller.AddExitStep(() => flush.Task);
+        var exit = controller.ExitAsync();
+
+        var restart = controller.RestartToUpdateAsync();
+        flush.SetResult();
+        await restart;
+        await exit;
+
+        Assert.Equal(0, _updates.Restarts);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task Exit_does_not_apply_the_update()
+    {
+        var controller = await StartedAsync();
+
+        await controller.ExitAsync();
+
+        Assert.Equal(0, _updates.Restarts);
     }
 
     [Fact]

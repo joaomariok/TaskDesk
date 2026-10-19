@@ -1,6 +1,7 @@
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Controls;
 using TaskDesk.Core.Shell;
 using TrayMessageWindow = H.NotifyIcon.Core.MessageWindow;
 
@@ -8,7 +9,7 @@ namespace TaskDesk.App.Shell;
 
 /// <summary>
 /// Tray icon built on H.NotifyIcon.WinUI: left click, the menu built by <see cref="TrayMenu"/> (Open TaskDesk,
-/// Quick add, Settings and Exit), and the Reminder balloons that stand in for toasts in sandbox mode. Create it on
+/// Quick add, Settings, Restart to update while an update is pending, and Exit), and the Reminder balloons that stand in for toasts in sandbox mode. Create it on
 /// the UI thread. The menu's items are covered in-process; the icon itself by manual checks only.
 /// </summary>
 internal sealed class WinUiTrayIcon : ITrayIcon, IBalloonTray
@@ -19,21 +20,16 @@ internal sealed class WinUiTrayIcon : ITrayIcon, IBalloonTray
     // True while the last balloon shown is a Reminder (a click on a hint balloon opens nothing).
     private bool _reminderBalloon;
     private bool _listening;
+    private bool _disposed;
 
     public WinUiTrayIcon()
     {
-        // The popup menu runs an item's command inside its own message loop; act once that has returned.
-        var menu = TrayMenu.Build(
-            () => Later(() => OpenRequested?.Invoke()),
-            () => Later(() => QuickAddRequested?.Invoke()),
-            () => Later(() => SettingsRequested?.Invoke()),
-            () => Later(() => ExitRequested?.Invoke()));
         _icon = new TaskbarIcon
         {
             ToolTipText = "TaskDesk",
             Icon = new System.Drawing.Icon(Path.Combine(AppContext.BaseDirectory, "Assets", "TaskDesk.ico")),
             ContextMenuMode = ContextMenuMode.PopupMenu,
-            ContextFlyout = menu,
+            ContextFlyout = BuildMenu(updatePending: false),
             LeftClickCommand = new ActionCommand(() => LeftClicked?.Invoke()),
             NoLeftClickDelay = true,
         };
@@ -44,6 +40,19 @@ internal sealed class WinUiTrayIcon : ITrayIcon, IBalloonTray
     public event Action? QuickAddRequested;
     public event Action? SettingsRequested;
     public event Action? ExitRequested;
+    public event Action? RestartToUpdateRequested;
+
+    /// <summary>
+    /// Adds "Restart to update" to the menu while an update is pending, or removes it; safe to call from any thread.
+    /// The popup menu reads the flyout each time it opens.
+    /// </summary>
+    public void ShowRestartToUpdate(bool updatePending) => _dispatcher.TryEnqueue(() =>
+    {
+        if (!_disposed)
+        {
+            _icon.ContextFlyout = BuildMenu(updatePending);
+        }
+    });
 
     /// <summary>Raised when the owner clicks a balloon shown by <see cref="ShowBalloon"/>.</summary>
     public event Action? BalloonClicked;
@@ -75,6 +84,7 @@ internal sealed class WinUiTrayIcon : ITrayIcon, IBalloonTray
 
     public void Dispose()
     {
+        _disposed = true;
         if (_listening)
         {
             _listening = false;
@@ -97,6 +107,14 @@ internal sealed class WinUiTrayIcon : ITrayIcon, IBalloonTray
             });
         }
     }
+
+    // The popup menu runs an item's command inside its own message loop; act once that has returned.
+    private MenuFlyout BuildMenu(bool updatePending) => TrayMenu.Build(
+        () => Later(() => OpenRequested?.Invoke()),
+        () => Later(() => QuickAddRequested?.Invoke()),
+        () => Later(() => SettingsRequested?.Invoke()),
+        () => Later(() => ExitRequested?.Invoke()),
+        updatePending ? () => Later(() => RestartToUpdateRequested?.Invoke()) : null);
 
     private void Later(Action action) => _dispatcher.TryEnqueue(() => action());
 }

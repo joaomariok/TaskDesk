@@ -132,7 +132,9 @@ public partial class App : Application
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<IImportService>(),
             sp.GetRequiredService<IImportDialogs>(),
-            sp.GetRequiredService<IClipboardService>()));
+            sp.GetRequiredService<IClipboardService>(),
+            sp.GetRequiredService<UpdateScheduler>(),
+            sp.GetRequiredService<ShellController>().RestartToUpdateAsync));
         _host = builder.Build();
 
         var logger = _host.Services.GetRequiredService<ILogger<App>>();
@@ -226,6 +228,9 @@ public partial class App : Application
         // Exit and session end can start the exit, and ShellController rejects a step added after that.
         var reminders = _host.Services.GetRequiredService<ReminderScheduler>();
         var updates = _host.Services.GetRequiredService<UpdateScheduler>();
+        // The tray's "Restart to update" shows once an update is downloaded.
+        var tray = _host.Services.GetRequiredService<WinUiTrayIcon>();
+        updates.PendingVersionChanged += () => tray.ShowRestartToUpdate(updates.PendingVersion is not null);
         StartSystemHooks(shell, reminders, notifications);
 
         // The last exit step: stop the update checks (a running download is cancelled), release the global hotkey,

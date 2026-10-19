@@ -33,6 +33,45 @@ public sealed class TrayMenuTests
     }
 
     [UITestMethod]
+    [DataRow("Open TaskDesk")]
+    [DataRow("Quick add")]
+    [DataRow("Settings")]
+    [DataRow("Restart to update")]
+    [DataRow("Exit")]
+    public void With_an_update_pending_clicking_an_item_in_the_native_popup_menu_runs_that_item_only(string text)
+    {
+        var ran = new List<string>();
+        var menu = TrayMenu.Build(
+            () => ran.Add("Open TaskDesk"), () => ran.Add("Quick add"), () => ran.Add("Settings"), () => ran.Add("Exit"),
+            restartToUpdate: () => ran.Add("Restart to update"));
+        var item = menu.Items.OfType<MenuFlyoutItem>().Single(i => i.Text == text);
+
+        Assert.IsNotNull(item.Command, $"'{text}' has no command, so the tray's popup menu cannot run it.");
+        Assert.IsTrue(item.Command.CanExecute(item.CommandParameter));
+        item.Command.Execute(item.CommandParameter);
+
+        CollectionAssert.AreEqual(new[] { text }, ran);
+    }
+
+    [UITestMethod]
+    public void With_an_update_pending_Restart_to_update_sits_above_Exit()
+    {
+        var menu = TrayMenu.Build(() => { }, () => { }, () => { }, () => { }, restartToUpdate: () => { });
+
+        CollectionAssert.AreEqual(
+            new[] { "Open TaskDesk", "Quick add", "Settings", "-", "Restart to update", "Exit" },
+            menu.Items.Select(i => i is MenuFlyoutItem item ? item.Text : i is MenuFlyoutSeparator ? "-" : "?").ToArray());
+    }
+
+    [UITestMethod]
+    public void Without_an_update_pending_the_menu_has_no_Restart_to_update()
+    {
+        var menu = TrayMenu.Build(() => { }, () => { }, () => { }, () => { }, restartToUpdate: null);
+
+        Assert.IsFalse(menu.Items.OfType<MenuFlyoutItem>().Any(i => i.Text == "Restart to update"));
+    }
+
+    [UITestMethod]
     public void The_menu_reads_Open_Quick_add_Settings_then_Exit_after_a_separator()
     {
         var menu = TrayMenu.Build(() => { }, () => { }, () => { }, () => { });

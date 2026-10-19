@@ -333,6 +333,7 @@ public sealed class ReminderActivationTests
         public event Action? QuickAddRequested;
         public event Action? SettingsRequested;
         public event Action? ExitRequested;
+        public event Action? RestartToUpdateRequested;
 #pragma warning restore CS0067
 
         public void Show()

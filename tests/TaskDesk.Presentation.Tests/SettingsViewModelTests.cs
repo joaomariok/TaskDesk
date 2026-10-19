@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Shell;
 
@@ -174,6 +175,86 @@ public sealed class SettingsViewModelTests
         vm.OpenDataFolderCommand.Execute(null);
 
         Assert.Equal([_paths.DataDirectory], _opener.Opened);
+    }
+
+    private static UpdateScheduler NewScheduler(FakeAppUpdates updates) =>
+        new(updates, RuntimeMode.Normal, new FakeTimeProvider(new DateTimeOffset(2026, 10, 20, 12, 0, 0, TimeSpan.Zero)));
+
+    private SettingsViewModel CreateWithUpdates(UpdateScheduler scheduler, Func<Task>? restartToUpdate = null) =>
+        new(_store, new AutoStartService(_runKey), _theme, _opener, _paths, Exe, "1.2.3", Hotkeys,
+            updates: scheduler, restartToUpdate: restartToUpdate);
+
+    [Fact]
+    public async Task Restart_to_update_is_hidden_with_nothing_pending_and_shown_once_an_update_is_pending()
+    {
+        var updates = new FakeAppUpdates { Available = "1.3.0" };
+        using var scheduler = NewScheduler(updates);
+        var vm = CreateWithUpdates(scheduler);
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        Assert.False(vm.IsUpdatePending);
+        Assert.Null(vm.PendingUpdateVersion);
+
+        scheduler.Start();
+        await scheduler.CurrentCheck;
+
+        Assert.True(vm.IsUpdatePending);
+        Assert.Equal("1.3.0", vm.PendingUpdateVersion);
+        Assert.Contains(nameof(SettingsViewModel.IsUpdatePending), changed);
+    }
+
+    [Fact]
+    public async Task An_update_already_pending_shows_restart_to_update_when_Settings_opens()
+    {
+        var updates = new FakeAppUpdates { Available = "1.3.0" };
+        using var scheduler = NewScheduler(updates);
+        scheduler.Start();
+        await scheduler.CurrentCheck;
+
+        var vm = CreateWithUpdates(scheduler);
+
+        Assert.True(vm.IsUpdatePending);
+        Assert.Equal("1.3.0", vm.PendingUpdateVersion);
+    }
+
+    [Fact]
+    public async Task A_stopped_Settings_no_longer_follows_the_pending_update()
+    {
+        var updates = new FakeAppUpdates { Available = "1.3.0" };
+        using var scheduler = NewScheduler(updates);
+        var vm = CreateWithUpdates(scheduler);
+
+        vm.Stop();
+        scheduler.Start();
+        await scheduler.CurrentCheck;
+
+        Assert.False(vm.IsUpdatePending);
+    }
+
+    [Fact]
+    public async Task Restart_to_update_runs_the_exit_path_before_asking_the_port_to_apply()
+    {
+        var updates = new FakeAppUpdates { Available = "1.3.0" };
+        using var scheduler = NewScheduler(updates);
+        var lifetime = new FakeLifetime();
+        var shell = new ShellController(
+            new FakeTray(), new FakeWindow(), new FakeSingleInstance(), _store, new AutoStartService(_runKey), lifetime,
+            updates: updates);
+        var restartsDuringExit = -1;
+        shell.AddExitStep(() =>
+        {
+            restartsDuringExit = updates.Restarts;
+            return Task.CompletedTask;
+        });
+        var vm = CreateWithUpdates(scheduler, shell.RestartToUpdateAsync);
+        scheduler.Start();
+        await scheduler.CurrentCheck;
+
+        await vm.RestartToUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, restartsDuringExit);
+        Assert.Equal(1, updates.Restarts);
     }
 
     private static readonly Hotkey Custom = new(HotkeyModifiers.Ctrl | HotkeyModifiers.Shift, 'K');

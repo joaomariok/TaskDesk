@@ -8,7 +8,10 @@ using TaskDesk.Core.Shell;
 
 namespace TaskDesk.Presentation;
 
-/// <summary>Backs the Settings window. Every change is applied and persisted immediately.</summary>
+/// <summary>
+/// Backs the Settings window. Every change is applied and persisted immediately. Follows the downloaded update
+/// until <see cref="Stop"/>, so "Restart to update" shows only while one is pending.
+/// </summary>
 public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly IShellSettingsStore _store;
@@ -24,6 +27,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IImportService? _imports;
     private readonly IImportDialogs? _importDialogs;
     private readonly IClipboardService? _clipboard;
+    private readonly UpdateScheduler? _updates;
+    private readonly Func<Task>? _restartToUpdate;
+
+    // The UI thread in the app, where the window creates this; none in tests.
+    private readonly SynchronizationContext? _uiContext = SynchronizationContext.Current;
     private readonly bool _loading = true;
 
     public SettingsViewModel(
@@ -41,9 +49,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         TimeProvider? clock = null,
         IImportService? imports = null,
         IImportDialogs? importDialogs = null,
-        IClipboardService? clipboard = null)
+        IClipboardService? clipboard = null,
+        UpdateScheduler? updates = null,
+        Func<Task>? restartToUpdate = null)
     {
         _clipboard = clipboard;
+        _updates = updates;
+        _restartToUpdate = restartToUpdate;
         _imports = imports;
         _importDialogs = importDialogs;
         _exports = exports;
@@ -67,6 +79,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         _defaultReminderTime = settings.DefaultReminderTime.ToTimeSpan();
         _hotkeyText = FormatHotkey(settings.Hotkey);
         _hotkeyError = hotkeys.Error;
+        if (updates is not null)
+        {
+            _pendingUpdateVersion = updates.PendingVersion;
+            updates.PendingVersionChanged += OnPendingVersionChanged;
+        }
+
         _loading = false;
     }
 
@@ -74,6 +92,41 @@ public sealed partial class SettingsViewModel : ObservableObject
     public static IReadOnlyList<CloseBehavior> CloseBehaviors { get; } = Enum.GetValues<CloseBehavior>();
 
     public string Version { get; }
+
+    /// <summary>The downloaded version that "Restart to update" applies; null when none is pending.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUpdatePending))]
+    private string? _pendingUpdateVersion;
+
+    /// <summary>True while an update is downloaded: "Restart to update" shows.</summary>
+    public bool IsUpdatePending => PendingUpdateVersion is not null;
+
+    /// <summary>Stops following the pending update; the Settings window calls it when it closes.</summary>
+    public void Stop()
+    {
+        if (_updates is not null)
+        {
+            _updates.PendingVersionChanged -= OnPendingVersionChanged;
+        }
+    }
+
+    /// <summary>Runs the app's exit (saves the pending edit), then restarts into the downloaded update.</summary>
+    [RelayCommand]
+    private Task RestartToUpdateAsync() => _restartToUpdate?.Invoke() ?? Task.CompletedTask;
+
+    // Raised on the update check's thread: the property changes on the UI thread.
+    private void OnPendingVersionChanged()
+    {
+        var version = _updates!.PendingVersion;
+        if (_uiContext is null)
+        {
+            PendingUpdateVersion = version;
+        }
+        else
+        {
+            _uiContext.Post(_ => PendingUpdateVersion = version, null);
+        }
+    }
     public string DataFolder { get; }
     public string LogFolder { get; }
 

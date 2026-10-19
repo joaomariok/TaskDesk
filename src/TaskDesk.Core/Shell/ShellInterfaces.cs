@@ -9,6 +9,9 @@ public interface ITrayIcon : IDisposable
     event Action? SettingsRequested;
     event Action? ExitRequested;
 
+    /// <summary>Raised by the menu's "Restart to update", which it shows only while an update is pending.</summary>
+    event Action? RestartToUpdateRequested;
+
     void Show();
 
     /// <summary>Shows a transient balloon/notification next to the icon.</summary>

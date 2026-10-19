@@ -22,6 +22,8 @@ public sealed partial class SettingsWindow : Window
         InitializeComponent();
         View = new SettingsView(viewModel);
         Content = View;
+        // The view model follows the pending update until the window goes.
+        Closed += (_, _) => viewModel.Stop();
 
         var scale = WindowScale.Of(this);
         var presenter = OverlappedPresenter.Create();

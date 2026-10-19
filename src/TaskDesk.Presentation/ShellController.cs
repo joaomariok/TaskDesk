@@ -5,7 +5,10 @@ using TaskDesk.Core.Shell;
 
 namespace TaskDesk.Presentation;
 
-/// <summary>Ties the tray icon, main window, single-instance guard and auto-start together.</summary>
+/// <summary>
+/// Ties the tray icon, main window, single-instance guard and auto-start together, and restarts into a downloaded
+/// update through <see cref="IAppUpdates"/> after the normal exit.
+/// </summary>
 public sealed class ShellController(
     ITrayIcon tray,
     IMainWindow window,
@@ -13,7 +16,8 @@ public sealed class ShellController(
     IShellSettingsStore settingsStore,
     AutoStartService autoStart,
     IAppShutdown lifetime,
-    ILogger<ShellController>? logger = null) : IDisposable
+    ILogger<ShellController>? logger = null,
+    IAppUpdates? updates = null) : IDisposable
 {
     public const string TrayHint = "TaskDesk is still running in the tray";
 
@@ -29,6 +33,7 @@ public sealed class ShellController(
     private bool _activationsClosed;
     private Task? _exit;
     private bool _exiting;
+    private bool _restartToUpdate;
     private bool _disposed;
 
     /// <summary>Raised by the tray menu's "Quick add"; the App opens the quick-add window.</summary>
@@ -63,6 +68,7 @@ public sealed class ShellController(
         tray.QuickAddRequested += OnQuickAddRequested;
         tray.SettingsRequested += OnSettingsRequested;
         tray.ExitRequested += Exit;
+        tray.RestartToUpdateRequested += RestartToUpdate;
         tray.Show();
 
         if (!minimized)
@@ -223,6 +229,29 @@ public sealed class ShellController(
         _exitSteps.Add(step);
     }
 
+    /// <summary>Starts the restart without waiting for it; see <see cref="RestartToUpdateAsync"/>.</summary>
+    public void RestartToUpdate() => _ = RestartToUpdateAsync();
+
+    /// <summary>
+    /// Runs the exit (see <see cref="ExitAsync"/>: the Reminder activations, then every exit step, which saves the
+    /// pending edit), then applies the downloaded update, which ends the process and starts the new version. Once
+    /// an exit has started it only returns that exit. When applying fails, the app shuts down as usual.
+    /// </summary>
+    public Task RestartToUpdateAsync()
+    {
+        if (updates is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (_exit is null)
+        {
+            _restartToUpdate = true;
+        }
+
+        return ExitAsync();
+    }
+
     /// <summary>Starts the exit without waiting for it; see <see cref="ExitAsync"/>.</summary>
     public void Exit() => _ = ExitAsync();
 
@@ -262,6 +291,19 @@ public sealed class ShellController(
         }
 
         Dispose();
+        if (_restartToUpdate)
+        {
+            try
+            {
+                // Ends the process at once when it works.
+                updates!.RestartToApply();
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                _logger.LogError(ex, "Applying the update failed; exiting");
+            }
+        }
+
         lifetime.Shutdown();
     }
 
@@ -278,6 +320,7 @@ public sealed class ShellController(
         tray.QuickAddRequested -= OnQuickAddRequested;
         tray.SettingsRequested -= OnSettingsRequested;
         tray.ExitRequested -= Exit;
+        tray.RestartToUpdateRequested -= RestartToUpdate;
         tray.Dispose();
         singleInstance.Dispose();
     }
