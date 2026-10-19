@@ -63,6 +63,21 @@ public sealed partial class InstallerGuardrailTests
             StringComparison.Ordinal);
     }
 
+    // Velopack applies a downloaded update at start unless told not to; a sandbox-mode run of an installed copy must
+    // leave a pending update pending (#92).
+    [Fact]
+    public void App_entry_point_applies_downloaded_updates_on_start_only_when_the_runtime_mode_manages_updates()
+    {
+        var program = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "TaskDesk.App", "Program.cs"));
+        var main = MainFirstStatement().Match(program);
+
+        Assert.True(main.Success, "Program.cs has no Main method.");
+        Assert.Contains(
+            ".SetAutoApplyOnStartup(RuntimeMode.FromEnvironment().ManagesUpdates)",
+            main.Groups["first"].Value,
+            StringComparison.Ordinal);
+    }
+
     [GeneratedRegex(@"\$OutputDir\s*=\s*Join-Path\s+\$repoRoot\s+'(?<value>[^']+)'")]
     private static partial Regex DefaultOutputDir();
 

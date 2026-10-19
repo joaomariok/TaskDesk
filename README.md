@@ -33,6 +33,14 @@ If you ran TaskDesk from a folder you copied by hand (for example `%LOCALAPPDATA
 
 The installed TaskDesk uses the same data, and its first start points "Start with Windows" at the installed exe. Delete the old folder before you start the old copy again, or it takes the Run key back.
 
+## Updates
+
+An installed TaskDesk keeps itself up to date. It checks the [GitHub Releases](https://github.com/joaomariok/TaskDesk/releases) when it starts and every 6 hours after that, and downloads a newer version in the background, without asking. The downloaded version is installed the next time TaskDesk starts, usually at your next logon. Your data is not touched.
+
+A check that fails (offline, GitHub down) shows nothing: it is logged and tried again 6 hours later. A finished download is logged too, in the day's log under `logs\`.
+
+Only an installed copy updates: a `dotnet run`, a Debug build or a copied publish folder never checks. Sandbox mode (`TASKDESK_DATA_DIR` set, see [Data location](#data-location)) never checks, downloads or installs an update, even with `TASKDESK_SANDBOX=0`, and an update already downloaded stays waiting for the next normal start. The `Runtime mode` line in the startup log says `updates on` or `updates off`.
+
 ## Uninstall
 
 Uninstall TaskDesk from **Settings > Apps > Installed apps** (Apps & features). Exit TaskDesk from its tray icon first, so an edit in progress is saved; uninstalling stops a running TaskDesk without saving it. Uninstalling removes the install folder `%LOCALAPPDATA%\TaskDesk.App`, the Start-menu shortcut, the "Start with Windows" entry (only when it points at the installed exe) and the app's Windows notification registration.
@@ -89,7 +97,7 @@ Settings has "Open data folder", Export, Import and "Back up now".
 
 To use another folder (for example to try the app without touching your real data), set the environment variable `TASKDESK_DATA_DIR` to that folder before launching. When it is unset or blank the default location is used.
 
-Setting `TASKDESK_DATA_DIR` to a non-blank value also turns on sandbox mode, so a trial run leaves the rest of the machine alone: the Run key is never read or written, so the "Start with Windows" setting has no effect, and reminders use tray balloons instead of registering Windows app notifications (no AppUserModelId keys, COM class or icon file are left behind). The `Runtime mode` line in the startup log shows which mode is active. To register Windows app notifications while using another data folder, also set `TASKDESK_SANDBOX=0`; that never re-enables the Run key. In a normal run, turning "Start with Windows" off removes the Run entry only if it points at the running exe.
+Setting `TASKDESK_DATA_DIR` to a non-blank value also turns on sandbox mode, so a trial run leaves the rest of the machine alone: the Run key is never read or written, so the "Start with Windows" setting has no effect, and reminders use tray balloons instead of registering Windows app notifications (no AppUserModelId keys, COM class or icon file are left behind), and updates are never checked, downloaded or installed. The `Runtime mode` line in the startup log shows which mode is active. To register Windows app notifications while using another data folder, also set `TASKDESK_SANDBOX=0`; that never re-enables the Run key. In a normal run, turning "Start with Windows" off removes the Run entry only if it points at the running exe.
 
 ## Windows App SDK
 

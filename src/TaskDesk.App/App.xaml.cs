@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -96,6 +95,8 @@ public partial class App : Application
         // Toasts with the balloon fallback, or the balloon only in sandbox mode (no toast registration).
         builder.Services.AddTaskDeskNotifications(mode, VelopackInstall.IsInstalled);
         builder.Services.AddSingleton<ReminderScheduler>();
+        builder.Services.AddSingleton<IAppUpdates, VelopackAppUpdates>();
+        builder.Services.AddSingleton<UpdateScheduler>();
         builder.Services.AddSingleton<ReminderActivationHandler>();
         builder.Services.AddSingleton(sp => new ReminderActivationRouter(
             sp.GetRequiredService<MainWindow>().DispatcherQueue,
@@ -123,7 +124,7 @@ public partial class App : Application
             sp.GetRequiredService<IFolderOpener>(),
             sp.GetRequiredService<IAppPaths>(),
             Environment.ProcessPath ?? "",
-            AppVersion(),
+            sp.GetRequiredService<IAppUpdates>().CurrentVersion,
             sp.GetRequiredService<HotkeyService>(),
             sp.GetRequiredService<IBackupService>(),
             sp.GetRequiredService<IExportService>(),
@@ -224,12 +225,14 @@ public partial class App : Application
         // Every exit step is added here, with no await since the first: from shell.StartAsync on, the tray's
         // Exit and session end can start the exit, and ShellController rejects a step added after that.
         var reminders = _host.Services.GetRequiredService<ReminderScheduler>();
+        var updates = _host.Services.GetRequiredService<UpdateScheduler>();
         StartSystemHooks(shell, reminders, notifications);
 
-        // The last exit step: release the global hotkey, then the shell (tray,
-        // single-instance guard) and the host, which closes the database and the log file.
+        // The last exit step: stop the update checks (a running download is cancelled), release the global hotkey,
+        // then the shell (tray, single-instance guard) and the host, which closes the database and the log file.
         shell.AddExitStep(async () =>
         {
+            updates.Dispose();
             hotkeys.Dispose();
             shell.Dispose();
             if (host is IAsyncDisposable asyncHost)
@@ -244,12 +247,17 @@ public partial class App : Application
 
         // The launch's activation and the Reminder checks start only while no exit has started: the exit disposes
         // what they use, and it waits for the activation, so a Mark done or Snooze from the toast is kept. The
-        // Reminder checks run on start, every 30 s, on every Task change and on resume from sleep (SPEC 7.4).
+        // Reminder checks run on start, every 30 s, on every Task change and on resume from sleep (SPEC 7.4). An
+        // installed copy checks for updates on start and every 6 hours, unless the runtime mode turns updates off.
         await shell.LaunchAsync(
             minimized,
             exePath,
             launch is null ? null : exitStarted => activations.HandleAsync(launch, exitStarted),
-            () => _ = reminders.StartAsync());
+            () =>
+            {
+                _ = reminders.StartAsync();
+                updates.Start();
+            });
     }
 
     // Session end and resume from sleep reach top-level windows only, so they get a hidden one of their own.
@@ -385,10 +393,6 @@ public partial class App : Application
             _logger?.LogError(ex, "The Settings window could not open");
         }
     }
-
-    private static string AppVersion() =>
-        (Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-         ?? "0.0.0").Split('+')[0];
 
     private const int AsfwAny = -1;
 

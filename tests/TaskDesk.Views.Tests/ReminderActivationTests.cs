@@ -23,7 +23,7 @@ namespace TaskDesk.Views.Tests;
 [TestClass]
 public sealed class ReminderActivationTests
 {
-    private static readonly RuntimeMode Sandbox = new(ManagesAutoStart: false, RegistersNotifications: false);
+    private static readonly RuntimeMode Sandbox = new(ManagesAutoStart: false, RegistersNotifications: false, ManagesUpdates: false);
 
     public TestContext TestContext { get; set; } = null!;
 

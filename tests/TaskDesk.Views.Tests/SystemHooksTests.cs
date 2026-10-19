@@ -122,7 +122,7 @@ public sealed partial class SystemHooksTests
         Assert.IsInstanceOfType<NotificationDelivery>(services.GetRequiredService<INotificationService>());
     }
 
-    private static readonly RuntimeMode Sandbox = new(ManagesAutoStart: false, RegistersNotifications: false);
+    private static readonly RuntimeMode Sandbox = new(ManagesAutoStart: false, RegistersNotifications: false, ManagesUpdates: false);
 
     internal static ServiceProvider NotificationsFor(RuntimeMode mode, IBalloonTray tray)
     {
