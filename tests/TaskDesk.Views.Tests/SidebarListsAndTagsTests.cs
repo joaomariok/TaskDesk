@@ -20,7 +20,7 @@ namespace TaskDesk.Views.Tests;
 
 /// <summary>
 /// The Lists and Tags under the Smart Views: one scroll area with the Lists (colour dot or hollow ring, open count),
-/// "+ New List" and the Tags; the rail's List initials in their colour ring; the context menu's Rename, Colour and
+/// "+ New List" and the Tags; the rail's Lists as squares of their colour; the context menu's Rename, Colour and
 /// Delete through the dialogs; a Tag filtering the page; the order a drag leaves saved and the insertion line that
 /// shows its gap.
 /// </summary>
@@ -65,7 +65,7 @@ public sealed class SidebarListsAndTagsTests
     }
 
     [UITestMethod]
-    public async Task A_List_whose_colour_is_removed_shows_the_hollow_ring_in_the_sidebar_and_the_rail()
+    public async Task A_List_whose_colour_is_removed_shows_it_hollow_in_the_sidebar_and_the_rail()
     {
         var ct = TestContext.CancellationToken;
         var colours = await ThemeColours.ResolveAsync(ElementTheme.Light, ["ListStripeBrush"], ct);
@@ -90,12 +90,14 @@ public sealed class SidebarListsAndTagsTests
             lists.Lists[0].ColorHex = "#D13438";
             window.Navigation.SetRail(true);
             var railRow = (await RowsAsync(window, "RailListsList", 1))[0];
-            Assert.AreEqual(Color.FromArgb(255, 0xD1, 0x34, 0x38), Colour(VisibleEllipse(railRow).Stroke));
+            Assert.AreEqual(Color.FromArgb(255, 0xD1, 0x34, 0x38), Colour(VisibleRectangle(railRow).Fill));
 
             lists.Lists[0].ColorHex = null;
 
-            Assert.AreEqual(colours["ListStripeBrush"], Colour(VisibleEllipse(railRow).Stroke),
-                "The rail's ring keeps the List's old colour.");
+            Assert.AreEqual(colours["ListStripeBrush"], Colour(VisibleRectangle(railRow).Stroke),
+                "The rail's square keeps the List's old colour.");
+            Assert.IsTrue(VisualTree.Descendants(railRow).OfType<Rectangle>().All(r => r.Fill is null || Colour(r.Fill) == Colors.Transparent),
+                "A Rectangle still holds the List's old colour.");
         }
         finally
         {
@@ -233,7 +235,7 @@ public sealed class SidebarListsAndTagsTests
     }
 
     [UITestMethod]
-    public async Task In_the_rail_each_List_shows_its_initial_in_a_ring_of_its_colour_and_Tags_move_behind_a_hash_button()
+    public async Task In_the_rail_each_List_shows_a_square_of_its_colour_and_Tags_move_behind_a_hash_button()
     {
         var ct = TestContext.CancellationToken;
         var colours = await ThemeColours.ResolveAsync(ElementTheme.Light, ["ListStripeBrush"], ct);
@@ -252,12 +254,13 @@ public sealed class SidebarListsAndTagsTests
             window.Navigation.SetRail(true);
 
             var rows = await RowsAsync(window, "RailListsList", 3);
-            CollectionAssert.AreEqual(new[] { "W", "G", "H" },
-                rows.Select(r => VisualTree.Descendants(r).OfType<TextBlock>().Single(t => t.Visibility == Visibility.Visible).Text).ToList());
+            Assert.IsFalse(rows.Any(r => VisualTree.Descendants(r).OfType<TextBlock>().Any(IsShown)), "Rail Lists show no text.");
             CollectionAssert.AreEqual(new[] { "Work", "groceries", "Home" }, rows.Select(AutomationProperties.GetName).ToList(),
                 "Rail Lists keep their names.");
-            Assert.AreEqual(Color.FromArgb(255, 0xD1, 0x34, 0x38), Colour(VisibleEllipse(rows[2]).Stroke));
-            Assert.AreEqual(colours["ListStripeBrush"], Colour(VisibleEllipse(rows[0]).Stroke));
+            Assert.AreEqual(Color.FromArgb(255, 0xD1, 0x34, 0x38), Colour(VisibleRectangle(rows[2]).Fill), "A coloured List's square is filled.");
+            Assert.AreEqual(colours["ListStripeBrush"], Colour(VisibleRectangle(rows[0]).Stroke));
+            Assert.IsTrue(VisibleRectangle(rows[0]).Fill is null || Colour(VisibleRectangle(rows[0]).Fill) == Colors.Transparent,
+                "A List without a colour has a hollow square.");
             Assert.IsFalse(IsShown(WithId(window.Content, "NewListButton")!), "The rail has no '+ New List'.");
             Assert.IsFalse(IsShown(WithId(window.Content, "TagList")!), "The rail shows the Tags behind its # button.");
             Assert.IsTrue(IsShown(WithId(window.Content, "RailTagsButton")!), "The rail has a # button for the Tags.");
@@ -708,11 +711,14 @@ public sealed class SidebarListsAndTagsTests
                 Assert.AreEqual(highlight.ActualWidth, row.ActualWidth, 1, $"{name}: row width");
                 Assert.AreEqual(highlight.ActualHeight, row.ActualHeight, 1, $"{name}: row height");
 
-                var marker = (FrameworkElement)VisualTree.Descendants(row).OfType<Grid>()
-                    .First(g => VisualTree.Descendants(g).OfType<Ellipse>().Any());
-                Assert.AreEqual(icon.ActualHeight, marker.ActualHeight, 1, $"{name}: marker size");
-                Assert.AreEqual(LeftOf(icon, root) + icon.ActualWidth / 2, LeftOf(marker, root) + marker.ActualWidth / 2, 1,
-                    $"{name}: marker centre");
+                // The List's square: the icon's size, centred where the icon is centred in its row.
+                var square = VisibleRectangle(row);
+                Assert.AreEqual(icon.ActualWidth, square.ActualWidth, 0.5, $"{name}: square width");
+                Assert.AreEqual(icon.ActualHeight, square.ActualHeight, 0.5, $"{name}: square height");
+                Assert.AreEqual(LeftOf(icon, root) + icon.ActualWidth / 2, LeftOf(square, root) + square.ActualWidth / 2, 0.5,
+                    $"{name}: square's horizontal centre");
+                Assert.AreEqual(TopOf(icon, highlight) + icon.ActualHeight / 2, TopOf(square, row) + square.ActualHeight / 2, 0.5,
+                    $"{name}: square's vertical centre in its row");
             }
         }
         finally
@@ -764,6 +770,9 @@ public sealed class SidebarListsAndTagsTests
 
     private static Ellipse VisibleEllipse(DependencyObject row) =>
         VisualTree.Descendants(row).OfType<Ellipse>().Single(e => e.Visibility == Visibility.Visible);
+
+    private static Rectangle VisibleRectangle(DependencyObject row) =>
+        VisualTree.Descendants(row).OfType<Rectangle>().Single(r => r.Visibility == Visibility.Visible);
 
     private static TextBlock TextIn(DependencyObject row, string text) =>
         VisualTree.Descendants(row).OfType<TextBlock>().Single(t => t.Text == text);

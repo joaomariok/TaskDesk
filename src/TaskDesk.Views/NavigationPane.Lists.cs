@@ -16,7 +16,7 @@ namespace TaskDesk.Views;
 
 // The Lists and Tags under the Smart Views: Lists (drag to reorder) with "+ New List", then Tags. Rename, Colour
 // and Delete live on the context menu of each List and Tag (right click, Shift+F10 or the Menu key); Delete on a
-// focused List or Tag starts its deletion with the usual confirmation. In the rail the Lists show their initials
+// focused List or Tag starts its deletion with the usual confirmation. In the rail the Lists show their colour squares
 // and the Tags move behind the # button.
 public sealed partial class NavigationPane
 {
@@ -40,7 +40,7 @@ public sealed partial class NavigationPane
     public static Visibility ShownWithColour(string? colorHex) =>
         ListColour.TryParse(colorHex, out _) ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>Shown only for a List without a colour (the hollow ring).</summary>
+    /// <summary>Shown only for a List without a colour (the hollow ring or square).</summary>
     public static Visibility ShownWithoutColour(string? colorHex) =>
         ListColour.TryParse(colorHex, out _) ? Visibility.Collapsed : Visibility.Visible;
 
@@ -185,7 +185,7 @@ public sealed partial class NavigationPane
         }
     }
 
-    // The rail (the closed compact pane) shows each List as its initial in a ring, no "+ New List", and the Tags
+    // The rail (the closed compact pane) shows each List as a square of its colour, no "+ New List", and the Tags
     // behind the # button; the full pane, also as the rail's overlay, shows everything.
     private void ShowCompact(bool compact)
     {

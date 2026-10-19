@@ -33,13 +33,14 @@
             <Setter Property="Padding" Value="12,0,12,0" />
         </Style>
         <!-- The rail's List row: a compact Smart View item's footprint (NavigationViewItemButtonMargin and
-             NavigationViewItemOnLeftMinHeight), with the initial's ring where the Smart Views' icons sit. -->
+             NavigationViewItemOnLeftMinHeight), with the List's square where the Smart Views' icons sit. -->
         <Style x:Key="RailListItem" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="MinHeight" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
             <Setter Property="Height" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
             <Setter Property="Margin" Value="{ThemeResource NavigationViewItemButtonMargin}" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Padding" Value="0" />
         </Style>
         <Style x:Key="SidebarSectionHeader" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongText}">
@@ -68,20 +69,18 @@
                            Visibility="{x:Bind local:NavigationPane.ShownAboveZero(OpenTaskCount), Mode=OneWay, FallbackValue=Collapsed}" />
             </Grid>
         </DataTemplate>
-        <!-- A List in the rail: its initial inside a ring of its colour (the stripe colour for none), the size of a
-             Smart View's icon (NavigationViewItemOnLeftIconBoxHeight). -->
+        <!-- A List in the rail: a rounded square of its colour (hollow, in the stripe colour, for none), the size of a
+             Smart View's icon (NavigationViewItemOnLeftIconBoxHeight) and centred where the icons sit. -->
         <DataTemplate x:Key="RailListRowTemplate" x:DataType="presentation:ListItemViewModel">
             <Grid Width="{ThemeResource NavigationViewItemOnLeftIconBoxHeight}"
                   Height="{ThemeResource NavigationViewItemOnLeftIconBoxHeight}"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"
                   ToolTipService.ToolTip="{x:Bind Name, Mode=OneWay}">
-                <Ellipse StrokeThickness="1"
-                         Stroke="{x:Bind local:NavigationPane.ColourBrush(ColorHex), Mode=OneWay, FallbackValue=Transparent}"
-                         Visibility="{x:Bind local:NavigationPane.ShownWithColour(ColorHex), Mode=OneWay, FallbackValue=Collapsed}" />
-                <Ellipse StrokeThickness="1" Stroke="{ThemeResource ListStripeBrush}"
-                         Visibility="{x:Bind local:NavigationPane.ShownWithoutColour(ColorHex), Mode=OneWay, FallbackValue=Visible}" />
-                <TextBlock Style="{StaticResource CaptionText}" FontSize="9" FontWeight="SemiBold"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Text="{x:Bind Initial, Mode=OneWay}" />
+                <Rectangle RadiusX="4" RadiusY="4"
+                           Fill="{x:Bind local:NavigationPane.ColourBrush(ColorHex), Mode=OneWay, FallbackValue=Transparent}"
+                           Visibility="{x:Bind local:NavigationPane.ShownWithColour(ColorHex), Mode=OneWay, FallbackValue=Collapsed}" />
+                <Rectangle RadiusX="4" RadiusY="4" StrokeThickness="1.5" Stroke="{ThemeResource ListStripeBrush}"
+                           Visibility="{x:Bind local:NavigationPane.ShownWithoutColour(ColorHex), Mode=OneWay, FallbackValue=Visible}" />
             </Grid>
         </DataTemplate>
         <!-- A Tag: "#" in the icon column, then its name. -->
@@ -200,7 +199,7 @@
         </NavigationView.MenuItems>
         <!-- Lists, "+ New List" and Tags: one scroll area right under the Smart Views (the pane footer, whose row
              takes the rest of the pane; see FitFooterUnderMenuItems). Native lists keep the UI tests' ids and give
-             drag reordering and the rows' context menus. In the rail the Lists show their initials and the Tags
+             drag reordering and the rows' context menus. In the rail the Lists show their colour squares and the Tags
              move behind the # button. -->
         <NavigationView.PaneFooter>
             <ScrollViewer x:Name="SidebarScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
