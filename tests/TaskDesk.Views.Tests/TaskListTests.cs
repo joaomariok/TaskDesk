@@ -351,8 +351,12 @@ public sealed class TaskListTests
     private static void Toggle(CheckBox check) =>
         ((ToggleButtonAutomationPeer)FrameworkElementAutomationPeer.CreatePeerForElement(check)).Toggle();
 
+    // The rows the list shows; containers it keeps for recycling stay in the visual tree but hold no item.
     private static List<string> RowNames(ListView list) =>
-        [.. VisualTree.Descendants(list).OfType<ListViewItem>().Select(AutomationProperties.GetName)];
+        [.. VisualTree.Descendants(list).OfType<ListViewItem>()
+            .Where(c => list.IndexFromContainer(c) >= 0)
+            .OrderBy(list.IndexFromContainer)
+            .Select(AutomationProperties.GetName)];
 
     // Waits until the named Task list shows exactly these rows (by their accessible names), and returns it.
     private async Task<ListView> WaitForRowsAsync(MainView view, string name, params string[] titles)
