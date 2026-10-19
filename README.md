@@ -119,6 +119,7 @@ Sandbox mode keeps the test run away from your Run key. Measured results and met
 ## Developer scripts
 
 - `scripts/gate.ps1`: build with warnings as errors, then run all tests; exit 0 is green.
+- Workflow audit: CI's `workflow-audit` job runs zizmor on `.github/workflows` and fails on any finding; run it locally with `uvx zizmor@1.30.1 --offline .github/workflows`. The gate does not need it.
 - `scripts/pack-installer.ps1`: build a local `Setup.exe` and release packages for a version (`-Version <x.y.z> [-OutputDir <dir>] [-DownloadFrom <repo url>]`), see [Install](#install). The gate does not need it.
 - `scripts/integrate-worktree.ps1`: apply a worktree's uncommitted diff onto a clean checkout and run the gate (see `docs/agents/implement-spec.md`).
 - `scripts/measure-startup.ps1`: measure cold start and `--minimized` working set of a publish against fresh sample data (`-Publish <dir> [-Runs 7] [-Tasks 5000] [-Label <name>]`).

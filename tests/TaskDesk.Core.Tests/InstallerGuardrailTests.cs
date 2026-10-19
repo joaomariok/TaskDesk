@@ -189,7 +189,8 @@ public sealed partial class InstallerGuardrailTests
     {
         var workflow = ReadWorkflow();
 
-        Assert.Contains("-Version ${{ steps.version.outputs.version }}", workflow, StringComparison.Ordinal);
+        Assert.Contains("RELEASE_VERSION: ${{ steps.version.outputs.version }}", workflow, StringComparison.Ordinal);
+        Assert.Contains("-Version $env:RELEASE_VERSION", workflow, StringComparison.Ordinal);
         Assert.Contains("-DownloadFrom https://github.com/${{ github.repository }}", workflow,
             StringComparison.Ordinal);
         Assert.DoesNotContain("vpk -- pack", workflow, StringComparison.Ordinal);
