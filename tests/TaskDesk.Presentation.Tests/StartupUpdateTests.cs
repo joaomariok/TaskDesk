@@ -20,7 +20,28 @@ public class StartupUpdateTests
 
         Assert.True(applied);
         Assert.Equal(1, updates.Restarts);
-        Assert.Equal(["--minimized"], updates.RestartArguments);
+        Assert.Equal(["--minimized", StartupUpdate.RestartedFlag], updates.RestartArguments);
+    }
+
+    // Update.exe restarts the app with the same arguments when applying fails too (a locked file, a corrupt
+    // package), and the package is still pending: applying again would repeat at every start (review M3).
+    [Fact]
+    public void A_process_the_updater_restarted_does_not_apply_again()
+    {
+        var updates = Pending();
+
+        var applied = StartupUpdate.ApplyIfPending(
+            updates, RuntimeMode.Normal, launchedByNotification: false, ["--minimized", StartupUpdate.RestartedFlag]);
+
+        Assert.False(applied);
+        Assert.Equal(0, updates.Restarts);
+    }
+
+    [Fact]
+    public void The_restart_arguments_mark_the_restart_and_keep_the_launch_arguments()
+    {
+        Assert.Equal(["--minimized", "--restarted-by-updater"], StartupUpdate.RestartArguments(["--minimized"]));
+        Assert.Equal(["--restarted-by-updater"], StartupUpdate.RestartArguments([]));
     }
 
     [Fact]

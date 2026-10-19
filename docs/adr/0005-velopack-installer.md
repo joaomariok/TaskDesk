@@ -17,12 +17,14 @@ TaskDesk was a published folder that the owner copied by hand. v1 had "installer
   - The gate runs on the hosted runner the same way `ci.yml` runs it, with the display set to 1920 x 1080 because the in-process WinUI tests open windows and the docked-pane tests need a wide screen.
   - Pre-release tags (`v1.0.0-beta.1`) are not supported by the workflow yet; the pack script would accept them.
 
-## When a downloaded update is installed (#92, review round 1)
+## When a downloaded update is installed (#92, review rounds 1 and 2)
 
 An installed copy checks GitHub Releases at start and every 6 hours and downloads a newer version in the background. The download is installed at one of two points, and never anywhere else:
 
 - **At start, by the single-instance owner only.** Velopack's own apply-on-start is always off (`SetAutoApplyOnStartup(false)` in `Program.cs`): it runs in every process before the single-instance check, so opening TaskDesk while it already ran would let the updater stop the running copy without its exit path, and lose a pending detail edit. Instead `App.OnLaunched`, once it holds the single-instance guard and before it builds the host or the window, calls `StartupUpdate.ApplyIfPending`. That applies the downloaded version and restarts with the same launch arguments, so a logon start stays `--minimized`. It does nothing when the runtime mode turns updates off (a redirected data folder), the copy is not installed, or a notification launched the process: the restarted process would have no toast activation, and a Mark done or Snooze would be lost. That update waits for the next normal start.
-- **By Restart to update** (tray or Settings), after the normal exit. The exit stops the update checks and waits up to 5 seconds for a running check to end, so the apply never races a download still writing to, or cleaning, the packages folder.
+- **By Restart to update** (tray or Settings), after the normal exit. The exit stops the update checks and waits up to 5 seconds for a running check to end, so the apply never races a download still writing to, or cleaning, the packages folder. When the check is still running at 5 seconds, the exit skips the apply and ends as usual; the update applies at the next start. A plain Exit or a session end cancels a running check and does not wait for it.
+
+Both points restart through Velopack's updater with an extra argument, `--restarted-by-updater` (`StartupUpdate.RestartedFlag`), and a process started with it never applies at start. Velopack 1.2.161 restarts the app with the given arguments after applying and also when applying failed (`UpdateExe.Apply`, `restart`: "restarts the application after updates are applied (or if they failed)"). Without the flag, an apply that fails every time (a locked file, a corrupt package) would leave the update pending and repeat at every start. The flag is never written to the "Start with Windows" Run value or forwarded to a running copy, so the next normal start (logon, the Start menu) applies the update again.
 
 `InstallerGuardrailTests` checks that `Program.cs` turns Velopack's apply-on-start off and that `App.xaml.cs` applies after the single-instance check and before the host.
 

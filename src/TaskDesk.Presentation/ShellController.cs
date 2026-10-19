@@ -6,8 +6,9 @@ using TaskDesk.Core.Shell;
 namespace TaskDesk.Presentation;
 
 /// <summary>
-/// Ties the tray icon, main window, single-instance guard and auto-start together, and restarts into a downloaded
-/// update through <see cref="IAppUpdates"/> after the normal exit.
+/// Ties the tray icon, main window, single-instance guard and auto-start together, stops the update checks
+/// (<see cref="UpdateScheduler"/>) on exit, and restarts into a downloaded update through <see cref="IAppUpdates"/>
+/// after the normal exit.
 /// </summary>
 public sealed class ShellController(
     ITrayIcon tray,
@@ -17,11 +18,13 @@ public sealed class ShellController(
     AutoStartService autoStart,
     IAppShutdown lifetime,
     ILogger<ShellController>? logger = null,
-    IAppUpdates? updates = null) : IDisposable
+    IAppUpdates? updates = null,
+    UpdateScheduler? updateChecks = null) : IDisposable
 {
     public const string TrayHint = "TaskDesk is still running in the tray";
 
     private readonly ILogger _logger = logger ?? NullLogger<ShellController>.Instance;
+    private readonly UpdateScheduler? _updateChecks = updateChecks;
     private readonly List<Func<Task>> _exitSteps = [];
 
     // Never disposed: a Reminder activation may still read its token after the exit, and it holds no timer.
@@ -234,8 +237,10 @@ public sealed class ShellController(
 
     /// <summary>
     /// Runs the exit (see <see cref="ExitAsync"/>: the Reminder activations, then every exit step, which saves the
-    /// pending edit), then applies the downloaded update, which ends the process and starts the new version. Once
-    /// an exit has started it only returns that exit. When applying fails, the app shuts down as usual.
+    /// pending edit), then applies the downloaded update, which ends the process and starts the new version. The
+    /// exit waits up to <see cref="UpdateScheduler.StopTimeout"/> for a running update check; when one still runs,
+    /// it skips the apply and shuts down as usual, and the update applies at the next start. Once an exit has started
+    /// it only returns that exit. When applying fails, the app shuts down as usual.
     /// </summary>
     public Task RestartToUpdateAsync()
     {
@@ -256,15 +261,37 @@ public sealed class ShellController(
     public void Exit() => _ = ExitAsync();
 
     /// <summary>
-    /// Waits for the Reminder activations still running (see <see cref="RunActivationAsync"/>), then runs every exit
-    /// step in order, waiting for each, then disposes the tray and the single-instance guard and shuts the app down. A failing step is logged and the exit carries on. Calling it again
-    /// returns the exit already under way.
+    /// Stops the update checks (a running download is cancelled, not waited for), waits for the Reminder activations
+    /// still running (see <see cref="RunActivationAsync"/>), then runs every exit step in order, waiting for each,
+    /// then disposes the tray and the single-instance guard and shuts the app down. A failing step is logged and the
+    /// exit carries on. Calling it again returns the exit already under way.
     /// </summary>
     public Task ExitAsync() => _exit ??= RunExitAsync();
+
+    // Stops the update checks. Only Restart to update waits (up to UpdateScheduler.StopTimeout) for a running check,
+    // so the apply never races a download still writing to, or cleaning, the packages folder; true when none runs.
+    // A plain exit or a session end only cancels it.
+    private async Task<bool> StopUpdateChecksAsync()
+    {
+        if (_updateChecks is null)
+        {
+            return true;
+        }
+
+        if (_restartToUpdate)
+        {
+            return await _updateChecks.StopAsync();
+        }
+
+        _updateChecks.Dispose();
+        return true;
+    }
 
     private async Task RunExitAsync()
     {
         _exiting = true;
+        // Started first, so its wait overlaps the activations' (see StopUpdateChecksAsync).
+        var checksEnded = StopUpdateChecksAsync();
         try
         {
             await _exitStarted.CancelAsync();
@@ -291,13 +318,18 @@ public sealed class ShellController(
         }
 
         Dispose();
-        if (_restartToUpdate)
+        if (_restartToUpdate && !await checksEnded)
+        {
+            _logger.LogWarning("An update check was still running; the update applies at the next start");
+        }
+        else if (_restartToUpdate)
         {
             try
             {
                 // Ends the process at once when it works.
-                // The new version opens its window: a restart the owner asked for is not a logon start.
-                updates!.RestartToApply([]);
+                // The new version opens its window: a restart the owner asked for is not a logon start. The
+                // restarted process never applies at start, even when this apply failed (StartupUpdate.RestartedFlag).
+                updates!.RestartToApply(StartupUpdate.RestartArguments([]));
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {

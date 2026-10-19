@@ -231,7 +231,7 @@ public class UpdateSchedulerTests
         Assert.False(stop.IsCompleted);
 
         gate.SetResult();
-        await stop.WaitAsync(TestContext.Current.CancellationToken);
+        Assert.True(await stop.WaitAsync(TestContext.Current.CancellationToken));
         Assert.True(s.Scheduler.CurrentCheck.IsCompleted);
     }
 
@@ -248,7 +248,7 @@ public class UpdateSchedulerTests
         var stop = s.Scheduler.StopAsync();
         s.Clock.Advance(UpdateScheduler.StopTimeout);
 
-        await stop.WaitAsync(TestContext.Current.CancellationToken);
+        Assert.False(await stop.WaitAsync(TestContext.Current.CancellationToken));
         Assert.False(s.Scheduler.CurrentCheck.IsCompleted);
         gate.SetResult();
     }
@@ -266,6 +266,14 @@ public class UpdateSchedulerTests
         await s.Scheduler.CurrentCheck;
 
         Assert.Equal(1, s.Updates.Checks);
+    }
+
+    [Fact]
+    public async Task Stopping_a_scheduler_with_no_check_running_reports_the_check_ended()
+    {
+        var s = Create();
+
+        Assert.True(await s.Scheduler.StopAsync().WaitAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

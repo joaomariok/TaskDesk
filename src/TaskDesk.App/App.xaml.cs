@@ -67,8 +67,10 @@ public partial class App : Application
         }
 
         // An update downloaded by an earlier run applies now, before anything can need saving, and restarts with
-        // this launch's arguments (a logon start stays minimized). Not for a toast's launch: the restarted process
-        // would lose its Mark done or Snooze. Logged once the host's logger exists; start-up carries on.
+        // this launch's arguments (a logon start stays minimized) and StartupUpdate.RestartedFlag. Not for a toast's
+        // launch: the restarted process would lose its Mark done or Snooze. Not for a process the updater restarted
+        // (that flag): applying may have failed, and trying again would repeat at every start. Logged once the
+        // host's logger exists; start-up carries on.
         Exception? startupUpdateFailure = null;
         var appUpdates = new VelopackAppUpdates();
         try
@@ -256,12 +258,11 @@ public partial class App : Application
         updates.PendingVersionChanged += () => tray.ShowRestartToUpdate(updates.PendingVersion is not null);
         StartSystemHooks(shell, reminders, notifications);
 
-        // The last exit step: stop the update checks (a running download is cancelled, and waited for, so Restart to
-        // update never applies while it writes), release the global hotkey, then the shell (tray, single-instance
-        // guard) and the host, which closes the database and the log file.
+        // The last exit step: release the global hotkey, then the shell (tray, single-instance guard) and the host,
+        // which closes the database and the log file. The shell stops the update checks when the exit starts (the
+        // UpdateScheduler it gets from the host); only Restart to update waits for a running download.
         shell.AddExitStep(async () =>
         {
-            await updates.StopAsync();
             hotkeys.Dispose();
             shell.Dispose();
             if (host is IAsyncDisposable asyncHost)

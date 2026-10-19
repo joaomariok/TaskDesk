@@ -11,10 +11,28 @@ namespace TaskDesk.Presentation;
 public static class StartupUpdate
 {
     /// <summary>
-    /// Applies the downloaded update and restarts with <paramref name="launchArguments"/>, so a logon start stays
-    /// minimized. Returns false, leaving the update pending, when the runtime mode turns updates off, the copy is not
-    /// installed, nothing is downloaded, or a notification launched the process (the restarted one would lose the
-    /// toast's action; the update applies at the next normal start). In the app a successful apply never returns.
+    /// Marks a process that the updater started. Velopack's updater restarts the app with the given arguments after
+    /// applying, and also when applying failed (a locked file, a corrupt package), which leaves the update pending:
+    /// a process with this flag never applies at start, or it would try again at every start. The rest of start-up
+    /// ignores it, and it is never written to the Run key or forwarded to a running copy, so a later normal start
+    /// (logon, the Start menu) still applies.
+    /// </summary>
+    public const string RestartedFlag = "--restarted-by-updater";
+
+    /// <summary>
+    /// The arguments the updater restarts the app with: <paramref name="launchArguments"/>, then
+    /// <see cref="RestartedFlag"/>.
+    /// </summary>
+    public static IReadOnlyList<string> RestartArguments(IReadOnlyList<string> launchArguments) =>
+        [.. launchArguments, RestartedFlag];
+
+    /// <summary>
+    /// Applies the downloaded update and restarts with <paramref name="launchArguments"/> (see
+    /// <see cref="RestartArguments"/>), so a logon start stays minimized. Returns false, leaving the update pending,
+    /// when the runtime mode turns updates off, the copy is not installed, nothing is downloaded, the updater started
+    /// this process (<see cref="RestartedFlag"/>), or a notification launched it (the restarted one would lose the
+    /// toast's action). The update then applies at the next normal start. In the app a successful apply never
+    /// returns.
     /// </summary>
     public static bool ApplyIfPending(
         IAppUpdates updates,
@@ -24,12 +42,16 @@ public static class StartupUpdate
     {
         ArgumentNullException.ThrowIfNull(updates);
         ArgumentNullException.ThrowIfNull(mode);
-        if (!mode.ManagesUpdates || launchedByNotification || !updates.IsInstalled || updates.DownloadedVersion is null)
+        if (!mode.ManagesUpdates
+            || launchedByNotification
+            || launchArguments.Contains(RestartedFlag, StringComparer.OrdinalIgnoreCase)
+            || !updates.IsInstalled
+            || updates.DownloadedVersion is null)
         {
             return false;
         }
 
-        updates.RestartToApply(launchArguments);
+        updates.RestartToApply(RestartArguments(launchArguments));
         return true;
     }
 }

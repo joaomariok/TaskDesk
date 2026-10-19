@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Time.Testing;
+using TaskDesk.Core.Paths;
 using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Shell;
 
@@ -31,6 +33,25 @@ public sealed class ShellControllerTests
 
     private ShellController Create() =>
         new(_tray, _window, _single, _settings, new AutoStartService(_runKey), _lifetime, updates: _updates);
+
+    private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 10, 20, 12, 0, 0, TimeSpan.Zero));
+
+    // Started with an update check that is downloading and ignores cancellation, as a busy file write can.
+    private async Task<(ShellController Controller, UpdateScheduler Checks, TaskCompletionSource Download)>
+        StartedWithRunningCheckAsync()
+    {
+        var download = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _updates.Gate = download;
+        _updates.IgnoresCancellation = true;
+        var checks = new UpdateScheduler(_updates, RuntimeMode.Normal, _clock);
+        checks.Start();
+        await _updates.Entered.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var controller = new ShellController(
+            _tray, _window, _single, _settings, new AutoStartService(_runKey), _lifetime, updates: _updates,
+            updateChecks: checks);
+        await controller.StartAsync(false, Exe, TestContext.Current.CancellationToken);
+        return (controller, checks, download);
+    }
 
     private async Task<ShellController> StartedAsync(bool minimized = false)
     {
@@ -363,6 +384,67 @@ public sealed class ShellControllerTests
 
         Assert.Equal(1, steps);
         Assert.Equal(1, _updates.Restarts);
+    }
+
+    // The restarted process must not apply at start: when applying failed, the update is still pending (review M3).
+    [Fact]
+    public async Task Restart_to_update_marks_the_restart_as_the_updater_s()
+    {
+        var controller = await StartedAsync();
+
+        await controller.RestartToUpdateAsync();
+
+        Assert.Equal([StartupUpdate.RestartedFlag], _updates.RestartArguments);
+    }
+
+    // The apply must not race a download still writing to, or cleaning, the packages folder (review M2).
+    [Fact]
+    public async Task Restart_to_update_applies_once_the_running_check_has_ended()
+    {
+        var (controller, _, download) = await StartedWithRunningCheckAsync();
+
+        var restart = controller.RestartToUpdateAsync();
+        _clock.Advance(UpdateScheduler.StopTimeout - TimeSpan.FromMilliseconds(1));
+        Assert.False(restart.IsCompleted);
+        Assert.Equal(0, _updates.Restarts);
+
+        download.SetResult();
+        await restart.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, _updates.Restarts);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    // The update stays pending and applies at the next start (review M4).
+    [Fact]
+    public async Task Restart_to_update_exits_without_applying_when_the_check_does_not_end_in_time()
+    {
+        var (controller, _, download) = await StartedWithRunningCheckAsync();
+
+        var restart = controller.RestartToUpdateAsync();
+        _clock.Advance(UpdateScheduler.StopTimeout);
+        await restart.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, _updates.Restarts);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+        download.SetResult();
+    }
+
+    // Only Restart to update waits: a plain exit or a session end just cancels the check.
+    [Fact]
+    public async Task Exit_cancels_the_running_check_without_waiting_for_it()
+    {
+        var (controller, checks, download) = await StartedWithRunningCheckAsync();
+
+        await controller.ExitAsync().WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, _lifetime.ShutdownCount);
+        Assert.Equal(0, _updates.Restarts);
+        download.SetResult();
+        await checks.CurrentCheck;
+        _clock.Advance(UpdateScheduler.Interval);
+        await checks.CurrentCheck;
+        Assert.Equal(1, _updates.Checks);
     }
 
     [Fact]

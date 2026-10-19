@@ -85,19 +85,22 @@ public sealed class UpdateScheduler(
 
     /// <summary>
     /// Stops the checks (see <see cref="Dispose"/>), then waits up to <see cref="StopTimeout"/> for the cancelled
-    /// check to end, so a restart into the update never applies while a download still writes to, or cleans, the
-    /// packages folder. Past the timeout it logs a warning and returns. Never throws.
+    /// check to end. Returns true once no check runs, and false, after logging a warning, when one still runs at the
+    /// timeout: a download may still write to, or clean, the packages folder, so the caller must not apply the
+    /// update. Only Restart to update needs the wait; a plain exit just disposes. Never throws.
     /// </summary>
-    public async Task StopAsync()
+    public async Task<bool> StopAsync()
     {
         Dispose();
         try
         {
             await CurrentCheck.WaitAsync(StopTimeout, clock).ConfigureAwait(false);
+            return true;
         }
         catch (TimeoutException)
         {
-            _logger.LogWarning("The update check did not end within {Timeout}; exiting without waiting", StopTimeout);
+            _logger.LogWarning("The update check did not end within {Timeout}", StopTimeout);
+            return false;
         }
     }
 
