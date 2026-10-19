@@ -26,7 +26,7 @@ Runs all day in the tray, alongside other desktop work. Main window: Smart Views
 - Windows 11 x64 only, unpackaged, English UI only (no localization).
 - Performance: cold start < 1.5 s with 5,000 Tasks; no visible lag when switching lists or searching (virtualized lists); `--minimized` working set target < 150 MB.
 - UI uses theme resources, not hard-coded colors; custom styles are `BasedOn` the Fluent styles so Light and Dark both work. Minimum window 800×500.
-- Out of scope for v1: sync, accounts, mobile, attachments, rich-text notes, installer/MSIX, auto-update, encryption at rest, ARM64.
+- Out of scope for v1: sync, accounts, mobile, attachments, rich-text notes, encryption at rest, ARM64.
 - Full spec: `docs/SPEC.md`; decisions: `docs/adr/`.
 
 ## Brand Commitments

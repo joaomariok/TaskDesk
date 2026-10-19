@@ -1,0 +1,66 @@
+name: Release
+
+# Cut a release by pushing a tag: git tag v0.2.0 && git push origin v0.2.0 (ADR 0005, #91).
+# The tag is the version. Builds are unsigned.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+# The tag reaches the scripts only through the environment, never pasted into a script's text.
+env:
+  RELEASE_TAG: ${{ github.ref_name }}
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Read the version from the tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = $env:RELEASE_TAG
+          if ($tag -notmatch '^v(?<version>\d+\.\d+\.\d+)$') {
+              throw "The tag '$tag' is not vX.Y.Z; a release tag has three numbers and no suffix."
+          }
+          "version=$($Matches['version'])" >> $env:GITHUB_OUTPUT
+      # The same display setup as ci.yml: the in-process WinUI tests open windows, and the docked-pane
+      # tests need a 1200 px wide screen. A failing gate stops the job here, before anything is published.
+      - name: Set display resolution
+        shell: pwsh
+        run: |
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Add-Type -AssemblyName System.Windows.Forms
+          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+      - name: Run gate
+        shell: pwsh
+        run: pwsh scripts/gate.ps1
+      # Downloads the previous release first, so vpk also writes a delta package against it.
+      - name: Pack
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          pwsh scripts/pack-installer.ps1
+          -Version ${{ steps.version.outputs.version }}
+          -OutputDir releases
+          -DownloadFrom https://github.com/${{ github.repository }}
+      - name: Upload the GitHub Release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          dotnet tool run vpk -- upload github
+          --repoUrl https://github.com/${{ github.repository }}
+          --outputDir releases
+          --token $env:GITHUB_TOKEN
+          --tag $env:RELEASE_TAG
+          --releaseName "TaskDesk ${{ steps.version.outputs.version }}"
+          --publish

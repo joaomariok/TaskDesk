@@ -53,6 +53,17 @@ dotnet publish src/TaskDesk.App -p:PublishProfile=win-x64
 
 To install TaskDesk, use `Setup.exe` (see [Install](#install)). The publish folder also runs as it is: run `TaskDesk.App.exe` from it. Nothing needs installing: neither .NET nor a Windows App Runtime. The profile is in `src/TaskDesk.App/Properties/PublishProfiles/`. Every publish leaves out the Windows App SDK files TaskDesk never loads (AI/ML, Widgets, imaging); the rules are in `src/TaskDesk.App/WindowsAppSdkPayload.targets` and the background in [ADR 0002](docs/adr/0002-notification-delivery.md) and [ADR 0004](docs/adr/0004-port-to-winui.md).
 
+## Release
+
+Pushing a tag `vX.Y.Z` cuts a release (decision: [ADR 0005](docs/adr/0005-velopack-installer.md)):
+
+```powershell
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The `Release` workflow (`.github/workflows/release.yml`) takes the version from the tag, runs the gate, packs with `scripts/pack-installer.ps1` (which first downloads the previous release, so a delta package is made against it) and uploads `TaskDesk.App-win-Setup.exe`, the full and delta packages and the feed to a GitHub Release with the workflow's `GITHUB_TOKEN`. If the gate fails, no release is created. A tag that is not exactly three numbers (`v1.2.3`) fails. Builds are unsigned.
+
 ## Data location
 
 Everything lives under `%LOCALAPPDATA%\TaskDesk`:
@@ -90,7 +101,7 @@ Sandbox mode keeps the test run away from your Run key. Measured results and met
 ## Developer scripts
 
 - `scripts/gate.ps1`: build with warnings as errors, then run all tests; exit 0 is green.
-- `scripts/pack-installer.ps1`: build a local `Setup.exe` and release packages for a version (`-Version <x.y.z> [-OutputDir <dir>]`), see [Install](#install). The gate does not need it.
+- `scripts/pack-installer.ps1`: build a local `Setup.exe` and release packages for a version (`-Version <x.y.z> [-OutputDir <dir>] [-DownloadFrom <repo url>]`), see [Install](#install). The gate does not need it.
 - `scripts/integrate-worktree.ps1`: apply a worktree's uncommitted diff onto a clean checkout and run the gate (see `docs/agents/implement-spec.md`).
 - `scripts/measure-startup.ps1`: measure cold start and `--minimized` working set of a publish against fresh sample data (`-Publish <dir> [-Runs 7] [-Tasks 5000] [-Label <name>]`).
 - `scripts/ui-tests.ps1`: the opt-in UI test suite (`tests/TaskDesk.UiTests`, FlaUI). It drives the real window against fresh temp data folders, so it needs an interactive desktop and takes over the keyboard and mouse for about a minute. The gate builds it but does not run it (`-Publish <dir>` to test a publish, `-Class <name>` for one class, `-Method <name>` for matching tests). It reruns each failed test once, labels it `FLAKE` or `FAILED`, and exits 5 when only flakes failed and 6 on a locked desktop.

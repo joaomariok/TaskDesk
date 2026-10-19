@@ -110,6 +110,78 @@ public sealed partial class InstallerGuardrailTests
         Assert.Equal("win-x64", Argument(RuntimeArgument()));
     }
 
+    private const string ReleaseWorkflow = ".github/workflows/release.yml";
+
+    private static string ReadWorkflow() => File.ReadAllText(Path.Combine(FindRepoRoot(), ReleaseWorkflow));
+
+    // The workflow's steps are the "- name:" blocks of its single job, in file order.
+    private static string[] StepNames() =>
+        Regex.Matches(ReadWorkflow(), @"^      - name: (?<name>.+)$", RegexOptions.Multiline)
+            .Select(m => m.Groups["name"].Value.Trim()).ToArray();
+
+    [Fact]
+    public void Release_workflow_runs_only_for_version_tags_and_may_write_contents()
+    {
+        var workflow = ReadWorkflow();
+
+        Assert.Matches(@"(?s)\non:\s+push:\s+tags:\s+- 'v\*'\s*\n\s*\npermissions:\s+contents: write\n", workflow);
+        Assert.DoesNotContain("branches:", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("pull_request", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Release_workflow_runs_the_gate_before_it_packs_and_uploads()
+    {
+        var steps = StepNames();
+
+        // A failing step ends the job, so nothing after the gate runs when the gate fails.
+        Assert.Contains("Run gate", steps);
+        Assert.True(steps.ToList().IndexOf("Run gate") < steps.ToList().IndexOf("Pack"));
+        Assert.True(steps.ToList().IndexOf("Pack") < steps.ToList().IndexOf("Upload the GitHub Release"));
+        Assert.Contains("pwsh scripts/gate.ps1", ReadWorkflow(), StringComparison.Ordinal);
+        Assert.DoesNotContain("continue-on-error", ReadWorkflow(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Release_workflow_packs_the_tag_version_with_the_pack_script_and_a_delta_source()
+    {
+        var workflow = ReadWorkflow();
+
+        Assert.Contains("-Version ${{ steps.version.outputs.version }}", workflow, StringComparison.Ordinal);
+        Assert.Contains("-DownloadFrom https://github.com/${{ github.repository }}", workflow,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("vpk -- pack", workflow, StringComparison.Ordinal);
+        // The pack script, not the workflow, must download the previous release before it packs.
+        var script = File.ReadAllText(Path.Combine(FindRepoRoot(), PackScript));
+        Assert.True(script.IndexOf("'download', 'github'", StringComparison.Ordinal)
+            < script.IndexOf("'pack'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Release_workflow_version_pattern_is_accepted_by_the_pack_script()
+    {
+        var script = File.ReadAllText(Path.Combine(FindRepoRoot(), PackScript));
+        var workflow = ReadWorkflow();
+
+        Assert.Contains(@"'^v(?<version>\d+\.\d+\.\d+)$'", workflow, StringComparison.Ordinal);
+        Assert.Contains(@"ValidatePattern('^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$')", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Release_workflow_uploads_a_published_release_with_the_workflow_token_and_the_tag()
+    {
+        var workflow = ReadWorkflow();
+
+        Assert.Contains("vpk -- upload github", workflow, StringComparison.Ordinal);
+        Assert.Contains("--token $env:GITHUB_TOKEN", workflow, StringComparison.Ordinal);
+        Assert.Contains("GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}", workflow, StringComparison.Ordinal);
+        Assert.Contains("RELEASE_TAG: ${{ github.ref_name }}", workflow, StringComparison.Ordinal);
+        Assert.Contains("--tag $env:RELEASE_TAG", workflow, StringComparison.Ordinal);
+        // The tag is a pushed string: pasted into a script's text, a quote in it would run as code.
+        Assert.Single(Regex.Matches(workflow, Regex.Escape("${{ github.ref_name }}")));
+        Assert.Contains("--publish", workflow, StringComparison.Ordinal);
+    }
+
     private static string Argument(Regex pattern)
     {
         var script = File.ReadAllText(Path.Combine(FindRepoRoot(), PackScript));

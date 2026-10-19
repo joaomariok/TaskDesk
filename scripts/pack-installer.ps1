@@ -3,11 +3,16 @@
 # profile at the given version and packs it with Velopack (vpk, pinned in dotnet-tools.json).
 #   -Version <x.y.z>     the version of the app and the package (SemVer 2, for example 0.2.0)
 #   -OutputDir <dir>     where Setup.exe and the release packages go; default: releases\ (git-ignored)
+#   -DownloadFrom <url>  a GitHub repository URL whose latest stable release is downloaded into -OutputDir first, so
+#                        vpk also writes a delta package against it (the release workflow, #91). With no release
+#                        yet nothing is downloaded and only a full package is made. The token comes from
+#                        $env:GITHUB_TOKEN when set.
 # The package id is TaskDesk.App, never TaskDesk: uninstall deletes %LOCALAPPDATA%\<package id>, and
 # %LOCALAPPDATA%\TaskDesk is the data folder (InstallerGuardrailTests). Only a Start-menu shortcut is made.
 param(
     [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$')][string]$Version,
-    [string]$OutputDir
+    [string]$OutputDir,
+    [string]$DownloadFrom
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -20,7 +25,9 @@ $OutputDir = [System.IO.Path]::GetFullPath($OutputDir)
 
 function Invoke-Checked {
     param([string[]]$Arguments)
-    Write-Host "== dotnet $($Arguments -join ' ')"
+    $echo = $Arguments -join ' '
+    if ($env:GITHUB_TOKEN) { $echo = $echo.Replace($env:GITHUB_TOKEN, '***') }
+    Write-Host "== dotnet $echo"
     & dotnet @Arguments
     if ($LASTEXITCODE -ne 0) { throw "dotnet $($Arguments[0]) failed with exit code $LASTEXITCODE." }
 }
@@ -32,6 +39,12 @@ Invoke-Checked @('publish', $project, '-p:PublishProfile=win-x64', "-p:Version=$
 Push-Location $repoRoot
 try {
     Invoke-Checked @('tool', 'restore')
+    if ($DownloadFrom) {
+        $download = @('tool', 'run', 'vpk', '--', 'download', 'github', '--repoUrl', $DownloadFrom,
+            '--outputDir', $OutputDir)
+        if ($env:GITHUB_TOKEN) { $download += @('--token', $env:GITHUB_TOKEN) }
+        Invoke-Checked $download
+    }
     Invoke-Checked @('tool', 'run', 'vpk', '--', 'pack',
         '--packId', 'TaskDesk.App',
         '--packTitle', 'TaskDesk',
