@@ -5,8 +5,8 @@ Owner-run check that a real Windows app notification (toast) appears for a due R
 
 .DESCRIPTION
 OWNER-RUN: this is not for agents. The final launch runs with TASKDESK_SANDBOX=0, so TaskDesk registers a
-notification AppUserModelId (plus COM class and icon file) for that exe path under HKCU. Registration is not
-removed on exit.
+notification AppUserModelId (plus COM class and icon file) for that exe path under HKCU. A run that is not a
+Velopack install removes that registration when it exits; one that is killed or crashes leaves it behind.
 
 Steps: refuse if TaskDesk is running; create a fresh temp data folder with startWithWindows=false in
 settings.json; launch once in sandbox mode to create the database, then stop it; seed one Task in the Default

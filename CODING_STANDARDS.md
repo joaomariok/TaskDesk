@@ -18,6 +18,10 @@ Delete, import and replace each either restore everything on undo (Tags, Subtask
 
 Registry writes, files outside the data folder and OS registration sit behind an interface, and tests use a fake. A direct call to the real thing from app logic is a finding.
 
+## Start-up and exit order
+
+Code that can end or restart the process, or that logs, sits at a stated point relative to single-instance acquisition and host disposal. A restart or apply before the single-instance guard is held, or a log call after the host is disposed, is a finding.
+
 ## Test isolation
 
 Gate tests (xUnit and the in-process MSTest app) use per-test state only: temp folders and fakes. Machine-global state (clipboard, registry, real global hotkeys, the foreground window) belongs to the opt-in FlaUI suite.

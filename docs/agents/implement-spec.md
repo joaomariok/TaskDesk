@@ -76,7 +76,7 @@ Beyond that one fast-forward, leave git alone: no commit, branch, checkout, merg
 
 - Build only what your ticket asks for. Sibling tickets run in parallel.
 - Keep edits to shared files (`TaskDeskDbContext`, `App.xaml.cs`, `MainViewModel`, `MainWindow.xaml`, `Directory.Packages.props`) minimal and additive.
-- Confirm that any package or API exists in the version you pick before you use it.
+- Confirm that any package or API exists in the version you pick before you use it: read its XML docs (`~/.nuget/packages/<id>/<version>/lib/*/<id>.xml`) or its source at the tag (`gh api repos/<owner>/<repo>/contents/<path>?ref=<tag>`).
 - Write everything in English. Tests are never weakened, skipped or deleted.
 - Tests write only to temp locations, never to `%LOCALAPPDATA%` or the registry.
 - Write the FlaUI tests your ticket needs and leave running them to the orchestrator (see **Concurrency**); list the test classes to run in your report.

@@ -19,6 +19,8 @@ Run `pwsh scripts/ui-tests.ps1` and judge it by the exit code. It reruns each fa
    - Find slugs with `winapp ui search "<text>" -a <pid>` or `inspect`.
    - Type into a box with `winapp ui focus <slug>`, then `winapp ui send-keys "<text>" --verbatim --via send-input`, then `send-keys tab --via send-input`. `set-value` skips TaskDesk's LostFocus bindings, so nothing validates or saves.
    - Wait for a result with `winapp ui wait-for "<text>" -a <pid>` rather than sleeping.
+   - Open Settings with `winapp ui send-keys "ctrl+," -a <pid> --via send-input`; no Settings button is searchable.
+   - Set `NO_COLOR=1` before parsing `winapp` output in a script: its colour codes break text matching.
 4. **Before/after**, when the change alters something that already exists: repeat steps 2 and 3 with `-Ref main` into `<check>/before`, with the same names, theme, width and sample count. A ref from before the WinUI swap (#68) builds the WPF app, under the same project path and exe name. Then run `pwsh scripts/compare-shots.ps1 -Before <check>/before -After <check>/after` and read every image in `<check>/after/compared`: before | after | changes in magenta. Each magenta area is either the intended change or a side effect to report. For a new state there is no before.
 5. In every shot, check:
    - text clipped, cut off or overlapping another control;
