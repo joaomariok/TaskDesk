@@ -18,6 +18,8 @@
     <ApplicationIcon>Assets\TaskDesk.ico</ApplicationIcon>
     <!-- LibraryImport (user32) generates marshalling code. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Program.cs is the entry point: Velopack's startup call runs before WinUI starts (#88). -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="Assets\TaskDesk.ico" CopyToOutputDirectory="PreserveNewest" />
@@ -32,6 +34,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Microsoft.WindowsAppSDK" />
     <PackageReference Include="H.NotifyIcon.WinUI" />
+    <PackageReference Include="Velopack" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinUIAnalyzer" PrivateAssets="all" />
   </ItemGroup>
   <Import Project="WindowsAppSdkPayload.targets" />

@@ -15,13 +15,31 @@ dotnet test
 
 The build treats warnings as errors and must stay at zero warnings.
 
+## Install
+
+Run `Setup.exe` (`TaskDesk.App-win-Setup.exe`). It installs TaskDesk for your user only, with no admin rights, into `%LOCALAPPDATA%\TaskDesk.App`, adds a TaskDesk shortcut to the Start menu (no Desktop shortcut) and an entry in Apps & features, then starts TaskDesk. Your data stays in `%LOCALAPPDATA%\TaskDesk` (see [Data location](#data-location)), never in the install folder.
+
+`Setup.exe` is not signed yet, so Windows SmartScreen may say "Windows protected your PC". Choose **More info**, then **Run anyway**.
+
+To build a `Setup.exe` yourself, run `pwsh scripts/pack-installer.ps1 -Version <x.y.z>`. It publishes the `win-x64` profile at that version and packs it with Velopack (`vpk`, a local dotnet tool pinned in `dotnet-tools.json`); `TaskDesk.App-win-Setup.exe` and the release packages land in `releases/` (git-ignored), or in `-OutputDir <dir>`. The package id is `TaskDesk.App`, never `TaskDesk`: uninstalling deletes `%LOCALAPPDATA%\<package id>`, and `%LOCALAPPDATA%\TaskDesk` is the data folder.
+
+### Moving from a copied folder
+
+If you ran TaskDesk from a folder you copied by hand (for example `%LOCALAPPDATA%\Programs\TaskDesk`):
+
+1. Quit TaskDesk from its tray icon (Exit).
+2. Delete the old folder.
+3. Run `Setup.exe`.
+
+The installed TaskDesk uses the same data, and its first start points "Start with Windows" at the installed exe. Delete the old folder before you start the old copy again, or it takes the Run key back.
+
 ## Run
 
 ```powershell
 dotnet run --project src/TaskDesk.App
 ```
 
-Run it once from the published folder (below), then turn on "Start with Windows" in Settings if you want it at logon. Auto-start writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\TaskDesk` as `"<path to TaskDesk.App.exe>" --minimized`; the value is rewritten on every start so moving the folder is safe. Windows Settings, Apps, Startup can still disable it independently and TaskDesk does not fight that.
+"Start with Windows" is on by default: every normal start makes sure TaskDesk starts at logon, until you turn it off in Settings, and a saved "off" is kept. Auto-start writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\TaskDesk` as `"<path to TaskDesk.App.exe>" --minimized`; the value is rewritten on every start so moving the folder is safe. Windows Settings, Apps, Startup can still disable it independently and TaskDesk does not fight that.
 
 `--minimized` starts hidden in the tray. Never run TaskDesk as administrator: Windows does not deliver notifications to elevated processes.
 
@@ -33,7 +51,7 @@ One publish profile, `win-x64`: self-contained (.NET and the Windows App SDK run
 dotnet publish src/TaskDesk.App -p:PublishProfile=win-x64
 ```
 
-Copy the whole folder anywhere, for example `%LOCALAPPDATA%\Programs\TaskDesk`, and run `TaskDesk.App.exe`. Nothing needs installing: neither .NET nor a Windows App Runtime. The profile is in `src/TaskDesk.App/Properties/PublishProfiles/`. Every publish leaves out the Windows App SDK files TaskDesk never loads (AI/ML, Widgets, imaging); the rules are in `src/TaskDesk.App/WindowsAppSdkPayload.targets` and the background in [ADR 0002](docs/adr/0002-notification-delivery.md) and [ADR 0004](docs/adr/0004-port-to-winui.md).
+To install TaskDesk, use `Setup.exe` (see [Install](#install)). The publish folder also runs as it is: run `TaskDesk.App.exe` from it. Nothing needs installing: neither .NET nor a Windows App Runtime. The profile is in `src/TaskDesk.App/Properties/PublishProfiles/`. Every publish leaves out the Windows App SDK files TaskDesk never loads (AI/ML, Widgets, imaging); the rules are in `src/TaskDesk.App/WindowsAppSdkPayload.targets` and the background in [ADR 0002](docs/adr/0002-notification-delivery.md) and [ADR 0004](docs/adr/0004-port-to-winui.md).
 
 ## Data location
 
@@ -72,6 +90,7 @@ Sandbox mode keeps the test run away from your Run key. Measured results and met
 ## Developer scripts
 
 - `scripts/gate.ps1`: build with warnings as errors, then run all tests; exit 0 is green.
+- `scripts/pack-installer.ps1`: build a local `Setup.exe` and release packages for a version (`-Version <x.y.z> [-OutputDir <dir>]`), see [Install](#install). The gate does not need it.
 - `scripts/integrate-worktree.ps1`: apply a worktree's uncommitted diff onto a clean checkout and run the gate (see `docs/agents/implement-spec.md`).
 - `scripts/measure-startup.ps1`: measure cold start and `--minimized` working set of a publish against fresh sample data (`-Publish <dir> [-Runs 7] [-Tasks 5000] [-Label <name>]`).
 - `scripts/ui-tests.ps1`: the opt-in UI test suite (`tests/TaskDesk.UiTests`, FlaUI). It drives the real window against fresh temp data folders, so it needs an interactive desktop and takes over the keyboard and mouse for about a minute. The gate builds it but does not run it (`-Publish <dir>` to test a publish, `-Class <name>` for one class, `-Method <name>` for matching tests). It reruns each failed test once, labels it `FLAKE` or `FAILED`, and exits 5 when only flakes failed and 6 on a locked desktop.

@@ -4,6 +4,7 @@ obj/
 *.user
 *.suo
 publish/
+releases/
 TestResults/
 *.db
 *.db-shm
