@@ -46,8 +46,19 @@ if ($Ref) {
 
 $appProject = Join-Path $root "src/$appName"
 if (-not (Test-Path $appProject)) { throw "No src/$appName in $root" }
-& dotnet build $appProject -nologo -v q
-if ($LASTEXITCODE -ne 0) { throw "Build failed in $root" }
+# A TaskDesk running from this build's output (a debug session, another sandbox) locks it once there is something to
+# copy. The build then fails at once (no copy retries) and only the holder is reported, not every retry warning.
+$build = & dotnet build $appProject -nologo -v q -p:CopyRetryCount=0 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $binDir = [IO.Path]::GetFullPath((Join-Path $appProject 'bin')) + [IO.Path]::DirectorySeparatorChar
+    $holder = Get-Process -Name $appName -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -and $_.Path.StartsWith($binDir, [StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1
+    if ($holder -and ($build -match 'error MSB30(21|26|27)')) {
+        throw "$appName (pid $($holder.Id)) runs from $($holder.Path) and locks the build output; close it (or Stop-Process $($holder.Id)) and run again."
+    }
+    $build | Write-Host
+    throw "Build failed in $root"
+}
 $exe = Get-ChildItem (Join-Path $appProject 'bin/Debug') -Filter "$appName.exe" -Recurse |
     Sort-Object LastWriteTimeUtc | Select-Object -Last 1
 if (-not $exe) { throw "No $appName.exe under $appProject\bin\Debug" }

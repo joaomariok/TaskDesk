@@ -188,6 +188,8 @@ Spacing sits on a 4 px rhythm: 4, 8, 12, 16 and 24 px. Fields in a form are stac
 
 **The Default-Size Rule.** Controls keep Fluent's default sizes: no padding, height or template-margin override unless this file names one. Controls side by side in a row then share one height (a button, a toggle, a text box and a drop-down are all 32 px); a command bar keeps its own default height.
 
+**The Native-Metrics Rule.** TaskDesk content inside a Fluent control takes that control's own size and spacing from its theme resources, not hand-picked pixels: a List row in the rail is `NavigationViewItemButtonMargin` and `NavigationViewItemOnLeftMinHeight`, and its square is `NavigationViewItemOnLeftIconBoxHeight`, centred where the Smart View icons sit. It then lines up with the native items around it and follows Fluent when Fluent changes.
+
 **The On-Demand Rule.** The list owns the window. The detail pane opens on a click, Enter, F2 or a notification; it stays closed when the user closes it, and arrow keys only move the selection.
 
 ## Elevation & Depth

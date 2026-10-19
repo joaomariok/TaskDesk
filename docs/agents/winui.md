@@ -43,6 +43,8 @@ What the gate cannot drive in-process. Run each after changing the code it names
 ## Gotchas
 
 - Rail and docked detail pane follow the window width with its frame (`MainWindow.WindowWidth`, `PaneLayout`), as the WPF window measured it, so saved layouts carry over.
+- A closed `LeftCompact` `NavigationView` left-aligns its `PaneFooter` (`FooterContentBorder`), so footer content shrinks to its own width; `NavigationPane.ShowCompact` sets the footer to `CompactPaneLength`.
+- Fluent's control templates and sizes (`NavigationViewItemOnLeftIconBoxHeight` and the like) are in `~/.nuget/packages/microsoft.windowsappsdk.winui/<version>/lib/native/Microsoft.UI/Themes/generic.xaml`.
 - Recycled `ListView` containers stay in the visual tree: count only those with `list.IndexFromContainer(c) >= 0`.
 - A hidden pane's `x:Bind` values update after layout: wait for `pane.ActualWidth > 0` before asserting.
 - H.NotifyIcon.WinUI's PopupMenu runs each item's `Command` and never raises `Click` (`Shell/TrayMenu.cs`).

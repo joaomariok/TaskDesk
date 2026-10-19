@@ -30,6 +30,10 @@ Product code serves the product. When a test tool cannot drive something, fix th
 
 A view test covers a transition, not only the first render: the bound item changes from A to B, a value goes from set to empty or null, an error is set and then cleared, a recycled row shows a different item. A changed view whose tests render it only once is a finding.
 
+## Retired code
+
+A change that stops using a member, resource or style removes it in the same change, with the tests that cover only it. A member the change left without a caller is a finding.
+
 ## Changed tests
 
 A changed existing test asserts at least as much as before; a removed assertion is replaced by one that implies it. A changed test that checks less is a finding, even when the change was approved.
