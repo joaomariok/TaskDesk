@@ -165,6 +165,8 @@ public sealed partial class MainViewModel
         TimeOnly? time = DetailDueTime is { } picked ? TimeOnly.FromTimeSpan(picked) : null;
         if (time is not null && date is null)
         {
+            // The pane can't reach this (its time picker needs a date, and clearing the date clears the time);
+            // it guards callers that set the time directly.
             ShowFieldError(ErrorPlace.Due, "A Due time needs a Due date.");
             return;
         }

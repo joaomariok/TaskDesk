@@ -5,7 +5,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
@@ -181,7 +180,8 @@ public sealed partial class MainView : UserControl
     // and again each time it opens or closes, so the name is put back whenever CommandBar changes it.
     private void OnHeadingCommandsLoaded(object sender, RoutedEventArgs e)
     {
-        if (FindByName<Button>((DependencyObject)sender, "MoreButton") is not { } more
+        if (VisualTreeWalk.Descendants((DependencyObject)sender).OfType<Button>().FirstOrDefault(b => b.Name == "MoreButton")
+                is not { } more
             || AutomationProperties.GetAutomationId(more) == ListMenuId)
         {
             return;
@@ -204,25 +204,6 @@ public sealed partial class MainView : UserControl
         {
             ToolTipService.SetToolTip(more, ListMenuName);
         }
-    }
-
-    private static T? FindByName<T>(DependencyObject root, string name) where T : FrameworkElement
-    {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if ((child as T)?.Name == name)
-            {
-                return (T)child;
-            }
-
-            if (FindByName<T>(child, name) is { } found)
-            {
-                return found;
-            }
-        }
-
-        return null;
     }
 
     private ListItemViewModel? ShownList => Lists?.ListOrDefault(ViewModel.CurrentListId);

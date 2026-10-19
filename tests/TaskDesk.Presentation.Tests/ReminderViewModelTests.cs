@@ -273,13 +273,57 @@ public class ReminderViewModelTests
         s.Vm.SelectedTask = s.Vm.Tasks[0];
         Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
 
+        // A date-only Reminder shows the default time already, so clearing it would change nothing.
         s.Vm.DetailReminderDate = new DateTime(2026, 10, 22);
         await s.Vm.PendingSave;
-        Assert.True(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+        Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
 
         s.Vm.DetailReminderDate = null;
         await s.Vm.PendingSave;
         Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task The_clear_Reminder_time_command_is_off_for_a_saved_Reminder_at_the_default_time()
+    {
+        var s = await StartAsync("a");
+        await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(22, 12), Ct); // 09:00 local, the default
+        await s.Vm.LoadAsync(Ct);
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+
+        Assert.Equal(new TimeSpan(9, 0, 0), s.Vm.DetailReminderTime);
+        Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task The_clear_Reminder_time_command_turns_off_once_the_time_falls_back_to_the_default()
+    {
+        var s = await StartAsync("a");
+        await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(22, 17, 30), Ct);
+        await s.Vm.LoadAsync(Ct);
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+
+        s.Vm.ClearDetailReminderTimeCommand.Execute(null);
+        await s.Vm.PendingSave;
+
+        Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Picking_a_time_on_a_date_only_Reminder_turns_the_clear_command_on()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        s.Vm.DetailReminderDate = new DateTime(2026, 10, 22);
+        await s.Vm.PendingSave;
+        var changed = 0;
+        s.Vm.ClearDetailReminderTimeCommand.CanExecuteChanged += (_, _) => changed++;
+
+        s.Vm.DetailReminderTime = new TimeSpan(14, 0, 0);
+        await s.Vm.PendingSave;
+
+        Assert.True(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+        Assert.True(changed > 0, "The clear command did not report its change.");
     }
 
     [Fact]

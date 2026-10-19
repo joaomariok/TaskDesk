@@ -153,12 +153,14 @@ public sealed partial class MainViewModel
 
     /// <summary>
     /// Clears the Reminder time (the pane's "Clear Reminder time" button): the Reminder falls back to the
-    /// default Reminder time, which the pane then shows.
+    /// default Reminder time, which the pane then shows. Disabled while the pane already shows the default time,
+    /// where clearing would change nothing.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanClearDetailReminderTime))]
     private void ClearDetailReminderTime() => DetailReminderTime = null;
 
-    private bool CanClearDetailReminderTime() => DetailReminderTime is not null;
+    private bool CanClearDetailReminderTime() =>
+        DetailReminderTime is { } shown && shown != DefaultReminderTime().ToTimeSpan();
 
     private void ScheduleReminderSave()
     {
@@ -185,6 +187,8 @@ public sealed partial class MainViewModel
         }
         else if (time is not null)
         {
+            // The pane can't reach this (its time picker needs a date, and clearing the date clears the time);
+            // it guards callers that set the time directly.
             ShowFieldError(ErrorPlace.Reminder, "A Reminder time needs a Reminder date.");
             return;
         }

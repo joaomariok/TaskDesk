@@ -5,7 +5,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
 using TaskDesk.Core.Shell;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
@@ -178,7 +177,7 @@ public sealed partial class NavigationPane : UserControl
     // The Lists and Tags (the pane footer) move up under the Smart Views.
     private void ExposeToAutomation()
     {
-        foreach (var element in Descendants(Pane).OfType<FrameworkElement>())
+        foreach (var element in VisualTreeWalk.Descendants(Pane).OfType<FrameworkElement>())
         {
             switch (element.Name)
             {
@@ -195,19 +194,6 @@ public sealed partial class NavigationPane : UserControl
                 case "ItemsContainerGrid" when element is Grid grid:
                     FitFooterUnderMenuItems(grid);
                     break;
-            }
-        }
-    }
-
-    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
-    {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            yield return child;
-            foreach (var descendant in Descendants(child))
-            {
-                yield return descendant;
             }
         }
     }
