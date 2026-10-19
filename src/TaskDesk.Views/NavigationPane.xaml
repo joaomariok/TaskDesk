@@ -32,10 +32,13 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="12,0,12,0" />
         </Style>
-        <!-- The rail's List row: the initial's ring centred in the 48 px rail, like the Smart Views' icons. -->
+        <!-- The rail's List row: a compact Smart View item's footprint (NavigationViewItemButtonMargin and
+             NavigationViewItemOnLeftMinHeight), with the initial's ring where the Smart Views' icons sit. -->
         <Style x:Key="RailListItem" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
             <Setter Property="MinWidth" Value="0" />
-            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="MinHeight" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
+            <Setter Property="Height" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
+            <Setter Property="Margin" Value="{ThemeResource NavigationViewItemButtonMargin}" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="Padding" Value="0" />
         </Style>
@@ -65,15 +68,19 @@
                            Visibility="{x:Bind local:NavigationPane.ShownAboveZero(OpenTaskCount), Mode=OneWay, FallbackValue=Collapsed}" />
             </Grid>
         </DataTemplate>
-        <!-- A List in the rail: its initial inside a ring of its colour (the stripe colour for none). -->
+        <!-- A List in the rail: its initial inside a ring of its colour (the stripe colour for none), the size of a
+             Smart View's icon (NavigationViewItemOnLeftIconBoxHeight). -->
         <DataTemplate x:Key="RailListRowTemplate" x:DataType="presentation:ListItemViewModel">
-            <Grid Width="24" Height="24" ToolTipService.ToolTip="{x:Bind Name, Mode=OneWay}">
-                <Ellipse StrokeThickness="1.5"
+            <Grid Width="{ThemeResource NavigationViewItemOnLeftIconBoxHeight}"
+                  Height="{ThemeResource NavigationViewItemOnLeftIconBoxHeight}"
+                  ToolTipService.ToolTip="{x:Bind Name, Mode=OneWay}">
+                <Ellipse StrokeThickness="1"
                          Stroke="{x:Bind local:NavigationPane.ColourBrush(ColorHex), Mode=OneWay, FallbackValue=Transparent}"
                          Visibility="{x:Bind local:NavigationPane.ShownWithColour(ColorHex), Mode=OneWay, FallbackValue=Collapsed}" />
-                <Ellipse StrokeThickness="1.5" Stroke="{ThemeResource ListStripeBrush}"
+                <Ellipse StrokeThickness="1" Stroke="{ThemeResource ListStripeBrush}"
                          Visibility="{x:Bind local:NavigationPane.ShownWithoutColour(ColorHex), Mode=OneWay, FallbackValue=Visible}" />
-                <TextBlock Style="{StaticResource CaptionText}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                <TextBlock Style="{StaticResource CaptionText}" FontSize="9" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
                            Text="{x:Bind Initial, Mode=OneWay}" />
             </Grid>
         </DataTemplate>

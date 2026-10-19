@@ -679,6 +679,48 @@ public sealed class SidebarListsAndTagsTests
         return (window, viewModel, lists);
     }
 
+    [UITestMethod]
+    public async Task Rail_List_rows_take_the_size_and_place_of_the_Smart_View_items()
+    {
+        using var db = new TempDatabase();
+        var (window, _, lists) = NewWindow(db);
+        lists.Lists.Add(NewList("Work", 0, null));
+        lists.Lists.Add(NewList("Home", 0, "#D13438"));
+        try
+        {
+            window.Activate();
+            await RowsAsync(window, "ListsList", 2);
+            window.Navigation.SetRail(true);
+            var rows = await RowsAsync(window, "RailListsList", 2);
+
+            var root = window.Content;
+            var today = (NavigationViewItem)WithId(root, "SmartViewToday")!;
+            // The Smart View's highlight (the presenter's root, inset by its margin) and its 16 px icon box.
+            var highlight = VisualTree.Descendants(today).OfType<Grid>().First(g => g.Name == "LayoutRoot");
+            var icon = VisualTree.Descendants(today).OfType<Viewbox>().First(v => v.Name == "IconBox");
+            await UiWait.UntilAsync(() => rows.All(r => r.ActualWidth > 0) && icon.ActualWidth > 0,
+                () => "The rail did not lay out.", TestContext.CancellationToken);
+
+            foreach (var row in rows)
+            {
+                var name = AutomationProperties.GetName(row);
+                Assert.AreEqual(LeftOf(highlight, root), LeftOf(row, root), 1, $"{name}: row left");
+                Assert.AreEqual(highlight.ActualWidth, row.ActualWidth, 1, $"{name}: row width");
+                Assert.AreEqual(highlight.ActualHeight, row.ActualHeight, 1, $"{name}: row height");
+
+                var marker = (FrameworkElement)VisualTree.Descendants(row).OfType<Grid>()
+                    .First(g => VisualTree.Descendants(g).OfType<Ellipse>().Any());
+                Assert.AreEqual(icon.ActualHeight, marker.ActualHeight, 1, $"{name}: marker size");
+                Assert.AreEqual(LeftOf(icon, root) + icon.ActualWidth / 2, LeftOf(marker, root) + marker.ActualWidth / 2, 1,
+                    $"{name}: marker centre");
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private static ListItemViewModel NewList(string name, int openTasks, string? colour) =>
         new(new ListSummary(new TaskList { Id = Guid.NewGuid(), Name = name, ColorHex = colour }, openTasks));
 

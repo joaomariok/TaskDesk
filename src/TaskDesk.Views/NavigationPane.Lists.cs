@@ -199,6 +199,8 @@ public sealed partial class NavigationPane
         ListsHeader.Visibility = full;
         NewListArea.Visibility = full;
         ShowTags();
+        // The closed compact pane left-aligns its footer, which would shrink the rows to their markers' width.
+        SidebarScroll.Width = compact ? Pane.CompactPaneLength : double.NaN;
 
         ListsList.ItemsSource = null;
         ListsList.ItemTemplate = (DataTemplate)Resources[compact ? "RailListRowTemplate" : "ListRowTemplate"];
