@@ -19,8 +19,14 @@ public interface IAppUpdates
     Task<string?> CheckAndDownloadAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Ends this process at once, applies the downloaded update and starts the new version. Run the app's exit path
-    /// first: nothing after this call runs.
+    /// The version a check (of this run or an earlier one) downloaded and that is waiting to be applied; null when
+    /// none. Reads the local packages folder only. Only valid while <see cref="IsInstalled"/>.
     /// </summary>
-    void RestartToApply();
+    string? DownloadedVersion { get; }
+
+    /// <summary>
+    /// Ends this process at once, applies the downloaded update and starts the new version with
+    /// <paramref name="restartArguments"/>. Run the app's exit path first: nothing after this call runs.
+    /// </summary>
+    void RestartToApply(IReadOnlyList<string> restartArguments);
 }

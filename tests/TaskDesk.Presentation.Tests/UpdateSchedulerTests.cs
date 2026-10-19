@@ -214,6 +214,66 @@ public class UpdateSchedulerTests
         Assert.Null(s.Scheduler.PendingVersion);
     }
 
+    // Restart to update applies right after the exit steps: a download still writing to, or cleaning, the packages
+    // folder must have finished first (review M2).
+    [Fact]
+    public async Task Stopping_waits_for_the_running_check_to_finish()
+    {
+        var s = Create();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        s.Updates.Gate = gate;
+        s.Updates.IgnoresCancellation = true;
+        s.Scheduler.Start();
+        await s.Updates.Entered.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        var stop = s.Scheduler.StopAsync();
+        s.Clock.Advance(UpdateScheduler.StopTimeout - TimeSpan.FromMilliseconds(1));
+        Assert.False(stop.IsCompleted);
+
+        gate.SetResult();
+        await stop.WaitAsync(TestContext.Current.CancellationToken);
+        Assert.True(s.Scheduler.CurrentCheck.IsCompleted);
+    }
+
+    [Fact]
+    public async Task Stopping_gives_up_waiting_for_a_check_after_the_timeout()
+    {
+        var s = Create();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        s.Updates.Gate = gate;
+        s.Updates.IgnoresCancellation = true;
+        s.Scheduler.Start();
+        await s.Updates.Entered.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        var stop = s.Scheduler.StopAsync();
+        s.Clock.Advance(UpdateScheduler.StopTimeout);
+
+        await stop.WaitAsync(TestContext.Current.CancellationToken);
+        Assert.False(s.Scheduler.CurrentCheck.IsCompleted);
+        gate.SetResult();
+    }
+
+    [Fact]
+    public async Task Stopping_cancels_the_running_check_and_stops_further_checks()
+    {
+        var s = Create();
+        s.Updates.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        s.Scheduler.Start();
+        await s.Updates.Entered.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        await s.Scheduler.StopAsync().WaitAsync(TestContext.Current.CancellationToken);
+        s.Clock.Advance(UpdateScheduler.Interval);
+        await s.Scheduler.CurrentCheck;
+
+        Assert.Equal(1, s.Updates.Checks);
+    }
+
+    [Fact]
+    public void The_stop_timeout_is_five_seconds()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(5), UpdateScheduler.StopTimeout);
+    }
+
     [Fact]
     public void The_interval_is_six_hours()
     {
@@ -238,9 +298,18 @@ internal sealed class FakeAppUpdates : IAppUpdates
     /// <summary>When set, a check waits for it before it returns.</summary>
     public TaskCompletionSource? Gate { get; set; }
 
+    /// <summary>When true, a check waiting for <see cref="Gate"/> ignores cancellation, as a busy file write can.</summary>
+    public bool IgnoresCancellation { get; set; }
+
     public int Checks => Volatile.Read(ref _checks);
 
     public int Restarts { get; private set; }
+
+    /// <summary>The downloaded version waiting on disk; null when none.</summary>
+    public string? DownloadedVersion { get; set; }
+
+    /// <summary>The launch arguments the last restart passed on.</summary>
+    public IReadOnlyList<string>? RestartArguments { get; private set; }
 
     /// <summary>Completed once a check has started.</summary>
     public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -251,7 +320,7 @@ internal sealed class FakeAppUpdates : IAppUpdates
         Entered.TrySetResult();
         if (Gate is { } gate)
         {
-            await gate.Task.WaitAsync(cancellationToken);
+            await (IgnoresCancellation ? gate.Task : gate.Task.WaitAsync(cancellationToken));
         }
 
         if (Failure is { } failure)
@@ -262,5 +331,9 @@ internal sealed class FakeAppUpdates : IAppUpdates
         return Available;
     }
 
-    public void RestartToApply() => Restarts++;
+    public void RestartToApply(IReadOnlyList<string> restartArguments)
+    {
+        Restarts++;
+        RestartArguments = restartArguments;
+    }
 }

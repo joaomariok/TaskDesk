@@ -35,7 +35,7 @@ The installed TaskDesk uses the same data, and its first start points "Start wit
 
 ## Updates
 
-An installed TaskDesk keeps itself up to date. It checks the [GitHub Releases](https://github.com/joaomariok/TaskDesk/releases) when it starts and every 6 hours after that, and downloads a newer version in the background, without asking. The downloaded version is installed the next time TaskDesk starts, usually at your next logon. Your data is not touched.
+An installed TaskDesk keeps itself up to date. It checks the [GitHub Releases](https://github.com/joaomariok/TaskDesk/releases) when it starts and every 6 hours after that, and downloads a newer version in the background, without asking. The downloaded version is installed the next time TaskDesk starts, usually at your next logon, or right away when you choose **Restart to update** from the tray icon or Settings. Opening TaskDesk again while it already runs (the Start-menu shortcut, say) never installs it: the running copy just comes forward. A start from a Reminder toast's button (Mark done, Snooze) does not install it either, so the button's action is kept; the update waits for the next start. Your data is not touched.
 
 A check that fails (offline, GitHub down) shows nothing: it is logged and tried again 6 hours later. A finished download is logged too, in the day's log under `logs\`.
 

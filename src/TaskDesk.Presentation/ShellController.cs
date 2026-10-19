@@ -296,7 +296,8 @@ public sealed class ShellController(
             try
             {
                 // Ends the process at once when it works.
-                updates!.RestartToApply();
+                // The new version opens its window: a restart the owner asked for is not a logon start.
+                updates!.RestartToApply([]);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {

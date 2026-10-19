@@ -8,8 +8,9 @@ namespace TaskDesk.Presentation;
 /// <summary>
 /// Keeps an installed TaskDesk up to date (ADR 0005). Checks GitHub Releases at start and every
 /// <see cref="Interval"/>, on the injected <see cref="TimeProvider"/>, and downloads a newer version silently;
-/// Velopack installs it at the next start. Does nothing when the app is not installed (a dev build or a copied
-/// folder) or the runtime mode turns updates off (a redirected data folder). Checks never overlap: a tick while one
+/// it is installed at the next start (<see cref="StartupUpdate"/>) or by Restart to update. Does nothing when the
+/// app is not installed (a dev build or a copied folder) or the runtime mode turns updates off (a redirected data
+/// folder). Checks never overlap: a tick while one
 /// runs is skipped. Every failure (offline, GitHub down) is logged and swallowed, never shown; the next interval
 /// retries. The downloaded version is <see cref="PendingVersion"/>.
 /// </summary>
@@ -21,6 +22,9 @@ public sealed class UpdateScheduler(
 {
     /// <summary>How often the scheduler checks for a new release.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromHours(6);
+
+    /// <summary>How long <see cref="StopAsync"/> waits for a cancelled check to end.</summary>
+    public static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
 
     private readonly ILogger _logger = logger ?? NullLogger<UpdateScheduler>.Instance;
     private readonly Lock _gate = new();
@@ -77,6 +81,24 @@ public sealed class UpdateScheduler(
         }
 
         RequestCheck();
+    }
+
+    /// <summary>
+    /// Stops the checks (see <see cref="Dispose"/>), then waits up to <see cref="StopTimeout"/> for the cancelled
+    /// check to end, so a restart into the update never applies while a download still writes to, or cleans, the
+    /// packages folder. Past the timeout it logs a warning and returns. Never throws.
+    /// </summary>
+    public async Task StopAsync()
+    {
+        Dispose();
+        try
+        {
+            await CurrentCheck.WaitAsync(StopTimeout, clock).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            _logger.LogWarning("The update check did not end within {Timeout}; exiting without waiting", StopTimeout);
+        }
     }
 
     public void Dispose()

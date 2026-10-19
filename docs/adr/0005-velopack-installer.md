@@ -17,6 +17,15 @@ TaskDesk was a published folder that the owner copied by hand. v1 had "installer
   - The gate runs on the hosted runner the same way `ci.yml` runs it, with the display set to 1920 x 1080 because the in-process WinUI tests open windows and the docked-pane tests need a wide screen.
   - Pre-release tags (`v1.0.0-beta.1`) are not supported by the workflow yet; the pack script would accept them.
 
+## When a downloaded update is installed (#92, review round 1)
+
+An installed copy checks GitHub Releases at start and every 6 hours and downloads a newer version in the background. The download is installed at one of two points, and never anywhere else:
+
+- **At start, by the single-instance owner only.** Velopack's own apply-on-start is always off (`SetAutoApplyOnStartup(false)` in `Program.cs`): it runs in every process before the single-instance check, so opening TaskDesk while it already ran would let the updater stop the running copy without its exit path, and lose a pending detail edit. Instead `App.OnLaunched`, once it holds the single-instance guard and before it builds the host or the window, calls `StartupUpdate.ApplyIfPending`. That applies the downloaded version and restarts with the same launch arguments, so a logon start stays `--minimized`. It does nothing when the runtime mode turns updates off (a redirected data folder), the copy is not installed, or a notification launched the process: the restarted process would have no toast activation, and a Mark done or Snooze would be lost. That update waits for the next normal start.
+- **By Restart to update** (tray or Settings), after the normal exit. The exit stops the update checks and waits up to 5 seconds for a running check to end, so the apply never races a download still writing to, or cleaning, the packages folder.
+
+`InstallerGuardrailTests` checks that `Program.cs` turns Velopack's apply-on-start off and that `App.xaml.cs` applies after the single-instance check and before the host.
+
 ## Toasts and the AppUserModelId (go/no-go, #89)
 
 The owner installed 0.1.0, upgraded to 0.1.1 and uninstalled, on the owner's own machine (not Windows Sandbox). The result was go.
@@ -32,6 +41,6 @@ The owner installed 0.1.0, upgraded to 0.1.1 and uninstalled, on the owner's own
 ## Consequences
 
 - A release is one `git tag` and one `git push`; there is no manual upload.
-- Updating from inside the app (`UpdateManager`) is not part of this record; the feed and delta packages it would use are already published.
+- Updating from inside the app (`UpdateManager`) uses the feed and delta packages the release publishes; see "When a downloaded update is installed".
 - An unsigned `Setup.exe` can be flagged by SmartScreen and some antivirus tools until the builds are signed.
 - The release workflow cannot be tried without pushing a tag. Its acceptance criteria are checked by pushing a test tag (a second one for the delta package) and deleting the test releases and tags afterwards.

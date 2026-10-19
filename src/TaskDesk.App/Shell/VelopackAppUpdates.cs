@@ -44,9 +44,11 @@ internal sealed class VelopackAppUpdates : IAppUpdates
         return target.Version.ToString();
     }
 
-    public void RestartToApply()
+    public string? DownloadedVersion => _manager.Value.UpdatePendingRestart?.Version.ToString();
+
+    public void RestartToApply(IReadOnlyList<string> restartArguments)
     {
         var manager = _manager.Value;
-        manager.ApplyUpdatesAndRestart(manager.UpdatePendingRestart);
+        manager.ApplyUpdatesAndRestart(manager.UpdatePendingRestart, [.. restartArguments]);
     }
 }

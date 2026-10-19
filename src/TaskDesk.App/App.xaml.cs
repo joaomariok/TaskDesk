@@ -66,6 +66,24 @@ public partial class App : Application
             return;
         }
 
+        // An update downloaded by an earlier run applies now, before anything can need saving, and restarts with
+        // this launch's arguments (a logon start stays minimized). Not for a toast's launch: the restarted process
+        // would lose its Mark done or Snooze. Logged once the host's logger exists; start-up carries on.
+        Exception? startupUpdateFailure = null;
+        var appUpdates = new VelopackAppUpdates();
+        try
+        {
+            StartupUpdate.ApplyIfPending(
+                appUpdates,
+                mode,
+                mode.RegistersNotifications && ReadLaunchActivation() is not null,
+                arguments[1..]);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            startupUpdateFailure = ex;
+        }
+
         var paths = AppPaths.Default();
         paths.EnsureDirectories();
 
@@ -95,7 +113,7 @@ public partial class App : Application
         // Toasts with the balloon fallback, or the balloon only in sandbox mode (no toast registration).
         builder.Services.AddTaskDeskNotifications(mode, VelopackInstall.IsInstalled);
         builder.Services.AddSingleton<ReminderScheduler>();
-        builder.Services.AddSingleton<IAppUpdates, VelopackAppUpdates>();
+        builder.Services.AddSingleton<IAppUpdates>(appUpdates);
         builder.Services.AddSingleton<UpdateScheduler>();
         builder.Services.AddSingleton<ReminderActivationHandler>();
         builder.Services.AddSingleton(sp => new ReminderActivationRouter(
@@ -141,6 +159,11 @@ public partial class App : Application
         _logger = logger;
         await _host.StartAsync();
         logger.LogInformation("Runtime mode: {Mode} (data folder {DataDirectory})", mode, paths.DataDirectory);
+        if (startupUpdateFailure is not null)
+        {
+            logger.LogError(startupUpdateFailure, "Applying the downloaded update at start failed; starting this version");
+        }
+
         try
         {
             await _host.Services.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
@@ -233,11 +256,12 @@ public partial class App : Application
         updates.PendingVersionChanged += () => tray.ShowRestartToUpdate(updates.PendingVersion is not null);
         StartSystemHooks(shell, reminders, notifications);
 
-        // The last exit step: stop the update checks (a running download is cancelled), release the global hotkey,
-        // then the shell (tray, single-instance guard) and the host, which closes the database and the log file.
+        // The last exit step: stop the update checks (a running download is cancelled, and waited for, so Restart to
+        // update never applies while it writes), release the global hotkey, then the shell (tray, single-instance
+        // guard) and the host, which closes the database and the log file.
         shell.AddExitStep(async () =>
         {
-            updates.Dispose();
+            await updates.StopAsync();
             hotkeys.Dispose();
             shell.Dispose();
             if (host is IAsyncDisposable asyncHost)

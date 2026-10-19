@@ -63,19 +63,31 @@ public sealed partial class InstallerGuardrailTests
             StringComparison.Ordinal);
     }
 
-    // Velopack applies a downloaded update at start unless told not to; a sandbox-mode run of an installed copy must
-    // leave a pending update pending (#92).
+    // Velopack's own apply-on-start runs in every process, before the single-instance check, so a second launch would
+    // stop the running copy without its exit path. It is always off; the App applies a downloaded update itself,
+    // only when the runtime mode manages updates (#92, review H1).
     [Fact]
-    public void App_entry_point_applies_downloaded_updates_on_start_only_when_the_runtime_mode_manages_updates()
+    public void App_entry_point_turns_off_Velopack_s_apply_on_start()
     {
         var program = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "TaskDesk.App", "Program.cs"));
         var main = MainFirstStatement().Match(program);
 
         Assert.True(main.Success, "Program.cs has no Main method.");
-        Assert.Contains(
-            ".SetAutoApplyOnStartup(RuntimeMode.FromEnvironment().ManagesUpdates)",
-            main.Groups["first"].Value,
-            StringComparison.Ordinal);
+        Assert.Contains(".SetAutoApplyOnStartup(false)", main.Groups["first"].Value, StringComparison.Ordinal);
+    }
+
+    // Only the single-instance owner applies, and before the host exists: nothing to save yet, no window to lose.
+    [Fact]
+    public void App_applies_a_downloaded_update_after_the_single_instance_check_and_before_the_host()
+    {
+        var app = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "TaskDesk.App", "App.xaml.cs"));
+        var acquire = app.IndexOf("singleInstance.TryAcquire()", StringComparison.Ordinal);
+        var apply = app.IndexOf("StartupUpdate.ApplyIfPending(", StringComparison.Ordinal);
+        var host = app.IndexOf("Host.CreateApplicationBuilder()", StringComparison.Ordinal);
+
+        Assert.True(acquire >= 0, "App.xaml.cs has no single-instance check.");
+        Assert.True(apply > acquire, "StartupUpdate.ApplyIfPending is not called after the single-instance check.");
+        Assert.True(apply < host, "StartupUpdate.ApplyIfPending is not called before the host is built.");
     }
 
     [GeneratedRegex(@"\$OutputDir\s*=\s*Join-Path\s+\$repoRoot\s+'(?<value>[^']+)'")]
