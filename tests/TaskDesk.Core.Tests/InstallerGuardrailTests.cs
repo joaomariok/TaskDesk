@@ -48,6 +48,21 @@ public sealed partial class InstallerGuardrailTests
         Assert.EndsWith(".Run()", main.Groups["first"].Value.Trim(), StringComparison.Ordinal);
     }
 
+    // Uninstalling runs this exe with the hook argument; without the hook the Run entry and the notification
+    // registration stay behind (#90).
+    [Fact]
+    public void App_entry_point_runs_the_uninstall_cleanup_in_Velopack_s_uninstall_hook()
+    {
+        var program = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "TaskDesk.App", "Program.cs"));
+        var main = MainFirstStatement().Match(program);
+
+        Assert.True(main.Success, "Program.cs has no Main method.");
+        Assert.Contains(
+            ".OnBeforeUninstallFastCallback(VelopackInstall.OnBeforeUninstall)",
+            main.Groups["first"].Value,
+            StringComparison.Ordinal);
+    }
+
     [GeneratedRegex(@"\$OutputDir\s*=\s*Join-Path\s+\$repoRoot\s+'(?<value>[^']+)'")]
     private static partial Regex DefaultOutputDir();
 

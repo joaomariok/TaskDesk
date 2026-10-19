@@ -8,9 +8,10 @@ namespace TaskDesk.App.Notifications;
 
 /// <summary>
 /// Reminder toasts through the Windows App SDK (ADR 0002, SPEC 7.3), unpackaged. Covered by manual checks
-/// only: tests never show a toast.
+/// only: tests never show a toast. On exit, a run that is not a Velopack install removes its registration (#90).
 /// </summary>
-internal sealed class AppSdkNotificationService(ILogger<AppSdkNotificationService> logger) : INotificationService
+internal sealed class AppSdkNotificationService(ILogger<AppSdkNotificationService> logger, bool isInstalled)
+    : INotificationService
 {
     private bool _registered;
 
@@ -96,8 +97,13 @@ internal sealed class AppSdkNotificationService(ILogger<AppSdkNotificationServic
         }
 
         _registered = false;
-        AppNotificationManager.Default.NotificationInvoked -= OnNotificationInvoked;
-        AppNotificationManager.Default.Unregister();
+        var manager = AppNotificationManager.Default;
+        manager.NotificationInvoked -= OnNotificationInvoked;
+        NotificationExit.Release(isInstalled, manager.Unregister, () =>
+        {
+            manager.UnregisterAll();
+            logger.LogInformation("Removed this run's app notification registration: not a Velopack install");
+        });
     }
 
     private void OnNotificationInvoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)

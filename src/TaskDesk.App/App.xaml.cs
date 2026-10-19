@@ -94,7 +94,7 @@ public partial class App : Application
         builder.Services.AddSingleton<ITrayIcon>(sp => sp.GetRequiredService<WinUiTrayIcon>());
         builder.Services.AddSingleton<IBalloonTray>(sp => sp.GetRequiredService<WinUiTrayIcon>());
         // Toasts with the balloon fallback, or the balloon only in sandbox mode (no toast registration).
-        builder.Services.AddTaskDeskNotifications(mode);
+        builder.Services.AddTaskDeskNotifications(mode, VelopackInstall.IsInstalled);
         builder.Services.AddSingleton<ReminderScheduler>();
         builder.Services.AddSingleton<ReminderActivationHandler>();
         builder.Services.AddSingleton(sp => new ReminderActivationRouter(
@@ -284,7 +284,8 @@ public partial class App : Application
     {
         try
         {
-            return new AppSdkNotificationService(NullLogger<AppSdkNotificationService>.Instance).GetLaunchActivation();
+            return new AppSdkNotificationService(
+                NullLogger<AppSdkNotificationService>.Instance, VelopackInstall.IsInstalled).GetLaunchActivation();
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

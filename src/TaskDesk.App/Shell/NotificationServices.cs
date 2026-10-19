@@ -13,9 +13,11 @@ internal static class NotificationServices
     /// <summary>
     /// Registers <see cref="INotificationService"/>: with toast registration (the normal mode), Windows App SDK
     /// toasts that fall back to the tray balloon; without it (sandbox mode), the tray balloon only, so nothing is
-    /// left behind in the registry. Needs an <see cref="Core.Shell.IBalloonTray"/> registered.
+    /// left behind in the registry. Needs an <see cref="Core.Shell.IBalloonTray"/> registered. A run that is not
+    /// <paramref name="isInstalled"/> removes its toast registration on exit (#90).
     /// </summary>
-    public static IServiceCollection AddTaskDeskNotifications(this IServiceCollection services, RuntimeMode mode)
+    public static IServiceCollection AddTaskDeskNotifications(
+        this IServiceCollection services, RuntimeMode mode, bool isInstalled)
     {
         services.AddSingleton<TrayBalloonNotificationService>();
         if (!mode.RegistersNotifications)
@@ -24,7 +26,8 @@ internal static class NotificationServices
             return services;
         }
 
-        services.AddSingleton<AppSdkNotificationService>();
+        services.AddSingleton(sp => new AppSdkNotificationService(
+            sp.GetRequiredService<ILogger<AppSdkNotificationService>>(), isInstalled));
         services.AddSingleton(sp => new NotificationDelivery(
             sp.GetRequiredService<AppSdkNotificationService>(),
             sp.GetRequiredService<TrayBalloonNotificationService>(),

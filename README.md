@@ -33,6 +33,16 @@ If you ran TaskDesk from a folder you copied by hand (for example `%LOCALAPPDATA
 
 The installed TaskDesk uses the same data, and its first start points "Start with Windows" at the installed exe. Delete the old folder before you start the old copy again, or it takes the Run key back.
 
+## Uninstall
+
+Uninstall TaskDesk from **Settings > Apps > Installed apps** (Apps & features). Exit TaskDesk from its tray icon first, so an edit in progress is saved; uninstalling stops a running TaskDesk without saving it. Uninstalling removes the install folder `%LOCALAPPDATA%\TaskDesk.App`, the Start-menu shortcut, the "Start with Windows" entry (only when it points at the installed exe) and the app's Windows notification registration.
+
+Your data stays: `%LOCALAPPDATA%\TaskDesk` keeps the database, settings, backups and logs, and installing TaskDesk again shows the same Tasks. To delete the data as well, delete that folder by hand after uninstalling:
+
+```powershell
+Remove-Item -Recurse "$env:LOCALAPPDATA\TaskDesk"
+```
+
 ## Run
 
 ```powershell
@@ -116,4 +126,4 @@ Sandbox mode keeps the test run away from your Run key. Measured results and met
 - Notifications are not delivered when TaskDesk runs elevated, or while Windows Do Not Disturb is on.
 - The default global hotkey `Ctrl+Alt+Space` may already belong to another application. TaskDesk logs the conflict and shows it in Settings; choose another combination there.
 - Subtasks are one level deep, Notes are plain text, and data is local to one PC (use Export and Import to move it).
-- The Windows registration of the app's notification identity (`HKCU\Software\Classes\AppUserModelId`) is not removed on exit.
+- An installed TaskDesk keeps its Windows notification registration (`HKCU\Software\Classes\AppUserModelId\velopack.TaskDesk.App`) on exit, so toasts in Action Center still open it; uninstalling removes it. A run that is not installed (a Debug build or a publish folder) removes its registration on exit, but one that is killed or crashes leaves it behind.

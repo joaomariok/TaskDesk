@@ -129,7 +129,7 @@ public sealed partial class SystemHooksTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(tray);
-        services.AddTaskDeskNotifications(mode);
+        services.AddTaskDeskNotifications(mode, isInstalled: false);
         return services.BuildServiceProvider();
     }
 
