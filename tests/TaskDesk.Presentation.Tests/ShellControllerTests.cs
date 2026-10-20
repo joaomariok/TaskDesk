@@ -78,16 +78,16 @@ public sealed class ShellControllerTests
         Assert.False(_window.IsVisible);
     }
 
+    // The launch gate finds the running copy (LaunchGateTests); a start without the guard is a start-up bug.
     [Fact]
-    public async Task Second_instance_signals_the_first_and_does_not_set_up()
+    public async Task Start_without_the_single_instance_guard_is_rejected_and_signals_no_one()
     {
         _single.IsFirst = false;
-        var controller = Create();
 
-        var started = await controller.StartAsync(false, Exe, TestContext.Current.CancellationToken);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Create().StartAsync(false, Exe, TestContext.Current.CancellationToken));
 
-        Assert.False(started);
-        Assert.Equal(1, _single.SignalCount);
+        Assert.Equal(0, _single.SignalCount);
         Assert.False(_tray.Shown);
         Assert.Empty(_runKey.Values);
     }
@@ -145,16 +145,6 @@ public sealed class ShellControllerTests
 
         Assert.Equal(0, _window.FocusCount);
         Assert.Equal(0, activations);
-    }
-
-    [Fact]
-    public async Task A_second_instance_forwards_its_minimized_flag()
-    {
-        _single.IsFirst = false;
-
-        await Create().StartAsync(minimized: true, Exe, TestContext.Current.CancellationToken);
-
-        Assert.Equal([SecondLaunchArguments.MinimizedFlag], Assert.Single(_single.Signals));
     }
 
     [Fact]
@@ -394,7 +384,7 @@ public sealed class ShellControllerTests
 
         await controller.RestartToUpdateAsync();
 
-        Assert.Equal([StartupUpdate.RestartedFlag], _updates.RestartArguments);
+        Assert.Equal([LaunchGate.RestartedFlag], _updates.RestartArguments);
     }
 
     // The apply must not race a download still writing to, or cleaning, the packages folder (review M2).
@@ -444,7 +434,7 @@ public sealed class ShellControllerTests
         await restart.WaitAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, _updates.Relaunches);
-        Assert.Equal([StartupUpdate.RestartedFlag], _updates.RelaunchArguments);
+        Assert.Equal([LaunchGate.RestartedFlag], _updates.RelaunchArguments);
         Assert.True(guardReleasedFirst);
         Assert.Equal(1, _lifetime.ShutdownCount);
         download.SetResult();
@@ -899,28 +889,6 @@ public sealed class ShellControllerTests
 
         Assert.True(ran);
         Assert.Equal(1, _lifetime.ShutdownCount);
-    }
-
-    [Fact]
-    public async Task A_launch_that_finds_another_instance_runs_nothing_else()
-    {
-        _single.IsFirst = false;
-        var controller = Create();
-        var steps = 0;
-
-        var launched = await controller.LaunchAsync(
-            minimized: false,
-            Exe,
-            _ =>
-            {
-                steps++;
-                return Task.CompletedTask;
-            },
-            () => steps++,
-            TestContext.Current.CancellationToken);
-
-        Assert.False(launched);
-        Assert.Equal(0, steps);
     }
 
     [Fact]

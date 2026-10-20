@@ -10,7 +10,7 @@ namespace TaskDesk.App;
 /// before any single-instance, host or window code. The uninstall hook removes what the app registered (#90).
 /// Velopack's own apply-on-start is always off: it would apply a downloaded update in every process, before the
 /// single-instance check, and stop a running copy without its exit path. The App applies it instead, in the
-/// single-instance owner only (<see cref="Presentation.StartupUpdate"/>).
+/// single-instance owner only (<see cref="Presentation.LaunchGate"/>).
 /// Then it starts WinUI as the generated entry point did.
 /// </summary>
 public static class Program

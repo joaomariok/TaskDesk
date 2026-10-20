@@ -52,15 +52,17 @@ public sealed class ShellController(
     public event Action<NotificationActivation>? ActivationRequested;
 
     /// <summary>
-    /// Returns false when another instance already runs (it has been signalled and this
-    /// process should exit); otherwise sets everything up.
+    /// Sets everything up in the process that owns the single-instance guard: <see cref="LaunchGate"/> has claimed
+    /// it and forwarded any launch that found another copy, so this only confirms ownership
+    /// (<see cref="ISingleInstance.TryAcquire"/> keeps its first answer) and throws when the guard is held
+    /// elsewhere. Listens for later launches, then sets up the Run key, the tray and the window. Returns true.
     /// </summary>
-    public async Task<bool> StartAsync(bool minimized, string exePath, CancellationToken cancellationToken = default)
+    public Task<bool> StartAsync(bool minimized, string exePath, CancellationToken cancellationToken = default)
     {
         if (!singleInstance.TryAcquire())
         {
-            await singleInstance.SignalExistingAsync(SecondLaunchArguments.Build(minimized, null), cancellationToken);
-            return false;
+            throw new InvalidOperationException(
+                "Another copy holds the single-instance guard; the launch gate forwards to it before the shell starts.");
         }
 
         singleInstance.Listen(OnSecondLaunch);
@@ -79,7 +81,7 @@ public sealed class ShellController(
             window.ShowAndFocus();
         }
 
-        return true;
+        return Task.FromResult(true);
     }
 
     /// <summary>
@@ -94,8 +96,7 @@ public sealed class ShellController(
     /// <see cref="StartAsync"/> on, the tray's Exit and session end can start the exit, which disposes what the
     /// later steps use. The activation gets <see cref="ExitStarted"/>, and the exit waits for it before its steps,
     /// so a Mark done or Snooze that launched the app is kept. A failing activation is logged and start-up carries
-    /// on. Nothing runs after an exit has started. Returns false when another instance already runs (see
-    /// <see cref="StartAsync"/>).
+    /// on. Nothing runs after an exit has started. Returns true.
     /// </summary>
     public async Task<bool> LaunchAsync(
         bool minimized,
@@ -105,10 +106,7 @@ public sealed class ShellController(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(running);
-        if (!await StartAsync(minimized, exePath, cancellationToken))
-        {
-            return false;
-        }
+        await StartAsync(minimized, exePath, cancellationToken);
 
         if (launchActivation is not null && !_exiting)
         {
@@ -329,7 +327,7 @@ public sealed class ShellController(
     }
 
     // Restart to update, after the exit. Either restart opens the window (a restart the owner asked for is not a
-    // logon start) and carries StartupUpdate.RestartedFlag, so the restarted process never applies at start.
+    // logon start) and carries LaunchGate.RestartedFlag, so the restarted process never applies at start.
     private async Task RestartAsync(Task<bool> checksEnded)
     {
         // The timed wait may have given up while the exit steps still ran; a check that ended since then is done.
@@ -341,7 +339,7 @@ public sealed class ShellController(
                 "An update check was still running; restarting without the update, which applies at the next start");
             try
             {
-                updates!.RestartWithoutApplying(StartupUpdate.RestartArguments([]));
+                updates!.RestartWithoutApplying(LaunchGate.RestartArguments([]));
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -354,7 +352,7 @@ public sealed class ShellController(
         try
         {
             // Ends the process at once when it works.
-            updates!.RestartToApply(StartupUpdate.RestartArguments([]));
+            updates!.RestartToApply(LaunchGate.RestartArguments([]));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

@@ -339,8 +339,16 @@ internal sealed class FakeAppUpdates : IAppUpdates
         return Available;
     }
 
+    /// <summary>Thrown by the next apply when set (a locked file, a corrupt package).</summary>
+    public Exception? ApplyFailure { get; set; }
+
     public void RestartToApply(IReadOnlyList<string> restartArguments)
     {
+        if (ApplyFailure is { } failure)
+        {
+            throw failure;
+        }
+
         Restarts++;
         RestartArguments = restartArguments;
     }

@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using TaskDesk.Core.Shell;
 
 namespace TaskDesk.App.Shell;
@@ -9,7 +10,7 @@ namespace TaskDesk.App.Shell;
 /// arguments (wire format: <see cref="SecondLaunchMessage"/>). Names come from <see cref="SingleInstanceNames"/>,
 /// so a redirected data folder is its own instance. Covered by manual checks and the UI tests.
 /// </summary>
-internal sealed class NamedPipeSingleInstance(SingleInstanceNames names) : ISingleInstance
+internal sealed partial class NamedPipeSingleInstance(SingleInstanceNames names) : ISingleInstance
 {
     private readonly CancellationTokenSource _stop = new();
     private Mutex? _mutex;
@@ -36,6 +37,8 @@ internal sealed class NamedPipeSingleInstance(SingleInstanceNames names) : ISing
 
     public async Task SignalExistingAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
+        // This launch has the foreground; let the running instance take it when it shows its window.
+        AllowSetForegroundWindow(AsfwAny);
         try
         {
             await using var client = new NamedPipeClientStream(".", names.Pipe, PipeDirection.Out);
@@ -86,4 +89,10 @@ internal sealed class NamedPipeSingleInstance(SingleInstanceNames names) : ISing
 
         _stop.Dispose();
     }
+
+    private const int AsfwAny = -1;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool AllowSetForegroundWindow(int processId);
 }

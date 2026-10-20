@@ -44,7 +44,7 @@ public interface IMainWindow
 /// <summary>Guarantees one running process; later launches wake the first one.</summary>
 public interface ISingleInstance : IDisposable
 {
-    /// <summary>True when this process is the first instance.</summary>
+    /// <summary>True when this process is the first instance. Later calls return the first call's answer.</summary>
     bool TryAcquire();
 
     /// <summary>

@@ -76,18 +76,17 @@ public sealed partial class InstallerGuardrailTests
         Assert.Contains(".SetAutoApplyOnStartup(false)", main.Groups["first"].Value, StringComparison.Ordinal);
     }
 
-    // Only the single-instance owner applies, and before the host exists: nothing to save yet, no window to lose.
+    // Only the single-instance owner applies, and before the host exists: nothing to save yet, no window to lose. The
+    // launch gate claims the guard before it applies (LaunchGateTests); the App asks the gate before the host (#99).
     [Fact]
-    public void App_applies_a_downloaded_update_after_the_single_instance_check_and_before_the_host()
+    public void App_asks_the_launch_gate_before_it_builds_the_host()
     {
         var app = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "TaskDesk.App", "App.xaml.cs"));
-        var acquire = app.IndexOf("singleInstance.TryAcquire()", StringComparison.Ordinal);
-        var apply = app.IndexOf("StartupUpdate.ApplyIfPending(", StringComparison.Ordinal);
+        var gate = app.IndexOf("LaunchGate.DecideAsync(", StringComparison.Ordinal);
         var host = app.IndexOf("Host.CreateApplicationBuilder()", StringComparison.Ordinal);
 
-        Assert.True(acquire >= 0, "App.xaml.cs has no single-instance check.");
-        Assert.True(apply > acquire, "StartupUpdate.ApplyIfPending is not called after the single-instance check.");
-        Assert.True(apply < host, "StartupUpdate.ApplyIfPending is not called before the host is built.");
+        Assert.True(gate >= 0, "App.xaml.cs does not ask the launch gate.");
+        Assert.True(gate < host, "LaunchGate.DecideAsync is not called before the host is built.");
     }
 
     [GeneratedRegex(@"\$OutputDir\s*=\s*Join-Path\s+\$repoRoot\s+'(?<value>[^']+)'")]

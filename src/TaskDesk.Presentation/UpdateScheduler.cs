@@ -8,7 +8,7 @@ namespace TaskDesk.Presentation;
 /// <summary>
 /// Keeps an installed TaskDesk up to date (ADR 0005). Checks GitHub Releases at start and every
 /// <see cref="Interval"/>, on the injected <see cref="TimeProvider"/>, and downloads a newer version silently;
-/// it is installed at the next start (<see cref="StartupUpdate"/>) or by Restart to update. Does nothing when the
+/// it is installed at the next start (<see cref="LaunchGate"/>) or by Restart to update. Does nothing when the
 /// app is not installed (a dev build or a copied folder) or the runtime mode turns updates off (a redirected data
 /// folder). Checks never overlap: a tick while one
 /// runs is skipped. Every failure (offline, GitHub down) is logged and swallowed, never shown; the next interval

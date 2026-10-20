@@ -1,9 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.UI.Xaml;
 using TaskDesk.App.Notifications;
 using TaskDesk.App.Shell;
@@ -49,41 +47,29 @@ public partial class App : Application
         var arguments = Environment.GetCommandLineArgs();
         var minimizedFlag = arguments.Contains(SecondLaunchArguments.MinimizedFlag, StringComparer.OrdinalIgnoreCase);
         var mode = RuntimeMode.FromEnvironment();
+        // The Reminder toast click that launched this process, read before registration for the launch gate (to
+        // forward it, and for the "launched by a toast" condition). The launch's Mark done or Snooze reads it again
+        // after registration: see ReadLaunchActivation.
+        var gateActivation = mode.RegistersNotifications ? ReadLaunchActivation() : null;
 
-        // Claim single-instance ownership before any expensive start-up work.
+        // Before any expensive start-up work: forward to a running copy and end, or apply an update downloaded by an
+        // earlier run and restart (ADR 0005), or carry on owning the instance. A failed apply is logged once the
+        // host's logger exists; start-up carries on.
         var singleInstance = new NamedPipeSingleInstance(
             SingleInstanceNames.For(Environment.GetEnvironmentVariable(AppPaths.DataDirectoryVariable)));
-        if (!singleInstance.TryAcquire())
+        var appUpdates = new VelopackAppUpdates();
+        var decision = await LaunchGate.DecideAsync(
+            singleInstance, appUpdates, mode, arguments[1..], gateActivation, CancellationToken.None);
+        if (decision.Outcome != LaunchOutcome.CarryOn)
         {
-            // This launch has the foreground; let the running instance take it when it shows its window.
-            AllowSetForegroundWindow(AsfwAny);
-            // Forward --minimized and a Reminder toast click to the running instance (SPEC 7.1).
-            var forwarded = SecondLaunchArguments.Build(
-                minimizedFlag, mode.RegistersNotifications ? ReadLaunchActivation() : null);
-            await singleInstance.SignalExistingAsync(forwarded, CancellationToken.None);
-            singleInstance.Dispose();
+            // The gate released the guard after forwarding; a successful apply never returns here.
+            if (decision.Outcome == LaunchOutcome.ApplyAndRestart)
+            {
+                singleInstance.Dispose();
+            }
+
             Exit();
             return;
-        }
-
-        // An update downloaded by an earlier run applies now, before anything can need saving, and restarts with
-        // this launch's arguments (a logon start stays minimized) and StartupUpdate.RestartedFlag. Not for a toast's
-        // launch: the restarted process would lose its Mark done or Snooze. Not for a process the updater restarted
-        // (that flag): applying may have failed, and trying again would repeat at every start. Logged once the
-        // host's logger exists; start-up carries on.
-        Exception? startupUpdateFailure = null;
-        var appUpdates = new VelopackAppUpdates();
-        try
-        {
-            StartupUpdate.ApplyIfPending(
-                appUpdates,
-                mode,
-                mode.RegistersNotifications && ReadLaunchActivation() is not null,
-                arguments[1..]);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            startupUpdateFailure = ex;
         }
 
         var paths = AppPaths.Default();
@@ -161,9 +147,9 @@ public partial class App : Application
         _logger = logger;
         await _host.StartAsync();
         logger.LogInformation("Runtime mode: {Mode} (data folder {DataDirectory})", mode, paths.DataDirectory);
-        if (startupUpdateFailure is not null)
+        if (decision.ApplyFailure is not null)
         {
-            logger.LogError(startupUpdateFailure, "Applying the downloaded update at start failed; starting this version");
+            logger.LogError(decision.ApplyFailure, "Applying the downloaded update at start failed; starting this version");
         }
 
         try
@@ -242,6 +228,7 @@ public partial class App : Application
         activations.Attach(notifications);
         shell.ActivationRequested += activations.Route;
         notifications.Register();
+        // Read again after registration, which delivers a launching toast's arguments (#99).
         var launch = notifications.GetLaunchActivation();
 
         // Launched by "Mark done" or a Snooze button on a toast: act without opening the window.
@@ -317,13 +304,14 @@ public partial class App : Application
         });
     }
 
-    // The Reminder toast click that launched this (second) process, read before any registration.
+    // The Reminder toast click that launched this process. Windows App SDK 1.8 hands a toast's arguments to the
+    // process it launched only through the COM activator that registration sets up, so this read, before
+    // registration, can miss them; the launch's own read stays after registration (#99).
     private static NotificationActivation? ReadLaunchActivation()
     {
         try
         {
-            return new AppSdkNotificationService(
-                NullLogger<AppSdkNotificationService>.Instance, VelopackInstall.IsInstalled).GetLaunchActivation();
+            return AppSdkNotificationService.ReadLaunchActivation();
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -423,10 +411,4 @@ public partial class App : Application
             _logger?.LogError(ex, "The Settings window could not open");
         }
     }
-
-    private const int AsfwAny = -1;
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool AllowSetForegroundWindow(int processId);
 }

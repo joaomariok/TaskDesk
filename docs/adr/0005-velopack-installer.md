@@ -2,6 +2,8 @@
 
 **Status: Accepted (2026-10-18). Spec #87; go/no-go on #89.**
 
+**Update (2026-10-20, #99).** The apply at start now runs in `LaunchGate` (it was `StartupUpdate`), which the App calls after reading the launch activation and before building the host. The gate claims the single-instance guard, forwards a launch that finds another copy and ends it, and otherwise applies under the conditions below, unchanged; `LaunchGate.RestartedFlag` replaces `StartupUpdate.RestartedFlag`. A failed apply is part of the gate's outcome, and the App logs it once the host's logger exists. `InstallerGuardrailTests` now checks that the App asks the gate before it builds the host; the gate's own tests check that nothing applies when another copy runs.
+
 TaskDesk was a published folder that the owner copied by hand. v1 had "installer/MSIX, auto-update" out of scope. The owner now wants a `Setup.exe` that installs for the current user, shows up in Apps & features and can be released by pushing a tag. This record covers the tool, the rules that keep user data safe, and what the go/no-go on the owner's machine found.
 
 ## Decision
