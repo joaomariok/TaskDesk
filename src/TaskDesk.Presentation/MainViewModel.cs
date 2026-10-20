@@ -312,10 +312,19 @@ public sealed partial class MainViewModel(
         {
             await tagService.AddTagToTaskAsync(task.Id, tagName, cancellationToken);
         }
-        catch
+        catch (Exception error) when (error is not OperationCanceledException)
         {
-            await taskService.DeleteTaskAsync(task.Id, CancellationToken.None);
-            throw;
+            // Undo the half-made Task, but let the tagging error surface even if the undo fails too.
+            try
+            {
+                await taskService.DeleteTaskAsync(task.Id, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                // Best effort: the original error is the one the caller needs.
+            }
+
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw();
         }
     }
 

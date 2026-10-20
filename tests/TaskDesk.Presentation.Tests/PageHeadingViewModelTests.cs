@@ -386,8 +386,43 @@ public class PageHeadingViewModelTests
         Assert.Equal("Ship it", vm.QuickAddTitle);
     }
 
+    [Fact]
+    public async Task Quick_add_on_a_Tags_page_surfaces_the_tagging_error_when_the_cleanup_also_fails()
+    {
+        var service = new FakeTaskService { DeleteFailure = new TimeoutException("cleanup failed") };
+        var tags = new FailingTagging(new FakeTagService(service));
+        var vm = new MainViewModel(
+            service, tags, new FakeTimeProvider(), dueService: new EmptyDueService(),
+            searchService: new TitleSearchService(service));
+        var tag = await tags.CreateTagAsync("work", Ct);
+        await vm.FilterByTagAsync(tag, Ct);
+        vm.QuickAddTitle = "Ship it";
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => vm.AddTaskCommand.ExecuteAsync(null));
+
+        Assert.Equal("The database is locked.", error.Message);
+    }
+
+    [Fact]
+    public async Task Quick_add_on_a_Tags_page_does_not_delete_the_Task_when_the_add_is_cancelled()
+    {
+        var service = new FakeTaskService();
+        var tags = new FailingTagging(new FakeTagService(service), new OperationCanceledException());
+        var vm = new MainViewModel(
+            service, tags, new FakeTimeProvider(), dueService: new EmptyDueService(),
+            searchService: new TitleSearchService(service));
+        var tag = await tags.CreateTagAsync("work", Ct);
+        await vm.FilterByTagAsync(tag, Ct);
+        vm.QuickAddTitle = "Ship it";
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => vm.AddTaskCommand.ExecuteAsync(null));
+
+        Assert.Empty(service.Deleted);
+        Assert.Single(service.All);
+    }
+
     // The Tag service whose tagging always fails; everything else goes to the fake.
-    private sealed class FailingTagging(FakeTagService tags) : ITagService
+    private sealed class FailingTagging(FakeTagService tags, Exception? failure = null) : ITagService
     {
         public Task<IReadOnlyList<Tag>> ListTagsAsync(CancellationToken cancellationToken = default)
             => tags.ListTagsAsync(cancellationToken);
@@ -396,7 +431,7 @@ public class PageHeadingViewModelTests
             => tags.CreateTagAsync(name, cancellationToken);
 
         public Task<Tag> AddTagToTaskAsync(Guid taskId, string name, CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("The database is locked.");
+            => throw failure ?? new InvalidOperationException("The database is locked.");
 
         public Task RemoveTagFromTaskAsync(Guid taskId, Guid tagId, CancellationToken cancellationToken = default)
             => tags.RemoveTagFromTaskAsync(taskId, tagId, cancellationToken);

@@ -350,6 +350,7 @@ public class MainViewModelTests
     {
         private readonly List<TaskItem> _tasks = [];
         public List<string> Created { get; } = [];
+        public Exception? DeleteFailure { get; init; }
         public IReadOnlyList<TaskItem> All => _tasks;
         public List<(Guid TaskId, int NewIndex)> Moves { get; } = [];
 
@@ -432,6 +433,11 @@ public class MainViewModelTests
 
         public Task<DeletedTask> DeleteTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
         {
+            if (DeleteFailure is { } failure)
+            {
+                throw failure;
+            }
+
             Deleted.Add(taskId);
             var task = _tasks.Single(t => t.Id == taskId);
             _tasks.Remove(task);
