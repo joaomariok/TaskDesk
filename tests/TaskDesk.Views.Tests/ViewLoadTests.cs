@@ -26,16 +26,22 @@ public sealed class ViewLoadTests
     // (empty) database, as the shell builds it.
     private static readonly Dictionary<string, Func<TempDatabase, FrameworkElementOrWindow>> Views = new()
     {
-        [nameof(MainWindow)] = db => new MainWindow(NewMainViewModel(db), NewListsViewModel(db)),
+        [nameof(MainWindow)] = db =>
+        {
+            var viewModel = NewMainViewModel(db);
+            return new MainWindow(viewModel, NewSidebarViewModel(viewModel, db));
+        },
         [nameof(QuickAddWindow)] = db => new QuickAddWindow(NewQuickAddViewModel(db)),
         [nameof(SettingsWindow)] = _ => new SettingsWindow(NewSettingsViewModel()),
         [nameof(StartupFailureWindow)] = _ => new StartupFailureWindow(),
         [nameof(MainView)] = db => new MainView(NewMainViewModel(db)),
         [nameof(DetailDock)] = db => new DetailDock(new MainView(NewMainViewModel(db))),
         [nameof(DetailPane)] = db => new DetailPane(NewMainViewModel(db)),
-        [nameof(NavigationPane)] = db => new NavigationPane(
-            NewMainViewModel(db), new DialogService(() => null),
-            NewListsViewModel(db)),
+        [nameof(NavigationPane)] = db =>
+        {
+            var viewModel = NewMainViewModel(db);
+            return new NavigationPane(viewModel, new DialogService(() => null), NewSidebarViewModel(viewModel, db));
+        },
         [nameof(TaskListView)] = db => new TaskListView(NewMainViewModel(db)),
         [nameof(TaskRow)] = _ => new TaskRow
         {
@@ -122,7 +128,8 @@ public sealed class ViewLoadTests
         dueService: db.Get<IDueService>(), searchService: db.Get<ITaskSearchService>(),
         listService: db.Get<IListService>());
 
-    private static ListsViewModel NewListsViewModel(TempDatabase db) => new(db.Get<IListService>(), new NoListDialogs());
+    private static SidebarViewModel NewSidebarViewModel(MainViewModel viewModel, TempDatabase db) =>
+        new(viewModel, db.Get<IListService>(), new NoListDialogs());
 
     private static QuickAddViewModel NewQuickAddViewModel(TempDatabase db) =>
         new(db.Get<ITaskCreator>(), db.Get<IListService>());

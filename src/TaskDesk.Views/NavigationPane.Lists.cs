@@ -29,7 +29,7 @@ public sealed partial class NavigationPane
     private ListItemViewModel? _dragged;
 
     /// <summary>The Lists section, or null when the pane shows no Lists.</summary>
-    public ListsViewModel? Lists { get; }
+    public SidebarViewModel? Lists { get; }
 
     /// <summary>The colour of a List (#RRGGBB) as a brush; transparent for none.</summary>
     public static Brush ColourBrush(string? colorHex) =>
@@ -208,23 +208,14 @@ public sealed partial class NavigationPane
         });
     }
 
-    // Part of SyncSelection: a Tag's page selects its Tag, a List's page that List (the Default List until the
-    // first load knows its id), and a Smart View neither.
-    private void SyncListAndTagSelection()
-    {
-        var tag = ViewModel.TagFilter is { } filter ? ViewModel.Tags.FirstOrDefault(t => t.Id == filter.Id) : null;
-        TagList.SelectedItem = tag;
-        RailTagList.SelectedItem = tag;
-        ListsList.SelectedItem = ViewModel.IsListPage ? Lists?.ListOrDefault(ViewModel.CurrentListId) : null;
-    }
-
-    // Selecting a List (by click or by keyboard) opens its page.
+    // Selecting a List (by keyboard, or a click on another List) opens its page. Opening a List ends the search, so
+    // the List the sidebar already selects (as SyncSelection sets it) opens nothing here.
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnListSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_syncing && ListsList.SelectedItem is ListItemViewModel item && ViewModel.CurrentListId != item.Id)
+        if (ListsList.SelectedItem is ListItemViewModel item && item.Id != Sidebar.SelectedList?.Id)
         {
-            await ViewModel.ShowListAsync(item.Id);
+            await Sidebar.OpenAsync(new SidebarEntry.ListEntry(item.Id));
         }
     }
 
@@ -234,17 +225,18 @@ public sealed partial class NavigationPane
     {
         if (e.ClickedItem is ListItemViewModel item)
         {
-            await ViewModel.ShowListAsync(item.Id);
+            await Sidebar.OpenAsync(new SidebarEntry.ListEntry(item.Id));
         }
     }
 
+    // Selecting a Tag opens its page; the Tag already selected opens nothing and keeps the rail's flyout open.
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnTagSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_syncing && sender is ListView { SelectedItem: Tag tag } && ViewModel.TagFilter?.Id != tag.Id)
+        if (sender is ListView { SelectedItem: Tag tag } && tag.Id != Sidebar.SelectedTag?.Id)
         {
             TagsFlyout.Hide();
-            await ViewModel.FilterByTagAsync(tag);
+            await Sidebar.OpenAsync(new SidebarEntry.TagEntry(tag));
         }
     }
 

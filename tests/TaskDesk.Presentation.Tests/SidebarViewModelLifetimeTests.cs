@@ -1,12 +1,12 @@
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tasks;
-using FakeDialogs = TaskDesk.Presentation.Tests.ListsViewModelTests.FakeDialogs;
-using FakeListService = TaskDesk.Presentation.Tests.ListsViewModelTests.FakeListService;
+using FakeDialogs = TaskDesk.Presentation.Tests.SidebarViewModelTests.FakeDialogs;
+using FakeListService = TaskDesk.Presentation.Tests.SidebarViewModelTests.FakeListService;
 
 namespace TaskDesk.Presentation.Tests;
 
-/// <summary>The sidebar's Lists stop with their window: after <see cref="ListsViewModel.StopAsync"/> they do no more work.</summary>
-public class ListsViewModelLifetimeTests
+/// <summary>The sidebar's Lists stop with their window: after <see cref="SidebarViewModel.StopAsync"/> they do no more work.</summary>
+public class SidebarViewModelLifetimeTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -49,7 +49,7 @@ public class ListsViewModelLifetimeTests
     public async Task A_load_the_stop_cancelled_ends_quietly_when_its_database_is_then_gone()
     {
         var service = new DisposedOnReleaseListService();
-        var vm = new ListsViewModel(service, new FakeDialogs());
+        var vm = new SidebarViewModel(SidebarViewModelTests.NewMainViewModel(), service, new FakeDialogs());
 
         var load = vm.LoadAsync(Ct);
         var stop = vm.StopAsync();
@@ -65,7 +65,7 @@ public class ListsViewModelLifetimeTests
     public async Task A_load_whose_database_is_gone_still_fails_when_nothing_stopped_it()
     {
         var service = new DisposedOnReleaseListService();
-        var vm = new ListsViewModel(service, new FakeDialogs());
+        var vm = new SidebarViewModel(SidebarViewModelTests.NewMainViewModel(), service, new FakeDialogs());
 
         var load = vm.LoadAsync(Ct);
         service.Release();
@@ -80,7 +80,7 @@ public class ListsViewModelLifetimeTests
         await fake.CreateListAsync("Work", Ct);
         var service = new CountingListService(fake);
         var dialogs = new HeldDialogs();
-        var vm = new ListsViewModel(service, dialogs);
+        var vm = new SidebarViewModel(SidebarViewModelTests.NewMainViewModel(), service, dialogs);
         await vm.LoadAsync(Ct);
         service.Reset();
 
@@ -133,7 +133,7 @@ public class ListsViewModelLifetimeTests
         public Task<string?> PromptNameAsync(string currentName) => Name.Task;
     }
 
-    private static Task RunAsync(ListsViewModel vm, string command) => command switch
+    private static Task RunAsync(SidebarViewModel vm, string command) => command switch
     {
         "create" => vm.CreateListCommand.ExecuteAsync(null),
         "rename" => vm.RenameCommand.ExecuteAsync(vm.Lists[1]),
@@ -176,13 +176,13 @@ public class ListsViewModelLifetimeTests
     }
 
     // Loaded with the Inbox and "Work"; the calls the start made are not counted.
-    private static async Task<(ListsViewModel Vm, CountingListService Service, FakeDialogs Dialogs)> StartAsync()
+    private static async Task<(SidebarViewModel Vm, CountingListService Service, FakeDialogs Dialogs)> StartAsync()
     {
         var fake = new FakeListService();
         await fake.CreateListAsync("Work", Ct);
         var service = new CountingListService(fake);
         var dialogs = new FakeDialogs();
-        var vm = new ListsViewModel(service, dialogs);
+        var vm = new SidebarViewModel(SidebarViewModelTests.NewMainViewModel(), service, dialogs);
         await vm.LoadAsync(Ct);
         service.Reset();
         return (vm, service, dialogs);

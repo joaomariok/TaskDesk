@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Time.Testing;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tasks;
-using FakeListService = TaskDesk.Presentation.Tests.ListsViewModelTests.FakeListService;
+using FakeListService = TaskDesk.Presentation.Tests.SidebarViewModelTests.FakeListService;
 using FakeTagService = TaskDesk.Presentation.Tests.MainViewModelTests.FakeTagService;
 using FakeTaskService = TaskDesk.Presentation.Tests.MainViewModelTests.FakeTaskService;
 

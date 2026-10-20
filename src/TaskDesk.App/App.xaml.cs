@@ -89,7 +89,7 @@ public partial class App : Application
         builder.Services.AddSingleton<IImportDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
         builder.Services.AddSingleton<IOccurrenceDialogs>(sp => sp.GetRequiredService<WinUiDialogs>());
         builder.Services.AddSingleton<MainViewModel>();
-        builder.Services.AddSingleton<ListsViewModel>();
+        builder.Services.AddSingleton<SidebarViewModel>();
         builder.Services.AddSingleton<MainWindow>();
         builder.Services.AddSingleton<WinUiMainWindow>();
         builder.Services.AddSingleton<IMainWindow>(sp => sp.GetRequiredService<WinUiMainWindow>());

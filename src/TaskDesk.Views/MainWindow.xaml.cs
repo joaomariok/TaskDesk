@@ -23,7 +23,7 @@ public sealed partial class MainWindow : Window
 
     private bool _closed;
 
-    public MainWindow(MainViewModel viewModel, ListsViewModel? lists = null)
+    public MainWindow(MainViewModel viewModel, SidebarViewModel? lists = null)
     {
         InitializeComponent();
         SetDefaultSize();
@@ -73,7 +73,7 @@ public sealed partial class MainWindow : Window
     public MainView View { get; }
 
     /// <summary>The sidebar's Lists, or null when the window shows none.</summary>
-    public ListsViewModel? Lists { get; }
+    public SidebarViewModel? Lists { get; }
 
     /// <summary>The sidebar with the Smart Views, around <see cref="View"/>.</summary>
     public NavigationPane Navigation { get; }
@@ -104,7 +104,7 @@ public sealed partial class MainWindow : Window
     /// Call when the exit starts, before its host stop: the window stays open until the exit has run, so its Closed
     /// comes too late. The sidebar, page and detail pane take no more input, so nothing there starts a reload, and
     /// both view models stop (<see cref="MainViewModel.StopAsync"/>, which saves a pending detail edit first, and
-    /// <see cref="ListsViewModel.StopAsync"/>); completes once the save has landed and the work they cancelled has
+    /// <see cref="SidebarViewModel.StopAsync"/>); completes once the save has landed and the work they cancelled has
     /// ended.
     /// </summary>
     public Task PrepareForExitAsync()

@@ -1,9 +1,10 @@
+using Microsoft.Extensions.Time.Testing;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Presentation.Tests;
 
-public class ListsViewModelTests
+public class SidebarViewModelTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -159,7 +160,7 @@ public class ListsViewModelTests
         await vm.MoveToGapAsync(vm.Lists.Single(l => l.Name == name), gap, Ct);
 
         Assert.Equal(expected, vm.Lists.Select(l => l.Name));
-        var reloaded = new ListsViewModel(service, new FakeDialogs());
+        var reloaded = new SidebarViewModel(NewMainViewModel(), service, new FakeDialogs());
         await reloaded.LoadAsync(Ct);
         Assert.Equal(expected, reloaded.Lists.Select(l => l.Name));
     }
@@ -177,7 +178,7 @@ public class ListsViewModelTests
         Assert.Equal(0, service.Reorders);
     }
 
-    private static async Task<(ListsViewModel Vm, FakeListService Service, FakeDialogs Dialogs)> StartAsync(
+    private static async Task<(SidebarViewModel Vm, FakeListService Service, FakeDialogs Dialogs)> StartAsync(
         params (string Name, int Open)[] extra)
     {
         var service = new FakeListService();
@@ -188,9 +189,16 @@ public class ListsViewModelTests
         }
 
         var dialogs = new FakeDialogs();
-        var vm = new ListsViewModel(service, dialogs);
+        var vm = new SidebarViewModel(NewMainViewModel(), service, dialogs);
         await vm.LoadAsync(Ct);
         return (vm, service, dialogs);
+    }
+
+    // The main view model a sidebar follows, over fakes; these tests use only the sidebar's Lists.
+    internal static MainViewModel NewMainViewModel()
+    {
+        var tasks = new MainViewModelTests.FakeTaskService();
+        return new MainViewModel(tasks, new MainViewModelTests.FakeTagService(tasks), new FakeTimeProvider());
     }
 
     internal sealed class FakeDialogs : IListDialogs

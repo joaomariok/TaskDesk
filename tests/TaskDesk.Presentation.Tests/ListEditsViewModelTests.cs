@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Time.Testing;
-using FakeDialogs = TaskDesk.Presentation.Tests.ListsViewModelTests.FakeDialogs;
-using FakeListService = TaskDesk.Presentation.Tests.ListsViewModelTests.FakeListService;
+using FakeDialogs = TaskDesk.Presentation.Tests.SidebarViewModelTests.FakeDialogs;
+using FakeListService = TaskDesk.Presentation.Tests.SidebarViewModelTests.FakeListService;
 using FakeTagService = TaskDesk.Presentation.Tests.MainViewModelTests.FakeTagService;
 using FakeTaskService = TaskDesk.Presentation.Tests.MainViewModelTests.FakeTaskService;
 
@@ -13,7 +13,7 @@ public class ListEditsViewModelTests
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private sealed record Setup(
-        FakeListService ListService, FakeDialogs Dialogs, ListsViewModel Lists, MainViewModel Vm);
+        FakeListService ListService, FakeDialogs Dialogs, SidebarViewModel Lists, MainViewModel Vm);
 
     // One Task in the Default List ("Inbox"); the main view model shows that List.
     private static async Task<Setup> StartAsync()
@@ -25,9 +25,9 @@ public class ListEditsViewModelTests
         task.ListId = inbox.Id;
 
         var dialogs = new FakeDialogs();
-        var lists = new ListsViewModel(listService, dialogs);
-        await lists.LoadAsync(Ct);
         var vm = new MainViewModel(tasks, new FakeTagService(tasks), new FakeTimeProvider(), listService: listService);
+        var lists = new SidebarViewModel(vm, listService, dialogs);
+        await lists.LoadAsync(Ct);
         await vm.LoadAsync(Ct);
         return new Setup(listService, dialogs, lists, vm);
     }

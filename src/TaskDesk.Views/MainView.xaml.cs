@@ -51,7 +51,7 @@ public sealed partial class MainView : UserControl
     public MainViewModel ViewModel { get; }
 
     /// <summary>The Lists the List menu renames and colours; the menu does nothing until the shell sets it.</summary>
-    public ListsViewModel? Lists { get; set; }
+    public SidebarViewModel? Lists { get; set; }
 
     /// <summary>Gives quick add keyboard focus, as the window does at start-up and on Ctrl+N.</summary>
     public void FocusQuickAdd()

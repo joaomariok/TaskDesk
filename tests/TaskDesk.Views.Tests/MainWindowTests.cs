@@ -187,7 +187,7 @@ public sealed partial class MainWindowTests
         var inbox = (await db.QueryAsync(c => c.Lists)).Single().Id;
         var viewModel = new MainViewModel(
             db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock, listService: db.Get<IListService>());
-        var lists = new ListsViewModel(db.Get<IListService>(), new NoListDialogs());
+        var lists = new SidebarViewModel(viewModel, db.Get<IListService>(), new NoListDialogs());
 
         var window = new MainWindow(viewModel, lists);
         try

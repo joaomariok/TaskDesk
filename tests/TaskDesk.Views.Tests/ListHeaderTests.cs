@@ -66,7 +66,7 @@ public sealed class ListHeaderTests
         var home = await db.Get<ITagService>().CreateTagAsync("home", Ct);
         var (window, viewModel) = await OpenAsync(db);
         var dialogs = new RenamingDialogs("Home");
-        var lists = new ListsViewModel(db.Get<IListService>(), dialogs);
+        var lists = new SidebarViewModel(viewModel, db.Get<IListService>(), dialogs);
         try
         {
             await lists.LoadAsync(Ct);

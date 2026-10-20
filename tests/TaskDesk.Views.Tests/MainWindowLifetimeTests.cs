@@ -28,7 +28,7 @@ public sealed class MainWindowLifetimeTests
         var viewModel = new MainViewModel(
             db.Get<ITaskService>(), tags, db.Clock, db.Get<IDueService>(), db.Get<ITaskSearchService>(),
             listService: db.Get<IListService>());
-        var lists = new ListsViewModel(db.Get<IListService>(), new WinUiDialogs(new DialogService(() => window)));
+        var lists = new SidebarViewModel(viewModel, db.Get<IListService>(), new WinUiDialogs(new DialogService(() => window)));
         window = new MainWindow(viewModel, lists);
         try
         {

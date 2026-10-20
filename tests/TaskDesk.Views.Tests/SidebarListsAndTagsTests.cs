@@ -672,12 +672,12 @@ public sealed class SidebarListsAndTagsTests
         }
     }
 
-    private (MainWindow Window, MainViewModel ViewModel, ListsViewModel Lists) NewWindow(TempDatabase db)
+    private (MainWindow Window, MainViewModel ViewModel, SidebarViewModel Lists) NewWindow(TempDatabase db)
     {
         MainWindow? window = null;
         var viewModel = new MainViewModel(db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock, db.Get<IDueService>(),
             db.Get<ITaskSearchService>(), listService: db.Get<IListService>(), taskCreator: db.Get<ITaskCreator>());
-        var lists = new ListsViewModel(db.Get<IListService>(), new WinUiDialogs(new DialogService(() => window)));
+        var lists = new SidebarViewModel(viewModel, db.Get<IListService>(), new WinUiDialogs(new DialogService(() => window)));
         window = new MainWindow(viewModel, lists);
         return (window, viewModel, lists);
     }

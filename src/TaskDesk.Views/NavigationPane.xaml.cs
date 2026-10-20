@@ -19,16 +19,16 @@ namespace TaskDesk.Views;
 public sealed partial class NavigationPane : UserControl
 {
     private readonly Dictionary<NavigationViewItem, SmartView> _views;
-    private bool _syncing;
     private bool _countRefreshQueued;
 
     /// <param name="viewModel">The page's view model: Smart Views, counts and Tags.</param>
-    /// <param name="lists">The Lists section; null shows no Lists.</param>
     /// <param name="dialogs">Confirms deleting a Tag (Lists confirm through their own dialogs).</param>
-    public NavigationPane(MainViewModel viewModel, Dialogs.DialogService dialogs, ListsViewModel? lists = null)
+    /// <param name="lists">The sidebar with its Lists, over <paramref name="viewModel"/>; null shows no Lists.</param>
+    public NavigationPane(MainViewModel viewModel, Dialogs.DialogService dialogs, SidebarViewModel? lists = null)
     {
         ViewModel = viewModel;
         Lists = lists;
+        Sidebar = lists ?? SidebarViewModel.WithoutLists(viewModel);
         _dialogs = dialogs;
         InitializeComponent();
         InitializeListsAndTags();
@@ -41,7 +41,7 @@ public sealed partial class NavigationPane : UserControl
             [CompletedItem] = SmartView.Completed,
         };
         Pane.OpenPaneLength = PaneLayout.NavigationLimits.Default;
-        viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        Sidebar.PropertyChanged += OnSidebarPropertyChanged;
         // Adding, completing, deleting or restoring a Task changes the counts.
         viewModel.OpenTaskCountsChanged += (_, _) => QueueCountRefresh();
         Pane.Loaded += (_, _) => ExposeToAutomation();
@@ -53,6 +53,9 @@ public sealed partial class NavigationPane : UserControl
     }
 
     public MainViewModel ViewModel { get; }
+
+    /// <summary>The entry the pane shows as selected, and the call that opens the entry the owner selects.</summary>
+    public SidebarViewModel Sidebar { get; }
 
     /// <summary>The page shown beside the pane (the main window's <see cref="MainView"/>).</summary>
     public UIElement? PageContent
@@ -97,44 +100,40 @@ public sealed partial class NavigationPane : UserControl
         ShowCompact(rail && !Pane.IsPaneOpen);
     }
 
-    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnSidebarPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(MainViewModel.Page))
+        if (e.PropertyName is nameof(SidebarViewModel.SelectedSmartView) or nameof(SidebarViewModel.SelectedList)
+            or nameof(SidebarViewModel.SelectedTag))
         {
             SyncSelection();
         }
     }
 
-    // Shows which page is current: a Smart View, a Tag, or the Default List.
+    // Sets the four selectors (Smart Views, Lists, Tags and the rail's Tags) to the sidebar's selected entry. The
+    // selection-changed events this raises open nothing: each selector then holds the entry already selected.
     private void SyncSelection()
     {
-        _syncing = true;
-        try
+        if (Sidebar.SelectedSmartView is { } view)
         {
-            if (ViewModel.CurrentView is { } view)
-            {
-                Pane.SelectedItem = _views.First(p => p.Value == view).Key;
-            }
-            else if (Pane.SelectedItem is NavigationViewItem item && _views.ContainsKey(item))
-            {
-                Pane.SelectedItem = null;
-            }
+            Pane.SelectedItem = _views.First(p => p.Value == view).Key;
+        }
+        else if (Pane.SelectedItem is NavigationViewItem item && _views.ContainsKey(item))
+        {
+            Pane.SelectedItem = null;
+        }
 
-            SyncListAndTagSelection();
-        }
-        finally
-        {
-            _syncing = false;
-        }
+        TagList.SelectedItem = Sidebar.SelectedTag;
+        RailTagList.SelectedItem = Sidebar.SelectedTag;
+        ListsList.SelectedItem = Sidebar.SelectedList;
     }
 
+    // Selecting a Smart View opens it; the one already shown opens nothing.
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        if (!_syncing && args.SelectedItemContainer is NavigationViewItem item && _views.TryGetValue(item, out var view)
-            && ViewModel.CurrentView != view)
+        if (args.SelectedItemContainer is NavigationViewItem item && _views.TryGetValue(item, out var view))
         {
-            await ViewModel.ShowSmartViewAsync(view);
+            await Sidebar.OpenAsync(new SidebarEntry.SmartViewEntry(view));
         }
     }
 
