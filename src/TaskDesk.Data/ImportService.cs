@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 using TaskDesk.Core.Backups;
 using TaskDesk.Core.Export;
 using TaskDesk.Core.Import;
-using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
@@ -184,17 +183,13 @@ internal sealed class ImportService(
     }
 
     /// <summary>
-    /// The Task a row becomes. The export does not carry ReminderFiredUtc (SPEC 9.1), so a Reminder whose
-    /// firing instant has already passed is marked fired now: importing an old file must not flood notifications.
+    /// The Task a row becomes. The export does not carry "notified through" (SPEC 9.1), so moments already
+    /// past count as notified (the past-moment rule): importing an old file must not flood notifications.
     /// </summary>
     private static TaskItem NewTask(ExportTask row, Guid listId, DateTime now)
     {
         var task = JsonImportFormat.ToTask(row, listId);
-        if (ReminderCalculator.EffectiveUtc(task) is { } effective && effective <= now)
-        {
-            task.ReminderFiredUtc = now;
-        }
-
+        task.NotifiedThroughUtc = now;
         return task;
     }
 }

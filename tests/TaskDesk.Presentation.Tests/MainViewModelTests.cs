@@ -467,7 +467,7 @@ public class MainViewModelTests
                 DueTime = source.DueTime,
                 ReminderUtc = source.ReminderUtc,
                 SnoozedUntilUtc = source.SnoozedUntilUtc,
-                ReminderFiredUtc = source.ReminderFiredUtc,
+                NotifiedThroughUtc = source.NotifiedThroughUtc,
                 Recurrence = source.Recurrence,
                 SeriesId = source.SeriesId,
                 NextOccurrenceId = source.NextOccurrenceId,

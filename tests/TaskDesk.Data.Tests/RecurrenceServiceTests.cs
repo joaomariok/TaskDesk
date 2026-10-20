@@ -185,7 +185,25 @@ public class RecurrenceServiceTests
         Assert.Null(old.SnoozedUntilUtc);
         Assert.Equal(Utc(21, 16), next.ReminderUtc);
         Assert.Null(next.SnoozedUntilUtc);
-        Assert.Null(next.ReminderFiredUtc);
+        Assert.Equal(Utc(20, 16, 1), next.NotifiedThroughUtc);
+    }
+
+    [Fact]
+    public async Task The_next_Occurrence_of_a_late_completion_does_not_fire_its_Reminder_already_past()
+    {
+        using var db = await StartAsync();
+        // Due 20 Oct 14:00 local, Reminder 20 Oct 16:00 UTC; completed on 23 Oct, so the next Occurrence
+        // (due 21 Oct) carries a Reminder at 21 Oct 16:00 UTC, already past.
+        var task = await AddAsync(db, "a", Day(20), Recurrence.Daily(), new TimeOnly(14, 0));
+        var reminders = db.Get<IReminderService>();
+        await reminders.SetReminderAsync(task.Id, Utc(20, 16), Ct);
+        db.Clock.SetUtcNow(new DateTimeOffset(Utc(23, 10)));
+
+        await CompleteAsync(db, task.Id);
+
+        var next = await TaskAsync(db, (await TaskAsync(db, task.Id)).NextOccurrenceId!.Value);
+        Assert.True(next.ReminderUtc < Utc(23, 10));
+        Assert.Empty(await reminders.ListDueAsync(Ct));
     }
 
     [Fact]

@@ -1,3 +1,9 @@
+using System.Globalization;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using TaskDesk.Core.Reminders;
+
 namespace TaskDesk.Data.Tests;
 
 public class DatabaseInitializerTests
@@ -40,5 +46,69 @@ public class DatabaseInitializerTests
 
         var list = Assert.Single(await db.QueryAsync(c => c.Lists));
         Assert.Equal("Work", list.Name);
+    }
+
+    // ---- Ticket 115: the fired marker becomes "notified through" ----
+
+    private static string Sql(DateTime? utc) => utc?.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) ?? "";
+
+    private static async Task InsertReminderTaskAsync(
+        TaskDeskDbContext context, Guid listId, string title, DateTime? reminder, DateTime? snoozed, DateTime? fired,
+        bool completed = false)
+    {
+        var created = Sql(new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
+        await context.Database.ExecuteSqlAsync(
+            $"""
+            INSERT INTO Tasks (Id, ListId, Title, Priority, IsCompleted, SortOrder, CreatedUtc, UpdatedUtc,
+                ReminderUtc, SnoozedUntilUtc, ReminderFiredUtc)
+            VALUES ({Guid.NewGuid().ToString().ToUpperInvariant()}, {listId.ToString().ToUpperInvariant()}, {title},
+                0, {(completed ? 1 : 0)}, 1, {created}, {created},
+                NULLIF({Sql(reminder)}, ''), NULLIF({Sql(snoozed)}, ''), NULLIF({Sql(fired)}, ''))
+            """,
+            TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Upgrading_keeps_fired_Reminders_fired_armed_ones_armed_and_running_Snoozes_running()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var db = new TempDatabase();
+        db.Paths.EnsureDirectories();
+        var now = db.Clock.GetUtcNow().UtcDateTime;
+        await using (var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(ct))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync("20261016233045_Ticket13_Reminders", ct);
+            var listId = Guid.NewGuid();
+            await context.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO Lists (Id, Name, SortOrder, IsDefault, CreatedUtc)
+                VALUES ({listId.ToString().ToUpperInvariant()}, 'Inbox', 0, 1, {Sql(now)})
+                """,
+                ct);
+            await InsertReminderTaskAsync(context, listId, "fired", now.AddHours(-1), null, now.AddMinutes(-59));
+            await InsertReminderTaskAsync(context, listId, "armed past", now.AddHours(-1), null, null);
+            await InsertReminderTaskAsync(context, listId, "armed future", now.AddHours(1), null, null);
+            await InsertReminderTaskAsync(context, listId, "snoozed", now.AddHours(-2), now.AddMinutes(30), null);
+            await InsertReminderTaskAsync(context, listId, "snooze fired", now.AddHours(-3), now.AddMinutes(-20), now.AddMinutes(-19));
+            await InsertReminderTaskAsync(context, listId, "completed", now.AddHours(-1), null, null, completed: true);
+            await InsertReminderTaskAsync(context, listId, "no reminder", null, null, null);
+        }
+
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
+        var reminders = db.Get<IReminderService>();
+
+        var due = Assert.Single(await reminders.ListDueAsync(ct));
+        Assert.Equal(("armed past", now.AddHours(-1)), (due.Title, due.DueAtUtc));
+        Assert.True(await reminders.TryMarkFiredAsync(due.TaskId, due.DueAtUtc, ct));
+        Assert.Empty(await reminders.ListDueAsync(ct));
+
+        db.Clock.Advance(TimeSpan.FromMinutes(30));
+        due = Assert.Single(await reminders.ListDueAsync(ct));
+        Assert.Equal(("snoozed", now.AddMinutes(30)), (due.Title, due.DueAtUtc));
+        Assert.True(await reminders.TryMarkFiredAsync(due.TaskId, due.DueAtUtc, ct));
+
+        db.Clock.Advance(TimeSpan.FromMinutes(30));
+        due = Assert.Single(await reminders.ListDueAsync(ct));
+        Assert.Equal(("armed future", now.AddHours(1)), (due.Title, due.DueAtUtc));
     }
 }

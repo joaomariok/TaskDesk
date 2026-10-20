@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Data;
@@ -42,6 +43,7 @@ internal sealed class RecurrenceService(
         task.IsCompleted = false;
         task.CompletedUtc = null;
         task.UpdatedUtc = now;
+        ReminderCalculator.MarkPastNotified(task, clock.GetUtcNow()); // the past-moment rule
         if (producedOccurrenceId is { } producedId && task.NextOccurrenceId == producedId)
         {
             await RemoveProducedAsync(context, producedId, cancellationToken);

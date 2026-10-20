@@ -36,7 +36,7 @@ public class ReminderSchedulerTests
         Assert.Equal(task.Id, shown.TaskId);
         Assert.Equal("Pay rent", shown.Title);
         Assert.Equal("Inbox", shown.Body);
-        Assert.Equal(Start, task.ReminderFiredUtc);
+        Assert.Equal(Start.AddMinutes(-5), task.NotifiedThroughUtc);
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class ReminderSchedulerTests
         await s.Scheduler.StartAsync();
 
         Assert.Empty(s.Notifications.Shown);
-        Assert.Null(task.ReminderFiredUtc);
+        Assert.Null(task.NotifiedThroughUtc);
         Assert.Equal([task.Id], s.Reminders.Released);
 
         s.Notifications.ShowFailure = null;
@@ -59,7 +59,7 @@ public class ReminderSchedulerTests
         await s.Scheduler.CurrentCheck;
 
         Assert.Equal(task.Id, Assert.Single(s.Notifications.Shown).TaskId);
-        Assert.NotNull(task.ReminderFiredUtc);
+        Assert.NotNull(task.NotifiedThroughUtc);
     }
 
     [Fact]
@@ -73,8 +73,8 @@ public class ReminderSchedulerTests
         await s.Scheduler.StartAsync();
 
         Assert.Equal(shown.Id, Assert.Single(s.Notifications.Shown).TaskId);
-        Assert.NotNull(shown.ReminderFiredUtc);
-        Assert.Null(failing.ReminderFiredUtc);
+        Assert.NotNull(shown.NotifiedThroughUtc);
+        Assert.Null(failing.NotifiedThroughUtc);
         Assert.Equal([failing.Id], s.Reminders.Released);
     }
 
@@ -88,7 +88,7 @@ public class ReminderSchedulerTests
         await s.Scheduler.StartAsync();
 
         Assert.Empty(s.Notifications.Summaries);
-        Assert.All(tasks, t => Assert.Null(t.ReminderFiredUtc));
+        Assert.All(tasks, t => Assert.Null(t.NotifiedThroughUtc));
 
         s.Notifications.ShowFailure = null;
         s.Clock.Advance(ReminderScheduler.Interval);
@@ -139,7 +139,8 @@ public class ReminderSchedulerTests
         await s.Scheduler.StartAsync();
         var task = s.Reminders.Add("a", null);
 
-        await s.Reminders.SetReminderAsync(task.Id, Start, TestContext.Current.CancellationToken);
+        await s.Reminders.SetReminderAsync(task.Id, Start.AddSeconds(1), TestContext.Current.CancellationToken);
+        s.Clock.Advance(TimeSpan.FromSeconds(1)); // far less than the timer's interval
         s.Changes.Raise();
         await s.Scheduler.CurrentCheck;
 
@@ -213,7 +214,7 @@ public class ReminderSchedulerTests
         var summary = Assert.Single(s.Notifications.Summaries);
         Assert.Equal(5, summary.Count);
         Assert.Equal("5 reminders missed", summary.Title);
-        Assert.All(tasks, t => Assert.Equal(Start, t.ReminderFiredUtc));
+        Assert.All(tasks, t => Assert.Equal(t.ReminderUtc, t.NotifiedThroughUtc));
 
         s.Clock.Advance(ReminderScheduler.Interval);
         await s.Scheduler.CurrentCheck;

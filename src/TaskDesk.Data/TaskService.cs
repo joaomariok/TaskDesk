@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Data;
@@ -45,6 +46,7 @@ internal sealed class TaskService(
             SortOrder = (lastOrder ?? 0) + 1,
             CreatedUtc = now,
             UpdatedUtc = now,
+            NotifiedThroughUtc = now, // moments already past never notify (the past-moment rule)
         };
         context.Tasks.Add(task);
         await context.SaveChangesAsync(cancellationToken);
@@ -104,6 +106,10 @@ internal sealed class TaskService(
             if (isCompleted)
             {
                 task.SnoozedUntilUtc = null; // a Snooze never outlives completion
+            }
+            else
+            {
+                ReminderCalculator.MarkPastNotified(task, clock.GetUtcNow()); // the past-moment rule
             }
 
             // Completing an Occurrence produces the next one (at most once) in the same transaction.
@@ -207,7 +213,7 @@ internal sealed class TaskService(
             DueTime = snapshot.DueTime,
             ReminderUtc = snapshot.ReminderUtc,
             SnoozedUntilUtc = snapshot.SnoozedUntilUtc,
-            ReminderFiredUtc = snapshot.ReminderFiredUtc,
+            NotifiedThroughUtc = snapshot.NotifiedThroughUtc,
             Recurrence = snapshot.Recurrence is { } recurrence ? recurrence with { } : null,
             SeriesId = snapshot.SeriesId,
             NextOccurrenceId = snapshot.NextOccurrenceId,

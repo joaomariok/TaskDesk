@@ -42,7 +42,7 @@ public class ReminderViewModelTests
         public Task<TaskItem> SetReminderAsync(Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default)
         {
             SetCalls.Add((taskId, reminderUtc));
-            var task = FakeTaskService.With(tasks.All.Single(t => t.Id == taskId), t => ReminderCalculator.SetPlanned(t, reminderUtc));
+            var task = FakeTaskService.With(tasks.All.Single(t => t.Id == taskId), t => ReminderCalculator.SetPlanned(t, reminderUtc, clock.GetUtcNow()));
             tasks.Put(task);
             return Task.FromResult(task);
         }
@@ -347,14 +347,14 @@ public class ReminderViewModelTests
     {
         var s = await StartAsync("a");
         await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(20, 12), Ct);
-        s.Tasks.Put(FakeTaskService.With(s.Tasks.All[0], t => t.ReminderFiredUtc = Utc(20, 12)));
+        s.Tasks.Put(FakeTaskService.With(s.Tasks.All[0], t => t.NotifiedThroughUtc = Utc(20, 12)));
         await s.Vm.LoadAsync(Ct);
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
         s.Vm.DetailReminderTime = new TimeSpan(15, 0, 0);
         await s.Vm.PendingSave;
 
-        Assert.Null(s.Tasks.All[0].ReminderFiredUtc);
+        Assert.Equal(Utc(20, 18), ReminderCalculator.DueInstant(s.Tasks.All[0], new DateTimeOffset(Utc(20, 18))));
         Assert.Equal(Utc(20, 18), s.Tasks.All[0].ReminderUtc);
     }
 
@@ -539,7 +539,7 @@ public class ReminderViewModelTests
         var id = s.Tasks.All[0].Id;
         await s.Reminders.SetReminderAsync(id, Utc(20, 12), Ct);
         await s.Reminders.SnoozeAsync(id, ReminderCalculator.LongSnooze, Ct); // until 14:00 UTC, 11:00 local
-        s.Tasks.Put(FakeTaskService.With(s.Tasks.All[0], t => t.ReminderFiredUtc = Utc(20, 13)));
+        s.Tasks.Put(FakeTaskService.With(s.Tasks.All[0], t => t.NotifiedThroughUtc = Utc(20, 13)));
         await s.Vm.LoadAsync(Ct);
 
         s.Vm.SelectedTask = s.Vm.Tasks[0];
@@ -550,7 +550,7 @@ public class ReminderViewModelTests
 
         Assert.False(s.Vm.HasDetailSnooze);
         Assert.Null(s.Tasks.All[0].SnoozedUntilUtc);
-        Assert.Null(s.Tasks.All[0].ReminderFiredUtc);
+        Assert.Null(s.Tasks.All[0].NotifiedThroughUtc);
         Assert.Equal(Utc(20, 12), s.Tasks.All[0].ReminderUtc);
     }
 

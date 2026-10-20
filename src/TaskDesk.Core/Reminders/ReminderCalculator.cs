@@ -26,22 +26,66 @@ public static class ReminderCalculator
     /// <summary>Whether <paramref name="dueCount"/> Reminders due at once are shown as one summary.</summary>
     public static bool ShouldSummarize(int dueCount) => dueCount > MissedSummaryThreshold;
 
-    /// <summary>The instant the Reminder fires at: the Snooze when set, otherwise the planned Reminder.</summary>
-    public static DateTime? EffectiveUtc(TaskItem task) => task.SnoozedUntilUtc ?? task.ReminderUtc;
+    /// <summary>
+    /// The due rule (SPEC 7.4, ADR 0006). A Task is due to notify at <paramref name="now"/> when it is open,
+    /// not snoozed past <paramref name="now"/>, and one of its moments (the planned Reminder, the end of the
+    /// Snooze) lies after "notified through" and at or before <paramref name="now"/>. Returns the latest such
+    /// moment, its due instant, or null when the Task is not due.
+    /// </summary>
+    public static DateTime? DueInstant(TaskItem task, DateTimeOffset now)
+    {
+        var nowUtc = now.UtcDateTime;
+        if (task.IsCompleted || task.SnoozedUntilUtc > nowUtc)
+        {
+            return null;
+        }
+
+        DateTime? latest = null;
+        foreach (var moment in Moments(task))
+        {
+            if (moment <= nowUtc && (task.NotifiedThroughUtc is not { } through || moment > through)
+                && (latest is null || moment > latest))
+            {
+                latest = moment;
+            }
+        }
+
+        return latest;
+    }
+
+    /// <summary>Whether the Task is due to notify at <paramref name="now"/> (see <see cref="DueInstant"/>).</summary>
+    public static bool IsDue(TaskItem task, DateTimeOffset now) => DueInstant(task, now) is not null;
+
+    // The moments a Task notifies at.
+    private static IEnumerable<DateTime> Moments(TaskItem task)
+    {
+        if (task.ReminderUtc is { } reminder)
+        {
+            yield return reminder;
+        }
+
+        if (task.SnoozedUntilUtc is { } snoozeEnd)
+        {
+            yield return snoozeEnd;
+        }
+    }
 
     /// <summary>
-    /// Due: the Task is not completed, its Reminder has not fired yet, and the instant it fires at is
-    /// <paramref name="now"/> or earlier.
+    /// The past-moment rule: moves "notified through" to at least <paramref name="now"/>, so moments already
+    /// past never notify. Used by every change to what makes a Task notify, and when a Task is created.
     /// </summary>
-    public static bool IsDue(TaskItem task, DateTimeOffset now) =>
-        !task.IsCompleted
-        && task.ReminderFiredUtc is null
-        && EffectiveUtc(task) is { } effective
-        && effective <= now.UtcDateTime;
+    public static void MarkPastNotified(TaskItem task, DateTimeOffset now)
+    {
+        var nowUtc = now.UtcDateTime;
+        if (task.NotifiedThroughUtc is not { } through || through < nowUtc)
+        {
+            task.NotifiedThroughUtc = nowUtc;
+        }
+    }
 
-    /// <summary>The due Reminders among <paramref name="tasks"/>, the one that fires first first.</summary>
+    /// <summary>The due Tasks among <paramref name="tasks"/>, the one with the earliest due instant first.</summary>
     public static IReadOnlyList<TaskItem> SelectDue(IEnumerable<TaskItem> tasks, DateTimeOffset now) =>
-        [.. tasks.Where(t => IsDue(t, now)).OrderBy(EffectiveUtc).ThenBy(t => t.Id)];
+        [.. tasks.Where(t => IsDue(t, now)).OrderBy(t => DueInstant(t, now)).ThenBy(t => t.Id)];
 
     /// <summary>
     /// The Reminder instant (UTC) for a local date and time in <paramref name="zone"/>; a date-only Reminder
@@ -95,10 +139,12 @@ public static class ReminderCalculator
     }
 
     /// <summary>
-    /// Sets or clears the planned Reminder. A change re-arms it: the fired marker and any Snooze are cleared.
+    /// Sets or clears the planned Reminder and clears any Snooze. Moments already past at
+    /// <paramref name="now"/> count as notified (<see cref="MarkPastNotified"/>), so a Reminder moved to a
+    /// later moment fires there even if it had fired before, and one set in the past never fires.
     /// Returns false, changing nothing, when the Reminder already has this value.
     /// </summary>
-    public static bool SetPlanned(TaskItem task, DateTime? reminderUtc)
+    public static bool SetPlanned(TaskItem task, DateTime? reminderUtc, DateTimeOffset now)
     {
         if (task.ReminderUtc == reminderUtc)
         {
@@ -107,13 +153,14 @@ public static class ReminderCalculator
 
         task.ReminderUtc = reminderUtc;
         task.SnoozedUntilUtc = null;
-        task.ReminderFiredUtc = null;
+        MarkPastNotified(task, now);
         return true;
     }
 
     /// <summary>
-    /// Snoozes the Reminder until <paramref name="now"/> + <paramref name="duration"/> and re-arms it. The
-    /// planned Reminder is left unchanged. Returns false, changing nothing, for a completed Task.
+    /// Snoozes the Task until <paramref name="now"/> + <paramref name="duration"/>: nothing notifies before
+    /// then, and the Task notifies once when it ends. The planned Reminder and "notified through" are left
+    /// unchanged. Returns false, changing nothing, for a completed Task.
     /// </summary>
     public static bool Snooze(TaskItem task, DateTimeOffset now, TimeSpan duration)
     {
@@ -123,13 +170,13 @@ public static class ReminderCalculator
         }
 
         task.SnoozedUntilUtc = now.UtcDateTime + duration;
-        task.ReminderFiredUtc = null;
         return true;
     }
 
     /// <summary>
-    /// Clears the Snooze and re-arms the planned Reminder, so a planned Reminder already past fires again.
-    /// Returns false, changing nothing, when there is no Snooze.
+    /// Clears the Snooze and resets "notified through", so the Task notifies once at the next check for its
+    /// latest moment already past (a planned Reminder already past fires again). Returns false, changing
+    /// nothing, when there is no Snooze.
     /// </summary>
     public static bool ClearSnooze(TaskItem task)
     {
@@ -139,7 +186,7 @@ public static class ReminderCalculator
         }
 
         task.SnoozedUntilUtc = null;
-        task.ReminderFiredUtc = null;
+        task.NotifiedThroughUtc = null;
         return true;
     }
 }

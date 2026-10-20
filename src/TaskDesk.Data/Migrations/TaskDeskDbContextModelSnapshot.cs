@@ -117,11 +117,11 @@ namespace TaskDesk.Data.Migrations
                         .HasMaxLength(10000)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("NotifiedThroughUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("ReminderFiredUtc")
-                        .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("ReminderUtc")
                         .HasColumnType("TEXT");

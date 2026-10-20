@@ -178,9 +178,16 @@ public sealed class ImportServiceTests
             await WriteFileAsync(target, await ExportAsync(source)), ImportMode.Replace, Ct);
 
         var tasks = await target.QueryAsync(c => c.Tasks);
-        Assert.Equal(target.Clock.GetUtcNow().UtcDateTime, tasks.Single(t => t.Id == BirthdayId).ReminderFiredUtc);
-        Assert.Null(tasks.Single(t => t.Id == RecurringId).ReminderFiredUtc);
-        Assert.Empty(await target.Get<TaskDesk.Core.Reminders.IReminderService>().ListDueAsync(Ct));
+        var importedAt = target.Clock.GetUtcNow().UtcDateTime;
+        Assert.Equal(importedAt, tasks.Single(t => t.Id == BirthdayId).NotifiedThroughUtc);
+        Assert.Equal(importedAt, tasks.Single(t => t.Id == RecurringId).NotifiedThroughUtc);
+        var reminders = target.Get<TaskDesk.Core.Reminders.IReminderService>();
+        Assert.Empty(await reminders.ListDueAsync(Ct));
+
+        // The future one fires when its Snooze ends (20 Oct 13:15 UTC).
+        target.Clock.SetUtcNow(new DateTimeOffset(2026, 10, 20, 13, 15, 0, TimeSpan.Zero));
+        var due = Assert.Single(await reminders.ListDueAsync(Ct));
+        Assert.Equal(RecurringId, due.TaskId);
     }
     /// <summary>A target whose Default List is "Caixa" and which has its own "WORK" List, "Work" Tag and a Task with DoneId.</summary>
     private static async Task<(TempDatabase Db, Guid CaixaId, Guid LocalWorkId, Guid LocalTagId)> SeedTargetAsync()

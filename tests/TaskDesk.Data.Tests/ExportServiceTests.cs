@@ -49,7 +49,7 @@ public sealed class ExportServiceTests
             DueTime = new TimeOnly(14, 0),
             ReminderUtc = new DateTime(2026, 10, 20, 13, 0, 0, DateTimeKind.Utc),
             SnoozedUntilUtc = new DateTime(2026, 10, 20, 13, 15, 0, DateTimeKind.Utc),
-            ReminderFiredUtc = new DateTime(2026, 10, 20, 13, 0, 1, DateTimeKind.Utc),
+            NotifiedThroughUtc = new DateTime(2026, 10, 20, 13, 0, 1, DateTimeKind.Utc),
             SortOrder = 1.5,
             SeriesId = SeriesId,
             NextOccurrenceId = NextId,

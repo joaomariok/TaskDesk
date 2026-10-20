@@ -34,7 +34,7 @@ internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>
         }
 
         var task = Tasks.Single(t => t.Id == taskId);
-        ReminderCalculator.SetPlanned(task, reminderUtc);
+        ReminderCalculator.SetPlanned(task, reminderUtc, clock.GetUtcNow());
         return task;
     }
 
@@ -70,25 +70,30 @@ internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>
             throw failure;
         }
 
-        IReadOnlyList<DueReminder> due = [.. ReminderCalculator.SelectDue(Tasks, clock.GetUtcNow())
-            .Select(t => new DueReminder(t.Id, t.Title, t.DueDate, t.DueTime, "Inbox", ReminderCalculator.EffectiveUtc(t)!.Value))];
+        var now = clock.GetUtcNow();
+        IReadOnlyList<DueReminder> due = [.. ReminderCalculator.SelectDue(Tasks, now)
+            .Select(t => new DueReminder(
+                t.Id, t.Title, t.DueDate, t.DueTime, "Inbox", ReminderCalculator.DueInstant(t, now)!.Value))];
         return Task.FromResult(due);
     }
 
     public async Task<bool> TryMarkFiredAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default) =>
         await TryClaimAsync(taskId, dueAtUtc, cancellationToken) is not null;
 
+    // "Notified through" before each live claim, so releasing it restores exactly that value.
+    private readonly Dictionary<Guid, DateTime?> _beforeClaim = [];
+
     public Task<DateTime?> TryClaimAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default)
     {
         var task = Tasks.Single(t => t.Id == taskId);
-        if (RefuseClaims.Contains(taskId)
-            || !ReminderCalculator.IsDue(task, clock.GetUtcNow()) || ReminderCalculator.EffectiveUtc(task) != dueAtUtc)
+        if (RefuseClaims.Contains(taskId) || ReminderCalculator.DueInstant(task, clock.GetUtcNow()) != dueAtUtc)
         {
             return Task.FromResult<DateTime?>(null);
         }
 
-        task.ReminderFiredUtc = clock.GetUtcNow().UtcDateTime;
-        return Task.FromResult(task.ReminderFiredUtc);
+        _beforeClaim[taskId] = task.NotifiedThroughUtc;
+        task.NotifiedThroughUtc = dueAtUtc;
+        return Task.FromResult(task.NotifiedThroughUtc);
     }
 
     /// <summary>The Tasks whose claim was released, in order.</summary>
@@ -97,12 +102,12 @@ internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>
     public Task<bool> ReleaseClaimAsync(Guid taskId, DateTime firedUtc, CancellationToken cancellationToken = default)
     {
         var task = Tasks.Single(t => t.Id == taskId);
-        if (task.ReminderFiredUtc != firedUtc)
+        if (task.NotifiedThroughUtc != firedUtc || !_beforeClaim.Remove(taskId, out var before))
         {
             return Task.FromResult(false);
         }
 
-        task.ReminderFiredUtc = null;
+        task.NotifiedThroughUtc = before;
         Released.Add(taskId);
         return Task.FromResult(true);
     }

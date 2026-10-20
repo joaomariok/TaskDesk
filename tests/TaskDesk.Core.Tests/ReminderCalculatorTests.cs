@@ -14,16 +14,89 @@ public class ReminderCalculatorTests
     private static DateTime Utc(int hour, int minute) => new(2026, 10, 20, hour, minute, 0, DateTimeKind.Utc);
 
     private static TaskItem Task(
-        DateTime? reminder = null, DateTime? snoozed = null, DateTime? fired = null, bool completed = false) =>
+        DateTime? reminder = null, DateTime? snoozed = null, DateTime? notifiedThrough = null, bool completed = false) =>
         new()
         {
             Id = Guid.CreateVersion7(),
             Title = "Task",
             ReminderUtc = reminder,
             SnoozedUntilUtc = snoozed,
-            ReminderFiredUtc = fired,
+            NotifiedThroughUtc = notifiedThrough,
             IsCompleted = completed,
         };
+
+    // Minutes after the planned Reminder (12:00 UTC); null means not set.
+    private static DateTime? At(int? minutes) => minutes is { } m ? Planned.AddMinutes(m) : null;
+
+    private static DateTimeOffset NowAt(int minutes) => new(Planned.AddMinutes(minutes));
+
+    public static TheoryData<string, int?, int?, int?, bool, int, int?> DueRuleCases => new()
+    {
+        // description, Reminder, Snooze end, notified through, completed, now, expected due instant
+        { "no moment at all", null, null, null, false, 60, null },
+        { "Reminder not reached yet", 0, null, null, false, -1, null },
+        { "Reminder reached, nothing notified yet", 0, null, null, false, 0, 0 },
+        { "Reminder missed hours ago", 0, null, null, false, 360, 0 },
+        { "Reminder after notified through", 0, null, -1, false, 5, 0 },
+        { "Reminder at notified through", 0, null, 0, false, 5, null },
+        { "Reminder before notified through", 0, null, 3, false, 5, null },
+        { "completed Task", 0, null, null, true, 5, null },
+        { "snoozed past now", 0, 10, 0, false, 5, null },
+        { "snoozed past now, Reminder not notified yet", 0, 10, null, false, 5, null },
+        { "Snooze ended", 0, 10, 0, false, 10, 10 },
+        { "Snooze ended, the latest moment wins", 0, 10, null, false, 30, 10 },
+        { "Snooze ended and notified", 0, 10, 10, false, 30, null },
+        { "Snooze ended, a later Reminder is the latest moment", 20, 10, 10, false, 30, 20 },
+        { "Snooze ended, a later Reminder not reached yet", 20, 10, 10, false, 15, null },
+    };
+
+    [Theory]
+    [MemberData(nameof(DueRuleCases))]
+    public void A_Task_is_due_at_its_latest_moment_after_notified_through_and_not_after_now(
+        string description, int? reminder, int? snoozed, int? notifiedThrough, bool completed, int now, int? expected)
+    {
+        var task = Task(At(reminder), At(snoozed), At(notifiedThrough), completed);
+
+        Assert.True(At(expected) == ReminderCalculator.DueInstant(task, NowAt(now)), description);
+        Assert.True((expected is not null) == ReminderCalculator.IsDue(task, NowAt(now)), description);
+    }
+
+    [Fact]
+    public void Marking_past_moments_notified_moves_notified_through_to_now_and_never_back()
+    {
+        var task = Task(Planned);
+
+        ReminderCalculator.MarkPastNotified(task, NowAt(5));
+        Assert.Equal(At(5), task.NotifiedThroughUtc);
+        Assert.False(ReminderCalculator.IsDue(task, NowAt(10)));
+
+        task.NotifiedThroughUtc = At(30);
+        ReminderCalculator.MarkPastNotified(task, NowAt(20));
+        Assert.Equal(At(30), task.NotifiedThroughUtc);
+    }
+
+    [Fact]
+    public void A_Reminder_set_to_a_moment_already_past_never_fires()
+    {
+        var task = Task();
+
+        Assert.True(ReminderCalculator.SetPlanned(task, At(-10), NowAt(0)));
+
+        Assert.False(ReminderCalculator.IsDue(task, NowAt(0)));
+        Assert.False(ReminderCalculator.IsDue(task, NowAt(600)));
+    }
+
+    [Fact]
+    public void Clearing_a_Snooze_makes_the_Task_notify_once_at_its_latest_past_moment()
+    {
+        var task = Task(Planned, snoozed: At(60), notifiedThrough: At(0));
+
+        Assert.True(ReminderCalculator.ClearSnooze(task));
+
+        Assert.Equal(Planned, ReminderCalculator.DueInstant(task, NowAt(5)));
+        task.NotifiedThroughUtc = Planned; // claimed
+        Assert.False(ReminderCalculator.IsDue(task, NowAt(5)));
+    }
 
     public static TheoryData<string, int, int, int, bool> DueCases => new()
     {
@@ -53,7 +126,7 @@ public class ReminderCalculatorTests
     [Fact]
     public void An_already_fired_Reminder_is_not_due()
     {
-        var task = Task(Planned, fired: Utc(12, 0));
+        var task = Task(Planned, notifiedThrough: Utc(12, 0));
 
         Assert.False(ReminderCalculator.IsDue(task, ClockAtUtc(13, 0).GetUtcNow()));
     }
@@ -73,7 +146,7 @@ public class ReminderCalculatorTests
 
         Assert.False(ReminderCalculator.IsDue(task, ClockAtUtc(12, 5).GetUtcNow()));
         Assert.True(ReminderCalculator.IsDue(task, ClockAtUtc(12, 10).GetUtcNow()));
-        Assert.Equal(Utc(12, 10), ReminderCalculator.EffectiveUtc(task));
+        Assert.Equal(Utc(12, 10), ReminderCalculator.DueInstant(task, ClockAtUtc(12, 10).GetUtcNow()));
     }
 
     [Fact]
@@ -82,7 +155,7 @@ public class ReminderCalculatorTests
         var late = Task(Utc(11, 0));
         var early = Task(Utc(9, 0));
         var future = Task(Utc(15, 0));
-        var fired = Task(Utc(8, 0), fired: Utc(8, 0));
+        var fired = Task(Utc(8, 0), notifiedThrough: Utc(8, 0));
         var completed = Task(Utc(8, 0), completed: true);
         var none = Task();
 
@@ -170,37 +243,38 @@ public class ReminderCalculatorTests
     [Fact]
     public void Editing_a_fired_Reminder_re_arms_it()
     {
-        var task = Task(Planned, snoozed: Utc(12, 10), fired: Utc(12, 10));
+        var task = Task(Planned, snoozed: Utc(12, 10), notifiedThrough: Utc(12, 10));
 
-        var changed = ReminderCalculator.SetPlanned(task, Utc(15, 0));
+        var changed = ReminderCalculator.SetPlanned(task, Utc(15, 0), ClockAtUtc(12, 20).GetUtcNow());
 
         Assert.True(changed);
         Assert.Equal(Utc(15, 0), task.ReminderUtc);
-        Assert.Null(task.ReminderFiredUtc);
         Assert.Null(task.SnoozedUntilUtc);
+        Assert.False(ReminderCalculator.IsDue(task, ClockAtUtc(14, 59).GetUtcNow()));
+        Assert.Equal(Utc(15, 0), ReminderCalculator.DueInstant(task, ClockAtUtc(15, 0).GetUtcNow()));
     }
 
     [Fact]
     public void Setting_the_same_Reminder_again_changes_nothing()
     {
-        var task = Task(Planned, fired: Utc(12, 0));
+        var task = Task(Planned, notifiedThrough: Utc(12, 0));
 
-        var changed = ReminderCalculator.SetPlanned(task, Planned);
+        var changed = ReminderCalculator.SetPlanned(task, Planned, ClockAtUtc(12, 20).GetUtcNow());
 
         Assert.False(changed);
-        Assert.Equal(Utc(12, 0), task.ReminderFiredUtc);
+        Assert.Equal(Utc(12, 0), task.NotifiedThroughUtc);
     }
 
     [Fact]
-    public void Clearing_a_Reminder_clears_its_Snooze_and_fired_marker()
+    public void Clearing_a_Reminder_clears_its_Snooze_and_counts_past_moments_as_notified()
     {
-        var task = Task(Planned, snoozed: Utc(12, 10), fired: Utc(12, 0));
+        var task = Task(Planned, snoozed: Utc(12, 10), notifiedThrough: Utc(12, 0));
 
-        Assert.True(ReminderCalculator.SetPlanned(task, null));
+        Assert.True(ReminderCalculator.SetPlanned(task, null, ClockAtUtc(12, 5).GetUtcNow()));
 
         Assert.Null(task.ReminderUtc);
         Assert.Null(task.SnoozedUntilUtc);
-        Assert.Null(task.ReminderFiredUtc);
+        Assert.Equal(Utc(12, 5), task.NotifiedThroughUtc);
     }
     // ---- Snooze ----
 
@@ -216,18 +290,18 @@ public class ReminderCalculatorTests
     public void Snoozing_a_fired_Reminder_sets_the_Snooze_from_now_and_leaves_the_planned_Reminder(
         string description, int minutes)
     {
-        var task = Task(Planned, fired: Utc(12, 0));
+        var task = Task(Planned, notifiedThrough: Utc(12, 0));
         var clock = ClockAtUtc(12, 3);
 
         Assert.True(ReminderCalculator.Snooze(task, clock.GetUtcNow(), TimeSpan.FromMinutes(minutes)), description);
 
         Assert.Equal(Utc(12, 3).AddMinutes(minutes), task.SnoozedUntilUtc);
         Assert.Equal(Planned, task.ReminderUtc);
-        Assert.Null(task.ReminderFiredUtc);
-        Assert.Equal(Utc(12, 3).AddMinutes(minutes), ReminderCalculator.EffectiveUtc(task));
+        Assert.Equal(Utc(12, 0), task.NotifiedThroughUtc);
         Assert.False(ReminderCalculator.IsDue(task, clock.GetUtcNow()));
         clock.Advance(TimeSpan.FromMinutes(minutes));
         Assert.True(ReminderCalculator.IsDue(task, clock.GetUtcNow()));
+        Assert.Equal(Utc(12, 3).AddMinutes(minutes), ReminderCalculator.DueInstant(task, clock.GetUtcNow()));
     }
 
     [Fact]
@@ -240,35 +314,35 @@ public class ReminderCalculatorTests
     [Fact]
     public void A_completed_Task_cannot_be_snoozed()
     {
-        var task = Task(Planned, fired: Utc(12, 0), completed: true);
+        var task = Task(Planned, notifiedThrough: Utc(12, 0), completed: true);
 
         Assert.False(ReminderCalculator.Snooze(task, ClockAtUtc(12, 3).GetUtcNow(), ReminderCalculator.ShortSnooze));
 
         Assert.Null(task.SnoozedUntilUtc);
-        Assert.Equal(Utc(12, 0), task.ReminderFiredUtc);
+        Assert.Equal(Utc(12, 0), task.NotifiedThroughUtc);
     }
 
     [Fact]
     public void Clearing_a_Snooze_re_arms_the_planned_Reminder()
     {
-        var task = Task(Planned, snoozed: Utc(13, 0), fired: Utc(13, 0));
+        var task = Task(Planned, snoozed: Utc(13, 0), notifiedThrough: Utc(13, 0));
 
         Assert.True(ReminderCalculator.ClearSnooze(task));
 
         Assert.Null(task.SnoozedUntilUtc);
-        Assert.Null(task.ReminderFiredUtc);
         Assert.Equal(Planned, task.ReminderUtc);
         Assert.True(ReminderCalculator.IsDue(task, ClockAtUtc(13, 5).GetUtcNow()));
+        Assert.Equal(Planned, ReminderCalculator.DueInstant(task, ClockAtUtc(13, 5).GetUtcNow()));
     }
 
     [Fact]
     public void Clearing_when_there_is_no_Snooze_changes_nothing()
     {
-        var task = Task(Planned, fired: Utc(12, 0));
+        var task = Task(Planned, notifiedThrough: Utc(12, 0));
 
         Assert.False(ReminderCalculator.ClearSnooze(task));
 
-        Assert.Equal(Utc(12, 0), task.ReminderFiredUtc);
+        Assert.Equal(Utc(12, 0), task.NotifiedThroughUtc);
     }
 
     // ---- Missed summary ----

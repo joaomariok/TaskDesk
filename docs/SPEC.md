@@ -162,8 +162,8 @@ erDiagram
 | DueDate | DateOnly? | local calendar date |
 | DueTime | TimeOnly? | only allowed when DueDate is set |
 | ReminderUtc | DateTime? | the planned Reminder instant; independent of due date (can exist without a due date). Never changed by Snooze. |
-| SnoozedUntilUtc | DateTime? | set by Snooze; when set, the Reminder fires at this instant instead of ReminderUtc. Cleared on completion and when ReminderUtc is edited. |
-| ReminderFiredUtc | DateTime? | set when the notification was shown; prevents duplicates. Cleared (re-armed) whenever ReminderUtc is edited, the Task is snoozed, or the Snooze is cleared. |
+| SnoozedUntilUtc | DateTime? | set by Snooze; the Task notifies at nothing before this instant, and its end is itself a moment, so the Task notifies once when it ends. Stays recorded after it ends. Cleared on completion, when ReminderUtc is edited, and by Clear Snooze. |
+| NotifiedThroughUtc | DateTime? | "notified through": the latest moment the Task has notified for, or counts as notified (ADR 0006); null means nothing notified yet. Only a moment after it can notify, which prevents duplicates. A claim advances it to the due instant. The past-moment rule moves it to at least now whenever ReminderUtc is set, changed or cleared, the Task is un-completed, or the Task is created (including quick add, the next Occurrence and import); edits to other fields leave it alone. Clear Snooze resets it to null. Replaces the former `ReminderFiredUtc` (migration `Ticket115_NotifiedThrough` renames the column: a fired Reminder keeps its marker and stays fired; an armed one has none and still fires). |
 | IsCompleted | bool | |
 | CompletedUtc | DateTime? | set when completed, cleared when un-completed |
 | SortOrder | double | manual order within a list; insert between neighbors by averaging; renormalize when the gap gets below 1e-6 |
@@ -245,7 +245,7 @@ Additionally, the next Occurrence must be **strictly after** the current Occurre
 
 1. The current Occurrence is marked completed (it stays in history as a normal completed Task). Its Subtasks are **not** changed: Subtask and Task completion are independent in both directions. Its SnoozedUntilUtc is cleared.
 2. If its NextOccurrenceId is already set, stop here: an Occurrence produces its next Occurrence **at most once** (re-completing after an un-complete does not create a duplicate).
-3. Otherwise a **new** TaskItem (the next Occurrence) is created with: same ListId, Title, Notes, Priority, tags, Recurrence, SeriesId (create one if null and assign to both); DueDate = next date; DueTime unchanged; Subtasks copied with IsCompleted = false; ReminderUtc shifted by the same offset the **planned** Reminder (ReminderUtc, never SnoozedUntilUtc) had relative to the old Due (if it had one); SnoozedUntilUtc = null; ReminderFiredUtc = null. The old Occurrence's NextOccurrenceId is set to the new Id.
+3. Otherwise a **new** TaskItem (the next Occurrence) is created with: same ListId, Title, Notes, Priority, tags, Recurrence, SeriesId (create one if null and assign to both); DueDate = next date; DueTime unchanged; Subtasks copied with IsCompleted = false; ReminderUtc shifted by the same offset the **planned** Reminder (ReminderUtc, never SnoozedUntilUtc) had relative to the old Due (if it had one); SnoozedUntilUtc = null; NotifiedThroughUtc = now, so moments already past never fire. The old Occurrence's NextOccurrenceId is set to the new Id.
 4. If the calculator returns null (Series ended), no new Task is created.
 5. **Ctrl+Z immediately after completing** (the undo of 6.5) restores the old Occurrence to not-completed and deletes the next Occurrence it produced, clearing NextOccurrenceId. A **later manual un-complete** (checkbox, detail pane) keeps the next Occurrence and NextOccurrenceId.
 6. Steps 1–3 are a single database transaction.
@@ -386,15 +386,15 @@ Only one TaskDesk process may run. Use a named `Mutex` (e.g., `Local\TaskDesk.Si
    On startup, try the primary; if registration throws, log the error, switch to the fallback, and show a one-time banner in the main window explaining that rich notifications are unavailable and why.
 3. Follow Microsoft's "App notifications quickstart" page for exact registration and activation code. Do not copy code from older tutorials using `Windows.UI.Notifications.ToastNotificationManager` or `Microsoft.Toolkit.Uwp.Notifications`.
 
-**Reminder notification content:** title = task title; body = due date/time + list name; buttons: **Mark done**, **Snooze 10 min**, **Snooze 1 h**; clicking the body opens the main window with the task selected. Snooze sets `SnoozedUntilUtc = now + duration` and clears `ReminderFiredUtc`; `ReminderUtc` (the planned Reminder) is left unchanged so its offset carries to the next Occurrence.
+**Reminder notification content:** title = task title; body = due date/time + list name; buttons: **Mark done**, **Snooze 10 min**, **Snooze 1 h**; clicking the body opens the main window with the task selected. Snooze sets `SnoozedUntilUtc = now + duration` and leaves `NotifiedThroughUtc` alone; `ReminderUtc` (the planned Reminder) is left unchanged so its offset carries to the next Occurrence.
 
 ### 7.4 Reminder scheduler
 
 A single `ReminderScheduler` hosted service (in Presentation or App, logic in Core):
 
 - Every **30 seconds** (via `TimeProvider` timer), and also immediately on: app start, any task change, and Windows resume from sleep (`Microsoft.Win32.SystemEvents.PowerModeChanged` → `Resume`):
-  - query tasks where `COALESCE(SnoozedUntilUtc, ReminderUtc) <= now AND ReminderFiredUtc IS NULL AND IsCompleted = false` (the effective Reminder time is the Snooze when set, otherwise the planned Reminder)
-  - show a notification for each, then set `ReminderFiredUtc = now`
+  - list the Tasks due to notify. **The due rule** (`ReminderCalculator.DueInstant`, ADR 0006): a Task is due at `now` when it is not completed, it is not snoozed past `now` (`SnoozedUntilUtc > now`), and one of its moments (`ReminderUtc`, `SnoozedUntilUtc`) lies after `NotifiedThroughUtc` (or `NotifiedThroughUtc` is null) and at or before `now`. Its due instant is the latest such moment, so a Task has at most one entry and missed moments collapse into one notification. The SQL only narrows to the candidates; the rule runs in memory over them.
+  - claim each with one conditional update that advances `NotifiedThroughUtc` to its listed due instant (a Task completed, snoozed, edited or claimed since it was listed is not claimed), then show its notification. A notification that cannot be shown releases only its own claim, so the same due instant is due again at the next check.
 - **Missed reminders** (PC was off/asleep, or app not running): when more than 3 are due at once, show **one** summary notification ("5 reminders missed") instead of a flood; clicking opens the Today view.
 - A polling loop (instead of one precise timer per reminder) is deliberate: it survives sleep, clock changes, and time-zone changes with no extra logic. Precision of ±30 s is acceptable.
 - The decision of "which reminders are due" must be a pure Core function so it can be unit-tested with `FakeTimeProvider`.
@@ -512,7 +512,7 @@ Columns: List, Title, Notes, Priority, DueDate (yyyy-MM-dd), DueTime (HH:mm), Co
 Must cover at least:
 - **RecurrenceCalculator**: every frequency; Interval > 1; weekly with multiple days crossing week boundaries; monthly day 31 in 30-day months and February; Feb 29 yearly (Feb 28 in non-leap years, back to Feb 29 in the next leap year — no drift); Anchor = CompletionDate when completed early and late, and with a Skip date; EndDate cutoff; "strictly after current due date" rule. Use table-driven tests (`[Theory]` + `[InlineData]`/`MemberData`).
 - **Occurrence completion**: produces the next Occurrence at most once (complete → un-complete → complete yields one next Occurrence); Ctrl+Z undo deletes the produced Occurrence, manual un-complete keeps it; completion leaves Subtasks untouched; the next Occurrence's Reminder offset comes from the planned Reminder, not the Snooze; date-only Due measures the offset from local midnight.
-- **Reminder selection**: due, not due, already fired, completed task, snoozed (SnoozedUntilUtc wins over ReminderUtc), edited Reminder re-armed, missed-summary threshold (>3), with `FakeTimeProvider`.
+- **Reminder selection**: due, not due, already notified (at or before NotifiedThroughUtc), completed task, snoozed (nothing before the Snooze ends; the latest moment is the due instant), edited Reminder re-armed, a moment already past when set never fires, missed-summary threshold (>3), with `FakeTimeProvider`.
 - **Smart view predicates**: boundaries at midnight and at DueTime = now; the single Overdue predicate (timed Task overdue once DueTime passes, date-only Task overdue from the next day); a Reminder without DueDate is in no Smart View.
 - **SortOrder** insertion/averaging/renormalization.
 - **Import/export**: JSON round-trip equals original; CSV escaping (commas, quotes, newlines, accents); invalid/unknown schema rejected.

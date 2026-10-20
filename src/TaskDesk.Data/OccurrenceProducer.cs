@@ -43,10 +43,12 @@ internal static class OccurrenceProducer
             DueDate = nextDue,
             DueTime = current.DueTime,
             Recurrence = recurrence with { }, // an owned value is never shared between two Tasks
-            // The planned Reminder, never the Snooze; the Snooze and fired marker start cleared (SPEC 5.1 step 3).
+            // The planned Reminder, never the Snooze; the Snooze starts cleared and moments already past count
+            // as notified (SPEC 5.1 step 3).
             ReminderUtc = current.ReminderUtc is { } planned
                 ? ReminderCalculator.CarryOver(planned, currentDue, current.DueTime, nextDue, zone)
                 : null,
+            NotifiedThroughUtc = nowUtc,
             SeriesId = current.SeriesId,
             SortOrder = await SortOrderAfterAsync(context, current, cancellationToken),
             CreatedUtc = nowUtc,
