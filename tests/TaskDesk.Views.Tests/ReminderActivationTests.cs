@@ -361,6 +361,10 @@ public sealed class ReminderActivationTests
         {
         }
 
+        public void ShowRestartToUpdate(bool updatePending)
+        {
+        }
+
         public void Dispose()
         {
         }

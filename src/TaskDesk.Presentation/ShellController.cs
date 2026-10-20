@@ -7,9 +7,9 @@ namespace TaskDesk.Presentation;
 
 /// <summary>
 /// Ties the tray icon, main window, single-instance guard and auto-start together, runs the exit parts in a fixed
-/// order (<see cref="ShellExitParts"/>), stops the update checks
-/// (<see cref="UpdateScheduler"/>) on exit, and restarts into a downloaded update through <see cref="IAppUpdates"/>
-/// after the normal exit.
+/// order (<see cref="ShellExitParts"/>), shows the tray's Restart to update while <see cref="UpdateScheduler"/> holds a
+/// downloaded version, stops the update checks on exit, and has the <see cref="UpdateScheduler"/> restart after the
+/// exit for Restart to update. A null <see cref="UpdateScheduler"/> means updates are absent.
 /// </summary>
 public sealed class ShellController(
     ITrayIcon tray,
@@ -19,13 +19,12 @@ public sealed class ShellController(
     AutoStartService autoStart,
     IAppShutdown lifetime,
     ILogger<ShellController>? logger = null,
-    IAppUpdates? updates = null,
-    UpdateScheduler? updateChecks = null) : IDisposable
+    UpdateScheduler? updates = null) : IDisposable
 {
     public const string TrayHint = "TaskDesk is still running in the tray";
 
     private readonly ILogger _logger = logger ?? NullLogger<ShellController>.Instance;
-    private readonly UpdateScheduler? _updateChecks = updateChecks;
+    private readonly UpdateScheduler? _updates = updates;
     private ShellExitParts? _exitParts;
     private bool _launched;
 
@@ -57,7 +56,8 @@ public sealed class ShellController(
     /// Sets everything up in the process that owns the single-instance guard (<see cref="LaunchAsync"/> calls it): <see cref="LaunchGate"/> has claimed
     /// it and forwarded any launch that found another copy, so this only confirms ownership
     /// (<see cref="ISingleInstance.TryAcquire"/> keeps its first answer) and throws when the guard is held
-    /// elsewhere. Listens for later launches, then sets up the Run key, the tray and the window. Returns true.
+    /// elsewhere. Listens for later launches, then sets up the Run key, the tray (its Restart to update follows the
+    /// downloaded version from here on) and the window. Returns true.
     /// </summary>
     public Task<bool> StartAsync(bool minimized, string exePath, CancellationToken cancellationToken = default)
     {
@@ -77,6 +77,12 @@ public sealed class ShellController(
         tray.ExitRequested += Exit;
         tray.RestartToUpdateRequested += RestartToUpdate;
         tray.Show();
+        if (_updates is not null)
+        {
+            // Subscribed before the read, so a version downloaded in between is not missed.
+            _updates.PendingVersionChanged += OnPendingVersionChanged;
+            OnPendingVersionChanged();
+        }
 
         if (!minimized)
         {
@@ -239,12 +245,12 @@ public sealed class ShellController(
     /// pending edit), then applies the downloaded update, which ends the process and starts the new version. The
     /// exit waits up to <see cref="UpdateScheduler.StopTimeout"/> for a running update check, or until its parts end
     /// if they take longer; when one still runs, it skips the apply and starts the current version again, and the
-    /// update applies at the next normal start. Once an exit has started it only returns that exit. When applying
-    /// fails, the app shuts down as usual.
+    /// update applies at the next normal start (<see cref="UpdateScheduler.RestartAfterExit"/>). Once an exit has
+    /// started it only returns that exit. When applying fails, the app shuts down as usual.
     /// </summary>
     public Task RestartToUpdateAsync()
     {
-        if (updates is null)
+        if (_updates is null)
         {
             return Task.CompletedTask;
         }
@@ -275,17 +281,17 @@ public sealed class ShellController(
     // A plain exit or a session end only cancels it.
     private async Task<bool> StopUpdateChecksAsync()
     {
-        if (_updateChecks is null)
+        if (_updates is null)
         {
             return true;
         }
 
         if (_restartToUpdate)
         {
-            return await _updateChecks.StopAsync();
+            return await _updates.StopAsync();
         }
 
-        _updateChecks.Dispose();
+        _updates.Dispose();
         return true;
     }
 
@@ -322,9 +328,9 @@ public sealed class ShellController(
             await RunPartAsync("dispose the host", last.DisposeHost);
         }
 
-        if (_restartToUpdate)
+        if (_restartToUpdate && _updates is not null)
         {
-            await RestartAsync(checksEnded);
+            _updates.RestartAfterExit(await checksEnded);
         }
 
         lifetime.Shutdown();
@@ -342,40 +348,6 @@ public sealed class ShellController(
         }
     }
 
-    // Restart to update, after the exit. Either restart opens the window (a restart the owner asked for is not a
-    // logon start) and carries LaunchGate.RestartedFlag, so the restarted process never applies at start.
-    private async Task RestartAsync(Task<bool> checksEnded)
-    {
-        // The timed wait may have given up while the exit parts still ran; a check that ended since then is done.
-        if (!await checksEnded && _updateChecks is { CurrentCheck.IsCompleted: false })
-        {
-            // A download may still write to the packages folder: start this version again, so Reminders keep
-            // running, and the update applies at the next normal start.
-            _logger.LogWarning(
-                "An update check was still running; restarting without the update, which applies at the next start");
-            try
-            {
-                updates!.RestartWithoutApplying(LaunchGate.RestartArguments([]));
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                _logger.LogError(ex, "Restarting the app failed; exiting");
-            }
-
-            return;
-        }
-
-        try
-        {
-            // Ends the process at once when it works.
-            updates!.RestartToApply(LaunchGate.RestartArguments([]));
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            _logger.LogError(ex, "Applying the update failed; exiting");
-        }
-    }
-
     public void Dispose()
     {
         if (_disposed)
@@ -390,6 +362,11 @@ public sealed class ShellController(
         tray.SettingsRequested -= OnSettingsRequested;
         tray.ExitRequested -= Exit;
         tray.RestartToUpdateRequested -= RestartToUpdate;
+        if (_updates is not null)
+        {
+            _updates.PendingVersionChanged -= OnPendingVersionChanged;
+        }
+
         tray.Dispose();
         singleInstance.Dispose();
     }
@@ -425,6 +402,8 @@ public sealed class ShellController(
             window.ShowAndFocus();
         }
     }
+
+    private void OnPendingVersionChanged() => tray.ShowRestartToUpdate(_updates?.PendingVersion is not null);
 
     private void OnQuickAddRequested() => QuickAddRequested?.Invoke();
 

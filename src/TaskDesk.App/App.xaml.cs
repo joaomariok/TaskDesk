@@ -233,9 +233,6 @@ public partial class App : Application
 
         var reminders = _host.Services.GetRequiredService<ReminderScheduler>();
         var updates = _host.Services.GetRequiredService<UpdateScheduler>();
-        // The tray's "Restart to update" shows once an update is downloaded.
-        var tray = _host.Services.GetRequiredService<WinUiTrayIcon>();
-        updates.PendingVersionChanged += () => tray.ShowRestartToUpdate(updates.PendingVersion is not null);
 
         // Session end and resume from sleep reach top-level windows only, so they get a hidden one of their own. The
         // shell starts them once it holds the exit parts.

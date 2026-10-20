@@ -16,8 +16,12 @@ internal sealed class FakeTray : ITrayIcon
     public int DisposeCount { get; private set; }
     public List<string> Hints { get; } = [];
 
+    /// <summary>Each "show or hide Restart to update" the shell asked for, in order; true shows it.</summary>
+    public List<bool> RestartToUpdateStates { get; } = [];
+
     public void Show() => Shown = true;
     public void ShowHint(string message) => Hints.Add(message);
+    public void ShowRestartToUpdate(bool updatePending) => RestartToUpdateStates.Add(updatePending);
     public void Dispose() => DisposeCount++;
 
     public void ClickLeft() => LeftClicked?.Invoke();

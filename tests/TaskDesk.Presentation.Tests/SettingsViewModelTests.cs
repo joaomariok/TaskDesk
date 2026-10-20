@@ -240,7 +240,7 @@ public sealed class SettingsViewModelTests
         var lifetime = new FakeLifetime();
         var shell = new ShellController(
             new FakeTray(), new FakeWindow(), new FakeSingleInstance(), _store, new AutoStartService(_runKey), lifetime,
-            updates: updates);
+            updates: scheduler);
         var restartsDuringExit = -1;
         Func<Task> noPart = () => Task.CompletedTask;
         await shell.LaunchAsync(

@@ -16,6 +16,11 @@ public interface ITrayIcon : IDisposable
 
     /// <summary>Shows a transient balloon/notification next to the icon.</summary>
     void ShowHint(string message);
+
+    /// <summary>
+    /// Shows the menu's "Restart to update" while an update is pending, or hides it; safe to call from any thread.
+    /// </summary>
+    void ShowRestartToUpdate(bool updatePending);
 }
 
 /// <summary>

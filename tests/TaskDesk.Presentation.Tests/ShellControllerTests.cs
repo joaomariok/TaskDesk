@@ -31,10 +31,13 @@ public sealed class ShellControllerTests
     private readonly FakeAppUpdates _updates = new();
     private const string Exe = @"C:\TaskDesk\TaskDesk.exe";
 
-    private ShellController Create() =>
-        new(_tray, _window, _single, _settings, new AutoStartService(_runKey), _lifetime, updates: _updates);
-
     private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 10, 20, 12, 0, 0, TimeSpan.Zero));
+
+    // Update checks over the fake port that have not started; Restart to update applies through them.
+    private ShellController Create() => Create(new UpdateScheduler(_updates, RuntimeMode.Normal, _clock));
+
+    private ShellController Create(UpdateScheduler checks) =>
+        new(_tray, _window, _single, _settings, new AutoStartService(_runKey), _lifetime, updates: checks);
 
     // Started with an update check that is downloading and ignores cancellation, as a busy file write can.
     private async Task<(ShellController Controller, UpdateScheduler Checks, TaskCompletionSource Download)>
@@ -46,9 +49,7 @@ public sealed class ShellControllerTests
         var checks = new UpdateScheduler(_updates, RuntimeMode.Normal, _clock);
         checks.Start();
         await _updates.Entered.Task.WaitAsync(TestContext.Current.CancellationToken);
-        var controller = new ShellController(
-            _tray, _window, _single, _settings, new AutoStartService(_runKey), _lifetime, updates: _updates,
-            updateChecks: checks);
+        var controller = Create(checks);
         if (parts is null)
         {
             await controller.StartAsync(false, Exe, TestContext.Current.CancellationToken);
@@ -424,6 +425,52 @@ public sealed class ShellControllerTests
 
         Assert.Equal(1, steps);
         Assert.Equal(1, _updates.Restarts);
+    }
+
+    // An update downloaded while the app runs.
+    [Fact]
+    public async Task The_tray_shows_restart_to_update_once_an_update_is_downloaded()
+    {
+        _updates.Available = "1.3.0";
+        var checks = new UpdateScheduler(_updates, RuntimeMode.Normal, _clock);
+        var controller = Create(checks);
+        await controller.StartAsync(false, Exe, TestContext.Current.CancellationToken);
+        Assert.Equal([false], _tray.RestartToUpdateStates);
+
+        checks.Start();
+        await checks.CurrentCheck;
+
+        Assert.Equal([false, true], _tray.RestartToUpdateStates);
+    }
+
+    // An update downloaded before the shell started, such as by the check at start.
+    [Fact]
+    public async Task The_tray_shows_restart_to_update_at_launch_when_an_update_is_already_downloaded()
+    {
+        _updates.Available = "1.3.0";
+        var checks = new UpdateScheduler(_updates, RuntimeMode.Normal, _clock);
+        checks.Start();
+        await checks.CurrentCheck;
+        var controller = Create(checks);
+
+        await controller.LaunchAsync(Launch(), TestContext.Current.CancellationToken);
+
+        Assert.Equal([true], _tray.RestartToUpdateStates);
+    }
+
+    [Fact]
+    public async Task The_tray_no_longer_follows_the_downloaded_version_once_the_shell_is_disposed()
+    {
+        _updates.Available = "1.3.0";
+        var checks = new UpdateScheduler(_updates, RuntimeMode.Normal, _clock);
+        var controller = Create(checks);
+        await controller.StartAsync(false, Exe, TestContext.Current.CancellationToken);
+
+        controller.Dispose();
+        checks.Start();
+        await checks.CurrentCheck;
+
+        Assert.Equal([false], _tray.RestartToUpdateStates);
     }
 
     // The restarted process must not apply at start: when applying failed, the update is still pending (review M3).
