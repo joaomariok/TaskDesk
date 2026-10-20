@@ -58,21 +58,28 @@ public sealed class MainViewModelStopTests
             => _inner.ListTasksByTagAsync(tagId, cancellationToken);
     }
 
-    // Today and All by the Core predicates; counts every call.
+    // Today and All by the Core predicates; counts every call. A Due save can be held until released.
     private sealed class CountingDueService(FakeTaskService tasks, FakeTimeProvider clock) : IDueService
     {
         public int Calls { get; private set; }
 
         public List<Guid> SetCalls { get; } = [];
 
-        public Task<TaskItem> SetDueAsync(
+        public TaskCompletionSource? HoldSets { get; set; }
+
+        public async Task<TaskItem> SetDueAsync(
             Guid taskId, DateOnly? dueDate, TimeOnly? dueTime, CancellationToken cancellationToken = default)
         {
             SetCalls.Add(taskId);
+            if (HoldSets is { } hold)
+            {
+                await hold.Task;
+            }
+
             var task = tasks.All.Single(t => t.Id == taskId);
             task.DueDate = dueDate;
             task.DueTime = dueTime;
-            return Task.FromResult(task);
+            return task;
         }
 
         public Task<IReadOnlyList<TaskItem>> ListSmartViewAsync(
@@ -92,18 +99,25 @@ public sealed class MainViewModelStopTests
         }
     }
 
-    // Records every Recurrence save.
+    // Records every Recurrence save. A save can be held until released.
     private sealed class RecordingRecurrenceService(FakeTaskService tasks) : IRecurrenceService
     {
         public List<Guid> SetCalls { get; } = [];
 
-        public Task<TaskItem> SetRecurrenceAsync(
+        public TaskCompletionSource? HoldSets { get; set; }
+
+        public async Task<TaskItem> SetRecurrenceAsync(
             Guid taskId, Recurrence? recurrence, CancellationToken cancellationToken = default)
         {
             SetCalls.Add(taskId);
+            if (HoldSets is { } hold)
+            {
+                await hold.Task;
+            }
+
             var task = tasks.All.Single(t => t.Id == taskId);
             task.Recurrence = recurrence;
-            return Task.FromResult(task);
+            return task;
         }
 
         public Task<TaskItem> UndoCompletionAsync(
@@ -117,18 +131,25 @@ public sealed class MainViewModelStopTests
             => throw new NotSupportedException();
     }
 
-    // Wraps the fake Task service: a Subtask tick is held until released, and the Subtask ticks, deletes and
-    // moves that reach it are recorded. A held delete waits for its own release.
+    // Wraps the fake Task service: a Subtask tick is held until released, and the Subtask ticks and moves that reach
+    // it are recorded; the deletes that land are the fake's own DeletedSubtasks. A held delete waits for its own
+    // release; a delete can be made to fail instead.
     private sealed class GatedSubtaskService(FakeTaskService inner, bool holdDeletes = false) : ITaskService
     {
         private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _deleteGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        public FakeTaskService Inner => inner;
+
         public List<Guid> Ticks { get; } = [];
 
-        public List<Guid> Deletes { get; } = [];
-
         public List<Guid> Moves { get; } = [];
+
+        /// <summary>The Subtask whose delete waits for <see cref="ReleaseDelete"/>, or null.</summary>
+        public Guid? HeldDelete { get; private set; }
+
+        /// <summary>When set, every Subtask delete fails with it.</summary>
+        public Exception? FailDeletes { get; set; }
 
         public void Release() => _gate.SetResult();
 
@@ -151,10 +172,16 @@ public sealed class MainViewModelStopTests
 
         public async Task<Subtask> DeleteSubtaskAsync(Guid subtaskId, CancellationToken cancellationToken = default)
         {
-            Deletes.Add(subtaskId);
             if (holdDeletes)
             {
+                HeldDelete = subtaskId;
                 await _deleteGate.Task;
+                HeldDelete = null;
+            }
+
+            if (FailDeletes is { } failure)
+            {
+                throw failure;
             }
 
             return await inner.DeleteSubtaskAsync(subtaskId, cancellationToken);
@@ -490,6 +517,8 @@ public sealed class MainViewModelStopTests
         Assert.Equal("step", s.Service.All[0].Subtasks[0].Title);
         Assert.False(s.Service.All[0].Subtasks[0].IsCompleted, "A Subtask tick was saved after the stop.");
         Assert.Null(s.Vm.ErrorMessage);
+        Assert.Equal("step", s.Vm.SubtaskItems[0].Title);
+        Assert.False(s.Vm.SubtaskItems[0].IsCompleted, "The pane shows a Subtask tick that was not saved.");
     }
 
     [Fact]
@@ -504,7 +533,7 @@ public sealed class MainViewModelStopTests
         await stop;
         await delete;
 
-        Assert.Empty(service.Deletes);
+        Assert.Empty(service.Inner.DeletedSubtasks);
         Assert.Equal(2, vm.SubtaskItems.Count);
     }
 
@@ -521,6 +550,7 @@ public sealed class MainViewModelStopTests
         await move;
 
         Assert.Empty(service.Moves);
+        Assert.Equal(["one", "two"], vm.SubtaskItems.Select(s => s.Title));
     }
 
     [Fact]
@@ -529,7 +559,7 @@ public sealed class MainViewModelStopTests
         var (inner, service, vm) = await StartWithDeletesHeldAsync();
         var gone = vm.SubtaskItems[0].Id;
         var delete = vm.DeleteSubtaskCommand.ExecuteAsync(vm.SubtaskItems[0]);
-        Assert.Equal([gone], service.Deletes);
+        Assert.Equal(gone, service.HeldDelete);
 
         var stop = vm.StopAsync();
         Assert.False(stop.IsCompleted);
@@ -565,11 +595,9 @@ public sealed class MainViewModelStopTests
         var delete = vm.DeleteSubtaskCommand.ExecuteAsync(vm.SubtaskItems[0]);
         vm.DetailNotes = "typed";
 
-        // The superseded debounce ends on another thread, so give the chain a moment to run ahead if it would.
         var prepare = vm.PrepareForImportAsync();
-        var first = await Task.WhenAny(prepare, Task.Delay(TimeSpan.FromMilliseconds(250), Ct));
+        Assert.Equal(gone, service.HeldDelete);
         Assert.False(prepare.IsCompleted, "The import went ahead while a Subtask delete was in flight.");
-        Assert.NotSame(prepare, first);
 
         service.ReleaseDelete();
         await prepare;
@@ -591,7 +619,7 @@ public sealed class MainViewModelStopTests
         await delete;
         await move;
 
-        Assert.Equal([gone.Id], service.Deletes);
+        Assert.Equal([gone.Id], service.Inner.DeletedSubtasks);
         Assert.Empty(service.Moves);
         Assert.Null(vm.ErrorMessage);
     }
@@ -636,5 +664,302 @@ public sealed class MainViewModelStopTests
 
         Assert.Empty(s.Reminders.SetCalls);
         Assert.Null(s.Vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task After_the_stop_a_detail_Reminder_date_leaves_the_Reminder_time_as_it_is()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        await s.Vm.StopAsync();
+
+        s.Vm.DetailReminderDate = new DateTime(2026, 10, 21);
+
+        Assert.Null(s.Vm.DetailReminderTime);
+    }
+
+    [Fact]
+    public async Task After_the_stop_a_detail_change_keeps_the_error_message()
+    {
+        var s = await StartAsync(("a", Day(20), null));
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        await s.Vm.StopAsync();
+        s.Vm.ErrorMessage = "Could not save the changes: disk full";
+
+        s.Vm.DetailDueDate = new DateTime(2026, 10, 21);
+        s.Vm.Repeat.Preset = RepeatPreset.Daily;
+        s.Vm.DetailReminderDate = new DateTime(2026, 10, 21);
+        await s.Vm.PendingSave;
+
+        Assert.Equal("Could not save the changes: disk full", s.Vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task The_stop_waits_for_a_Due_save_in_flight_to_land()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        s.Due.HoldSets = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        s.Vm.DetailDueDate = new DateTime(2026, 10, 21);
+        Assert.Single(s.Due.SetCalls);
+
+        var stop = s.Vm.StopAsync();
+        Assert.False(stop.IsCompleted);
+
+        s.Due.HoldSets.SetResult();
+        await stop;
+        Assert.Equal(Day(21), s.Service.All[0].DueDate);
+    }
+
+    [Fact]
+    public async Task The_stop_waits_for_a_Recurrence_save_in_flight_to_land()
+    {
+        var s = await StartAsync(("a", Day(20), null));
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        s.Recurrence.HoldSets = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        s.Vm.Repeat.Preset = RepeatPreset.Daily;
+        Assert.Single(s.Recurrence.SetCalls);
+
+        var stop = s.Vm.StopAsync();
+        Assert.False(stop.IsCompleted);
+
+        s.Recurrence.HoldSets.SetResult();
+        await stop;
+        Assert.NotNull(s.Service.All[0].Recurrence);
+    }
+
+    [Fact]
+    public async Task The_stop_waits_for_a_Reminder_save_in_flight_to_land()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        s.Reminders.HoldSets = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        s.Vm.DetailReminderDate = new DateTime(2026, 10, 21);
+        Assert.Single(s.Reminders.SetCalls);
+
+        var stop = s.Vm.StopAsync();
+        Assert.False(stop.IsCompleted);
+
+        s.Reminders.HoldSets.SetResult();
+        await stop;
+        Assert.NotNull(s.Reminders.Tasks.Single().ReminderUtc);
+    }
+
+    [Fact]
+    public async Task The_stop_waits_for_a_Subtask_tick_in_flight_to_land()
+    {
+        var (service, vm) = await StartWithTickInFlightAsync();
+
+        var stop = vm.StopAsync();
+        Assert.False(stop.IsCompleted);
+
+        service.Release();
+        await stop;
+        Assert.True(service.Inner.All[0].Subtasks[0].IsCompleted);
+    }
+
+    [Fact]
+    public async Task After_the_stop_a_Subtask_rename_keeps_the_tick_still_in_flight_on_screen()
+    {
+        var (service, vm) = await StartWithTickInFlightAsync();
+        var stop = vm.StopAsync();
+
+        vm.SubtaskItems[0].Title = "renamed";
+        service.Release();
+        await stop;
+
+        Assert.Equal("one", vm.SubtaskItems[0].Title);
+        Assert.True(vm.SubtaskItems[0].IsCompleted, "The pane dropped a tick that was saved.");
+        Assert.True(service.Inner.All[0].Subtasks[0].IsCompleted);
+    }
+
+    [Fact]
+    public async Task A_failed_Subtask_delete_faults_its_command_and_the_saves_after_it_still_run()
+    {
+        var (service, vm) = await StartWithTickInFlightAsync();
+        service.FailDeletes = new InvalidOperationException("The database is locked.");
+        var delete = vm.DeleteSubtaskCommand.ExecuteAsync(vm.SubtaskItems[1]);
+        vm.SubtaskItems[0].Title = "renamed";
+
+        service.Release();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => delete);
+        await vm.PendingSave;
+        Assert.Equal("renamed", service.Inner.All[0].Subtasks[0].Title);
+        Assert.Equal(2, service.Inner.All[0].Subtasks.Count);
+    }
+
+    [Fact]
+    public async Task A_Subtask_move_whose_place_is_gone_on_its_turn_does_nothing()
+    {
+        var (_, service, vm) = await StartWithDeletesHeldAsync();
+        var delete = vm.DeleteSubtaskCommand.ExecuteAsync(vm.SubtaskItems[1]);
+        var move = vm.MoveSubtaskDownCommand.ExecuteAsync(vm.SubtaskItems[0]); // down into the deleted one's place
+
+        service.ReleaseDelete();
+        await delete;
+        await move;
+
+        Assert.Empty(service.Moves);
+        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(["one"], vm.SubtaskItems.Select(s => s.Title));
+    }
+
+    [Fact]
+    public async Task A_Subtask_delete_landing_after_the_stop_shows_no_Undo_bar()
+    {
+        var (_, service, vm) = await StartWithDeletesHeldAsync();
+        var delete = vm.DeleteSubtaskCommand.ExecuteAsync(vm.SubtaskItems[0]);
+
+        var stop = vm.StopAsync();
+        service.ReleaseDelete();
+        await stop;
+        await delete;
+
+        Assert.False(vm.IsUndoBarVisible, "An Undo bar showed after the stop; nothing would hide it.");
+    }
+
+    [Fact]
+    public async Task After_the_stop_deleting_a_Tag_touches_no_service()
+    {
+        var s = await StartAsync("a");
+        var tag = await s.Tags.CreateTagAsync("home", Ct);
+        await s.Vm.StopAsync();
+
+        await s.Vm.DeleteTagAsync(tag, Ct);
+
+        Assert.Contains(await s.Tags.ListTagsAsync(Ct), t => t.Id == tag.Id);
+    }
+
+    [Fact]
+    public async Task After_the_stop_adding_a_Tag_touches_no_service()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        s.Vm.NewTagName = "home";
+        await s.Vm.StopAsync();
+
+        await s.Vm.AddTagCommand.ExecuteAsync(null);
+
+        Assert.Empty(await s.Tags.ListTagsAsync(Ct));
+    }
+
+    [Fact]
+    public async Task After_the_stop_removing_a_Tag_touches_no_service()
+    {
+        var s = await StartAsync("a");
+        var tag = await s.Tags.AddTagToTaskAsync(s.Service.All[0].Id, "home", Ct);
+        await s.Vm.LoadAsync(Ct);
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        await s.Vm.StopAsync();
+
+        await s.Vm.RemoveTagCommand.ExecuteAsync(tag);
+
+        Assert.Single(await s.Tags.ListTasksByTagAsync(tag.Id, Ct));
+    }
+
+    [Fact]
+    public async Task After_the_stop_adding_a_Subtask_touches_no_service()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        s.Vm.NewSubtaskTitle = "step";
+        await s.Vm.StopAsync();
+
+        await s.Vm.AddSubtaskCommand.ExecuteAsync(null);
+
+        Assert.Empty(s.Service.All[0].Subtasks);
+        Assert.Empty(s.Vm.SubtaskItems);
+    }
+
+    [Fact]
+    public async Task After_the_stop_deleting_a_Task_touches_no_service_and_shows_no_Undo_bar()
+    {
+        var s = await StartAsync("a");
+        await s.Vm.StopAsync();
+
+        await s.Vm.DeleteCommand.ExecuteAsync(s.Vm.Tasks[0]);
+
+        Assert.Empty(s.Service.Deleted);
+        Assert.Equal(["a"], Titles(s.Vm.Tasks));
+        Assert.False(s.Vm.IsUndoBarVisible);
+    }
+
+    [Fact]
+    public async Task After_the_stop_completing_a_Task_touches_no_service()
+    {
+        var s = await StartAsync("a");
+        await s.Vm.StopAsync();
+
+        await s.Vm.ToggleCompleteCommand.ExecuteAsync(s.Vm.Tasks[0]);
+        await s.Vm.CompleteTaskAsync(s.Service.All[0].Id, Ct);
+
+        Assert.Empty(s.Service.Completions);
+        Assert.False(s.Vm.Tasks[0].IsCompleted);
+    }
+
+    [Fact]
+    public async Task After_the_stop_quick_add_touches_no_service()
+    {
+        var s = await StartAsync("a");
+        s.Vm.QuickAddTitle = "b";
+        await s.Vm.StopAsync();
+
+        await s.Vm.AddTaskCommand.ExecuteAsync(null);
+
+        Assert.Equal(["a"], s.Service.Created);
+        Assert.Equal(["a"], Titles(s.Vm.Tasks));
+    }
+
+    [Fact]
+    public async Task After_the_stop_moving_a_Task_touches_no_service()
+    {
+        var s = await StartAsync("a", "b");
+        await s.Vm.StopAsync();
+
+        await s.Vm.MoveTaskAsync(0, 1, Ct);
+
+        Assert.Empty(s.Service.Moves);
+        Assert.Equal(["a", "b"], Titles(s.Vm.Tasks));
+    }
+
+    [Fact]
+    public async Task After_the_stop_Undo_touches_no_service()
+    {
+        var s = await StartAsync("a", "b");
+        await s.Vm.DeleteCommand.ExecuteAsync(s.Vm.Tasks[0]);
+        await s.Vm.StopAsync();
+
+        await s.Vm.UndoCommand.ExecuteAsync(null);
+
+        Assert.Empty(s.Service.Restored);
+        Assert.Equal(["b"], Titles(s.Vm.Tasks));
+    }
+
+    [Fact]
+    public async Task After_the_stop_snoozing_or_clearing_a_Snooze_touches_no_service()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        await s.Vm.StopAsync();
+
+        await s.Vm.SnoozeTaskAsync(s.Service.All[0].Id, TimeSpan.FromMinutes(10), Ct);
+        await s.Vm.ClearSnoozeCommand.ExecuteAsync(null);
+
+        Assert.Empty(s.Reminders.SnoozeCalls);
+        Assert.Empty(s.Reminders.ClearSnoozeCalls);
+    }
+
+    [Fact]
+    public async Task After_the_stop_loading_more_Completed_Tasks_touches_no_service()
+    {
+        var s = await StartAsync("a");
+        await s.Vm.ShowSmartViewAsync(SmartView.Completed, Ct);
+        await s.Vm.StopAsync();
+        var calls = s.Due.Calls;
+
+        await s.Vm.LoadMoreCompletedCommand.ExecuteAsync(null);
+
+        Assert.Equal(calls, s.Due.Calls);
     }
 }

@@ -21,12 +21,21 @@ internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>
         return task;
     }
 
-    public Task<TaskItem> SetReminderAsync(Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default)
+    /// <summary>When set, each SetReminderAsync waits for it before it stores anything.</summary>
+    public TaskCompletionSource? HoldSets { get; set; }
+
+    public async Task<TaskItem> SetReminderAsync(
+        Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default)
     {
         SetCalls.Add((taskId, reminderUtc));
+        if (HoldSets is { } hold)
+        {
+            await hold.Task;
+        }
+
         var task = Tasks.Single(t => t.Id == taskId);
         ReminderCalculator.SetPlanned(task, reminderUtc);
-        return Task.FromResult(task);
+        return task;
     }
 
     /// <summary>Tasks whose Reminder TryMarkFiredAsync refuses, as if another check claimed it after listing.</summary>

@@ -302,7 +302,10 @@ public sealed partial class MainViewModel(
     }
 
     [RelayCommand(CanExecute = nameof(CanAddTask))]
-    private async Task AddTaskAsync(CancellationToken cancellationToken)
+    private Task AddTaskAsync(CancellationToken cancellationToken) =>
+        _lifetime.RunAsync(AddTaskInLifetimeAsync, cancellationToken);
+
+    private async Task AddTaskInLifetimeAsync(CancellationToken cancellationToken)
     {
         if (!CanAddTask())
         {
@@ -352,23 +355,24 @@ public sealed partial class MainViewModel(
     private bool _isReorderEnabled = true;
 
     /// <summary>Moves the open Task at <paramref name="oldIndex"/> to <paramref name="newIndex"/> and persists it.</summary>
-    public async Task MoveTaskAsync(int oldIndex, int newIndex, CancellationToken cancellationToken = default)
-    {
-        if (!IsReorderEnabled || oldIndex == newIndex
-            || oldIndex < 0 || oldIndex >= Tasks.Count
-            || newIndex < 0 || newIndex >= Tasks.Count)
+    public Task MoveTaskAsync(int oldIndex, int newIndex, CancellationToken cancellationToken = default)
+        => _lifetime.RunAsync(async token =>
         {
-            return;
-        }
+            if (!IsReorderEnabled || oldIndex == newIndex
+                || oldIndex < 0 || oldIndex >= Tasks.Count
+                || newIndex < 0 || newIndex >= Tasks.Count)
+            {
+                return;
+            }
 
-        var moved = Tasks[oldIndex];
-        // The service orders the whole List, completed Tasks included.
-        var fullIndex = _all.IndexOf(Tasks[newIndex]);
-        await taskService.MoveTaskAsync(moved.Id, fullIndex, cancellationToken);
-        _all.Remove(moved);
-        _all.Insert(fullIndex, moved);
-        Tasks.Move(oldIndex, newIndex);
-    }
+            var moved = Tasks[oldIndex];
+            // The service orders the whole List, completed Tasks included.
+            var fullIndex = _all.IndexOf(Tasks[newIndex]);
+            await taskService.MoveTaskAsync(moved.Id, fullIndex, token);
+            _all.Remove(moved);
+            _all.Insert(fullIndex, moved);
+            Tasks.Move(oldIndex, newIndex);
+        }, cancellationToken);
 
     private bool CanAddTask() => TaskTitle.IsValid(QuickAddTitle);
 
@@ -384,20 +388,20 @@ public sealed partial class MainViewModel(
     private Task ToggleSelectedCompleteAsync(CancellationToken cancellationToken)
         => SelectedTask is null ? Task.CompletedTask : ToggleAsync(SelectedTask, cancellationToken);
 
-    private async Task ToggleAsync(TaskRowViewModel row, CancellationToken cancellationToken)
+    private Task ToggleAsync(TaskRowViewModel row, CancellationToken cancellationToken) => _lifetime.RunAsync(async token =>
     {
         var previous = row.IsCompleted;
         var hadNext = row.Item.NextOccurrenceId is not null;
-        await SetCompletedAsync(row, !previous, cancellationToken);
+        await SetCompletedAsync(row, !previous, token);
 
         // Completing an Occurrence may have produced the next one; Ctrl+Z right after deletes it again.
         var produced = !previous && !hadNext ? row.Item.NextOccurrenceId : null;
         PushUndo(new ToggleUndo(row.Id, previous, produced));
         if (produced is not null)
         {
-            await LoadAsync(cancellationToken);
+            await LoadAsync(token);
         }
-    }
+    }, cancellationToken);
 
     private async Task SetCompletedAsync(TaskRowViewModel row, bool isCompleted, CancellationToken cancellationToken)
     {

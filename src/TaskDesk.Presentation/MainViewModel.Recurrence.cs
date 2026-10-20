@@ -34,8 +34,11 @@ public sealed partial class MainViewModel
             return;
         }
 
-        ErrorMessage = null;
-        EnqueueSave(previous => SaveRecurrenceAsync(previous, row, recurrence));
+        _ = EnqueueSave(previous =>
+        {
+            ErrorMessage = null;
+            return SaveRecurrenceAsync(previous, row, recurrence);
+        });
     }
 
     private async Task SaveRecurrenceAsync(Task previous, TaskRowViewModel row, Recurrence? recurrence)

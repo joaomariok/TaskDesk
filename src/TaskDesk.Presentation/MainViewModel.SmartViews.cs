@@ -26,7 +26,10 @@ public sealed partial class MainViewModel
 
     /// <summary>Loads the next page of 100 in the Completed view.</summary>
     [RelayCommand]
-    private async Task LoadMoreCompletedAsync(CancellationToken cancellationToken)
+    private Task LoadMoreCompletedAsync(CancellationToken cancellationToken) =>
+        _lifetime.RunAsync(LoadMoreCompletedInLifetimeAsync, cancellationToken);
+
+    private async Task LoadMoreCompletedInLifetimeAsync(CancellationToken cancellationToken)
     {
         if (CurrentView != SmartView.Completed)
         {
@@ -98,6 +101,12 @@ public sealed partial class MainViewModel
         };
 #pragma warning restore VSTHRD101
 
+        OnUiThread(run);
+    }
+
+    // A timer ticks on the thread pool: post its work to the UI thread, or run it inline when there is none (tests).
+    private void OnUiThread(SendOrPostCallback run)
+    {
         if (_uiContext is { } context)
         {
             context.Post(run, null);

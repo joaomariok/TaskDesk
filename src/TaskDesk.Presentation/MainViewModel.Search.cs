@@ -31,7 +31,8 @@ public sealed partial class MainViewModel
     /// Saves a pending detail edit, then stops the view model's deferred work: from now on nothing starts, and work
     /// still running is cancelled and ends quietly. That is the search (waiting or loading), <see cref="LoadAsync"/>,
     /// the Smart View count refresh, the due refresh timer (disposed, never armed again), the detail save debounce,
-    /// the Undo bar timer and the completion hold. Idempotent; the save starts and the stop happens before this
+    /// the Undo bar timer, the completion hold, and every command that reaches a service (a dialog it shows stays
+    /// outside, so the stop never waits on the owner). Idempotent; the save starts and the stop happens before this
     /// returns, and the task completes once the save has landed and the cancelled work has ended, however it ended.
     /// A failed save shows in <see cref="ErrorMessage"/>, as any detail save does.
     /// </summary>
@@ -118,17 +119,7 @@ public sealed partial class MainViewModel
         _searchTimer = _clock.CreateTimer(_ => OnSearchTimer(version), null, SearchDelay, Timeout.InfiniteTimeSpan);
     }
 
-    private void OnSearchTimer(int version)
-    {
-        if (_uiContext is { } context)
-        {
-            context.Post(_ => RunQueuedSearch(version), null);
-        }
-        else
-        {
-            RunQueuedSearch(version);
-        }
-    }
+    private void OnSearchTimer(int version) => OnUiThread(_ => RunQueuedSearch(version));
 
     private void RunQueuedSearch(int version)
     {

@@ -171,8 +171,11 @@ public sealed partial class MainViewModel
             return;
         }
 
-        ErrorMessage = null;
-        EnqueueSave(previous => SaveDueAsync(previous, row, date, time));
+        _ = EnqueueSave(previous =>
+        {
+            ErrorMessage = null;
+            return SaveDueAsync(previous, row, date, time);
+        });
     }
 
     private async Task SaveDueAsync(Task previous, TaskRowViewModel row, DateOnly? date, TimeOnly? time)
@@ -252,37 +255,56 @@ public sealed partial class MainViewModel
     }
 
     /// <summary>
-    /// Every detail save joins the chain of saves here, after the saves already pending, so saves of one Task never
-    /// overlap. Once the view model has stopped, nothing joins: the stop has saved the pending edit already, and
-    /// a save started after it would run against a host being stopped.
+    /// Every detail save joins the chain of saves here. <paramref name="save"/> gets the end of the chain so far and
+    /// must await it before it stores anything, so saves of one Task never overlap; it runs only when the save joins,
+    /// so it is also where an edit changes what the pane shows. The chain moves on once both the saves ahead and
+    /// this one have ended, however they ended: a failure stays with the link, which this returns. Once the view
+    /// model has stopped, nothing joins and this returns null: the stop has saved the pending edit already, and a
+    /// save started after it would run against a host being stopped.
     /// </summary>
-    private void EnqueueSave(Func<Task, Task> save)
+    private Task? EnqueueSave(Func<Task, Task> save)
     {
-        if (!_lifetime.IsStopped)
+        if (_lifetime.IsStopped)
         {
-            _pendingSave = save(_pendingSave);
+            return null;
+        }
+
+        var previous = _pendingSave;
+        var link = save(previous);
+        _pendingSave = ChainEndAsync(previous, link);
+        return link;
+    }
+
+    private static async Task ChainEndAsync(Task previous, Task link)
+    {
+        try
+        {
+            await Task.WhenAll(previous, link);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // The caller that queued the link reports it; later saves still run.
         }
     }
 
     private void ScheduleSave(TaskRowViewModel row, bool immediate)
     {
-        if (_lifetime.IsStopped)
-        {
-            return; // no save would join the chain (EnqueueSave), so arm no debounce for one
-        }
-
         _debounce?.Cancel();
         _debounce = null;
-        var token = CancellationToken.None;
-        if (!immediate)
-        {
-            _debounce = new CancellationTokenSource();
-            token = _debounce.Token;
-        }
 
         // Capture now: the fields describe `row` only until the selection changes.
-        EnqueueSave(previous => SaveDetailAsync(
-            previous, row, DetailTitle, DetailNotes, DetailPriority, immediate, token));
+        var (title, notes, priority) = (DetailTitle, DetailNotes, DetailPriority);
+        _ = EnqueueSave(previous =>
+        {
+            var token = CancellationToken.None;
+            if (!immediate)
+            {
+                _debounce = new CancellationTokenSource();
+                token = _debounce.Token;
+            }
+
+            return SaveDetailAsync(previous, row, title, notes, priority, immediate, token);
+        });
     }
 
     private async Task SaveDetailAsync(
@@ -311,10 +333,7 @@ public sealed partial class MainViewModel
 
             if (!waited)
             {
-                // Superseded, or the view model stopped: store nothing, but still complete only after the save
-                // ahead, so the links queued after this one keep waiting for it.
-                await previous;
-                return;
+                return; // superseded, or the view model stopped: store nothing
             }
 
             // A later edit may have armed its own debounce already; clear only this save's.

@@ -27,26 +27,30 @@ public sealed partial class MainViewModel
             return;
         }
 
-        _debounce?.Cancel();
-        _debounce = null;
-        if (choice == OccurrenceDeleteChoice.DeleteThisOccurrence)
+        // The dialog stays outside the lifetime, so a stop never waits on the owner.
+        await _lifetime.RunAsync(async token =>
         {
-            var skipped = await Recurrences.SkipOccurrenceAsync(row.Id, cancellationToken);
-            RemoveRow(row);
-            PushUndo(new SkipUndo(skipped));
-            ShowUndoBar("Task deleted");
-            if (skipped.ProducedOccurrenceId is not null)
+            _debounce?.Cancel();
+            _debounce = null;
+            if (choice == OccurrenceDeleteChoice.DeleteThisOccurrence)
             {
-                await LoadAsync(cancellationToken);
+                var skipped = await Recurrences.SkipOccurrenceAsync(row.Id, token);
+                RemoveRow(row);
+                PushUndo(new SkipUndo(skipped));
+                ShowUndoBar("Task deleted");
+                if (skipped.ProducedOccurrenceId is not null)
+                {
+                    await LoadAsync(token);
+                }
+
+                return;
             }
 
-            return;
-        }
-
-        var snapshot = await taskService.DeleteTaskAsync(row.Id, cancellationToken);
-        RemoveRow(row);
-        PushUndo(new DeleteUndo(snapshot));
-        ShowUndoBar("Task deleted");
+            var snapshot = await taskService.DeleteTaskAsync(row.Id, token);
+            RemoveRow(row);
+            PushUndo(new DeleteUndo(snapshot));
+            ShowUndoBar("Task deleted");
+        }, cancellationToken);
     }
 
     private void RemoveRow(TaskRowViewModel row)
@@ -74,7 +78,7 @@ public sealed partial class MainViewModel
 
     /// <summary>Undoes the last delete or completion toggle (Ctrl+Z and the Undo bar).</summary>
     [RelayCommand]
-    private async Task UndoAsync(CancellationToken cancellationToken)
+    private Task UndoAsync(CancellationToken cancellationToken) => _lifetime.RunAsync(async token =>
     {
         var entry = _lastUndo;
         if (entry is null)
@@ -87,23 +91,23 @@ public sealed partial class MainViewModel
         switch (entry)
         {
             case ToggleUndo { ProducedOccurrenceId: { } produced } toggle:
-                await Recurrences.UndoCompletionAsync(toggle.TaskId, produced, cancellationToken);
-                await LoadAsync(cancellationToken);
+                await Recurrences.UndoCompletionAsync(toggle.TaskId, produced, token);
+                await LoadAsync(token);
                 OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty);
                 break;
             case SkipUndo skip:
-                await Recurrences.UndoSkipAsync(skip.Skipped, cancellationToken);
-                await LoadAsync(cancellationToken);
+                await Recurrences.UndoSkipAsync(skip.Skipped, token);
+                await LoadAsync(token);
                 OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty);
                 break;
             case ToggleUndo toggle when _all.Find(r => r.Id == toggle.TaskId) is { } row:
-                await SetCompletedAsync(row, toggle.PreviousState, cancellationToken);
+                await SetCompletedAsync(row, toggle.PreviousState, token);
                 break;
             case SubtaskDeleteUndo subtask:
-                await RestoreSubtaskAsync(subtask.Snapshot, cancellationToken);
+                await RestoreSubtaskAsync(subtask.Snapshot, token);
                 break;
             case DeleteUndo delete:
-                var restored = await taskService.RestoreTaskAsync(delete.Snapshot, cancellationToken);
+                var restored = await taskService.RestoreTaskAsync(delete.Snapshot, token);
                 var restoredRow = CreateRow(restored);
                 var at = _all.FindIndex(r => r.Item.SortOrder > restored.SortOrder);
                 _all.Insert(at < 0 ? _all.Count : at, restoredRow);
@@ -111,7 +115,7 @@ public sealed partial class MainViewModel
                 OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty);
                 break;
         }
-    }
+    }, cancellationToken);
 
     private void PushUndo(UndoEntry entry)
     {
@@ -126,8 +130,14 @@ public sealed partial class MainViewModel
     [ObservableProperty]
     private string _undoBarText = "Task deleted";
 
+    // Once the view model has stopped, no bar shows: its timer would never hide it. A bar shown before stays.
     private void ShowUndoBar(string text)
     {
+        if (_lifetime.IsStopped)
+        {
+            return;
+        }
+
         UndoBarText = text;
         _barTimer?.Cancel();
         _barTimer = new CancellationTokenSource();

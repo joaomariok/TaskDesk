@@ -82,7 +82,7 @@ public sealed partial class MainViewModel
 
     /// <summary>Clears the Snooze of the selected Task, which re-arms its planned Reminder.</summary>
     [RelayCommand]
-    private async Task ClearSnoozeAsync()
+    private Task ClearSnoozeAsync() => _lifetime.RunAsync(async token =>
     {
         if (DetailTask is not { } row)
         {
@@ -91,36 +91,37 @@ public sealed partial class MainViewModel
 
         try
         {
-            ApplyReminderChange(row, await Reminders.ClearSnoozeAsync(row.Id));
+            ApplyReminderChange(row, await Reminders.ClearSnoozeAsync(row.Id, token));
             ErrorMessage = null;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not (OutOfMemoryException or OperationCanceledException))
         {
             ErrorMessage = "Could not clear the Snooze: " + ex.Message;
         }
-    }
+    });
 
     /// <summary>
     /// Snoozes a Task from its Reminder notification; the planned Reminder is unchanged. A Task deleted since
     /// is ignored.
     /// </summary>
-    public async Task SnoozeTaskAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default)
-    {
-        TaskItem task;
-        try
+    public Task SnoozeTaskAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default)
+        => _lifetime.RunAsync(async token =>
         {
-            task = await Reminders.SnoozeAsync(taskId, duration, cancellationToken);
-        }
-        catch (KeyNotFoundException)
-        {
-            return;
-        }
+            TaskItem task;
+            try
+            {
+                task = await Reminders.SnoozeAsync(taskId, duration, token);
+            }
+            catch (KeyNotFoundException)
+            {
+                return;
+            }
 
-        if (_all.Find(r => r.Id == taskId) is { } row)
-        {
-            ApplyReminderChange(row, task);
-        }
-    }
+            if (_all.Find(r => r.Id == taskId) is { } row)
+            {
+                ApplyReminderChange(row, task);
+            }
+        }, cancellationToken);
 
     private void ApplyReminderChange(TaskRowViewModel row, TaskItem task)
     {
@@ -171,6 +172,7 @@ public sealed partial class MainViewModel
 
         TimeOnly? time = DetailReminderTime is { } picked ? TimeOnly.FromTimeSpan(picked) : null;
         DateTime? reminderUtc = null;
+        TimeOnly? firesAt = null;
         if (DetailReminderDate is { } day)
         {
             // Read on every save, so a change in Settings applies without a restart.
@@ -179,10 +181,7 @@ public sealed partial class MainViewModel
                 DateOnly.FromDateTime(day), time, _clock.LocalTimeZone, defaultTime);
             if (time is null)
             {
-                // Show the time a date-only Reminder fires at.
-                _loadingDetail = true;
-                DetailReminderTime = defaultTime.ToTimeSpan();
-                _loadingDetail = false;
+                firesAt = defaultTime;
             }
         }
         else if (time is not null)
@@ -193,8 +192,19 @@ public sealed partial class MainViewModel
             return;
         }
 
-        ErrorMessage = null;
-        EnqueueSave(previous => SaveReminderAsync(previous, row, reminderUtc));
+        _ = EnqueueSave(previous =>
+        {
+            if (firesAt is { } shown)
+            {
+                // Show the time a date-only Reminder fires at.
+                _loadingDetail = true;
+                DetailReminderTime = shown.ToTimeSpan();
+                _loadingDetail = false;
+            }
+
+            ErrorMessage = null;
+            return SaveReminderAsync(previous, row, reminderUtc);
+        });
     }
 
     private async Task SaveReminderAsync(Task previous, TaskRowViewModel row, DateTime? reminderUtc)
@@ -252,18 +262,19 @@ public sealed partial class MainViewModel
     }
 
     /// <summary>Completes a Task from its Reminder notification. A Task deleted since is ignored.</summary>
-    public async Task CompleteTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
-    {
-        try
+    public Task CompleteTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
+        => _lifetime.RunAsync(async token =>
         {
-            await taskService.SetCompletedAsync(taskId, true, cancellationToken);
-        }
-        catch (KeyNotFoundException)
-        {
-            return;
-        }
+            try
+            {
+                await taskService.SetCompletedAsync(taskId, true, token);
+            }
+            catch (KeyNotFoundException)
+            {
+                return;
+            }
 
-        await LoadAsync(cancellationToken); // also shows a next Occurrence the completion produced
-        OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty);
-    }
+            await LoadAsync(token); // also shows a next Occurrence the completion produced
+            OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty);
+        }, cancellationToken);
 }
