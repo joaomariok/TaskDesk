@@ -28,16 +28,19 @@
                      IsOpen="{x:Bind ViewModel.HasNotificationBanner, Mode=OneWay}"
                      Message="{x:Bind ViewModel.NotificationBanner, Mode=OneWay}"
                      CloseButtonCommand="{x:Bind ViewModel.DismissNotificationBannerCommand, Mode=OneTime}" />
-            <Grid ColumnSpacing="8">
+            <Grid x:Name="HeadingRow" ColumnSpacing="8" MinHeight="{ThemeResource TextControlThemeMinHeight}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="4*" MinWidth="160" MaxWidth="280" />
+                    <ColumnDefinition x:Name="SearchColumn" Width="280" />
                 </Grid.ColumnDefinitions>
-                <!-- The name takes the rest of the row and ends with an ellipsis. Search is weighted 4:1 against it,
-                     so a long name is trimmed before search shrinks below its 280 px. Filter sits directly left of
-                     search and never shrinks. The detail pane, which overlays the page's right side at 1100 px or
-                     less, covers both on purpose. Fluent's subtitle style wraps; the heading stays on one line. -->
+                <!-- The name fits first: search takes its 280 px, the name gets the rest and ends with an ellipsis.
+                     A long name trims down to 160 px before search shrinks (to its 160 px); a name narrower than 160 px
+                     is never trimmed. A Grid cannot say this with star weights and Min/MaxWidth (it keeps search at
+                     its maximum and overflows), so FitHeadingRow sets SearchColumn's width. Filter sits directly left
+                     of search and never shrinks. While the detail pane overlays the page (1100 px or less) Filter and
+                     search are collapsed, and the row's MinHeight (the height of search) keeps quick add and the list
+                     in place. Fluent's subtitle style wraps; the heading stays on one line. -->
                 <TextBlock x:Name="PageHeading" Style="{StaticResource SubtitleText}" VerticalAlignment="Center"
                            HorizontalAlignment="Left"
                            TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
@@ -45,6 +48,7 @@
                            Text="{x:Bind ViewModel.PageHeading, Mode=OneWay}"
                            ToolTipService.ToolTip="{x:Bind ViewModel.PageHeading, Mode=OneWay}" />
                 <local:CommandToggleButton x:Name="FilterButton" Grid.Column="1" VerticalAlignment="Center"
+                                           Visibility="{x:Bind ViewModel.HasHeadingTools, Mode=OneWay}"
                                            AutomationProperties.Name="Filter"
                                            AutomationProperties.AutomationId="FilterButton"
                                            ToolTipService.ToolTip="Show or hide the Filters"
@@ -56,6 +60,7 @@
                     </StackPanel>
                 </local:CommandToggleButton>
                 <TextBox x:Name="SearchBox" Grid.Column="2" VerticalAlignment="Center"
+                         Visibility="{x:Bind ViewModel.HasHeadingTools, Mode=OneWay}"
                          AutomationProperties.Name="Search (Ctrl+F)"
                          AutomationProperties.AutomationId="SearchBox"
                          ToolTipService.ToolTip="Search (Ctrl+F). Esc clears."

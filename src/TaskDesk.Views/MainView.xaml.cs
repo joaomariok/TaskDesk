@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Windows.Input;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using TaskDesk.Core.Tags;
@@ -20,6 +19,10 @@ public sealed partial class MainView : UserControl
 {
     private static readonly string[] PriorityChoices = ["Any priority", "Low or higher", "Medium or higher", "High"];
 
+    private const double MaxNameMinWidth = 160;
+    private const double MinSearchWidth = 160;
+    private const double MaxSearchWidth = 280;
+
     private bool _syncingPriorityFilter;
 
     public MainView(MainViewModel viewModel)
@@ -36,6 +39,9 @@ public sealed partial class MainView : UserControl
         _syncingPriorityFilter = true;
         PriorityFilterBox.SelectedIndex = (int)(viewModel.MinPriorityFilter ?? Priority.None);
         _syncingPriorityFilter = false;
+        PageHeading.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => FitHeadingRow());
+        HeadingRow.SizeChanged += (_, _) => FitHeadingRow();
+        FilterButton.SizeChanged += (_, _) => FitHeadingRow();
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         viewModel.FocusQuickAddRequested += (_, _) => FocusQuickAdd();
     }
@@ -53,9 +59,19 @@ public sealed partial class MainView : UserControl
         QuickAddBox.Focus(FocusState.Programmatic);
     }
 
-    /// <summary>Focuses the search box with its text selected (Ctrl+F).</summary>
+    /// <summary>
+    /// Focuses the search box with its text selected (Ctrl+F). An overlaid detail pane hides the search box, so it
+    /// is closed first.
+    /// </summary>
     public void FocusSearch()
     {
+        if (!ViewModel.HasHeadingTools)
+        {
+            ViewModel.CloseDetailPaneCommand.Execute(null);
+            // The search box has only just been shown; lay it out so it can take focus.
+            SearchBox.UpdateLayout();
+        }
+
         SearchBox.Focus(FocusState.Programmatic);
         SearchBox.SelectAll();
     }
@@ -151,9 +167,34 @@ public sealed partial class MainView : UserControl
         }
     }
 
+    // The name fits first. Of the room left after Filter and the two gaps, search takes up to 280 px but leaves the
+    // name what it needs: its own width, up to 160 px. Search shrinks (to 160 px) only for a name already that small.
+    private void FitHeadingRow()
+    {
+        if (!ViewModel.HasHeadingTools)
+        {
+            SearchColumn.Width = new GridLength(0);
+            return;
+        }
+
+        PageHeading.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        var nameNeeds = Math.Min(PageHeading.DesiredSize.Width, MaxNameMinWidth);
+        PageHeading.InvalidateMeasure(); // the grid measures it again with its column's width
+        var room = HeadingRow.ActualWidth - FilterButton.ActualWidth - 2 * HeadingRow.ColumnSpacing;
+        var search = Math.Clamp(room - nameNeeds, MinSearchWidth, MaxSearchWidth);
+        if (Math.Abs(SearchColumn.Width.Value - search) > 0.01 || SearchColumn.Width.GridUnitType != GridUnitType.Pixel)
+        {
+            SearchColumn.Width = new GridLength(search);
+        }
+    }
+
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.MinPriorityFilter))
+        if (e.PropertyName == nameof(MainViewModel.HasHeadingTools))
+        {
+            FitHeadingRow();
+        }
+        else if (e.PropertyName == nameof(MainViewModel.MinPriorityFilter))
         {
             _syncingPriorityFilter = true;
             PriorityFilterBox.SelectedIndex = (int)(ViewModel.MinPriorityFilter ?? Priority.None);

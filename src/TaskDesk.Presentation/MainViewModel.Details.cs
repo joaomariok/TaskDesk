@@ -21,6 +21,7 @@ public sealed partial class MainViewModel
     [NotifyCanExecuteChangedFor(nameof(AddSubtaskCommand))]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(IsDetailPaneVisible))]
+    [NotifyPropertyChangedFor(nameof(HasHeadingTools))]
     [NotifyPropertyChangedFor(nameof(HasDetailDue))]
     private TaskRowViewModel? _detailTask;
 
@@ -29,8 +30,15 @@ public sealed partial class MainViewModel
     /// <summary>The pane shows when it is open and has a Task.</summary>
     public bool IsDetailPaneVisible => IsDetailPaneOpen && HasSelection;
 
+    /// <summary>
+    /// Filter and search show in the page heading unless the detail pane overlays the page, which hides them
+    /// (Ctrl+F closes the pane first).
+    /// </summary>
+    public bool HasHeadingTools => !(IsDetailPaneVisible && !IsDetailDocked);
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDetailPaneVisible))]
+    [NotifyPropertyChangedFor(nameof(HasHeadingTools))]
     private bool _isDetailPaneOpen = true;
 
     /// <summary>
@@ -39,6 +47,7 @@ public sealed partial class MainViewModel
     /// overlaid, only <see cref="OpenDetailPane"/> does.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHeadingTools))]
     private bool _isDetailDocked = true;
 
     [ObservableProperty]

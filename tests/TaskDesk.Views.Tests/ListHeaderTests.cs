@@ -237,6 +237,80 @@ public sealed class ListHeaderTests
         }
     }
 
+    // The row's star space (what is left after Filter and the two gaps) is shared "name first": search takes its 280 px
+    // first, the name gets the rest, and only a name already down to 160 px makes search shrink. A name shorter than
+    // 160 px is never trimmed.
+    [UITestMethod]
+    public async Task A_short_name_is_never_trimmed_while_search_is_narrower_than_280()
+    {
+        using var db = await DatabaseAsync();
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var (heading, filter, search, row) = HeadingRow(window);
+            await UiWait.UntilAsync(() => heading.ActualWidth > 0 && filter.ActualWidth > 0,
+                () => "The heading row is not laid out.", Ct);
+            heading.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var natural = heading.DesiredSize.Width;
+            Assert.IsLessThan(160, natural, $"'{viewModel.PageHeading}' is not a short name.");
+
+            foreach (var star in new[] { natural + 200, natural + 250, 300, 460 })
+            {
+                row.Width = filter.ActualWidth + 16 + star;
+                window.View.UpdateLayout();
+                Assert.IsFalse(heading.IsTextTrimmed, $"The short heading is trimmed with {star} px of star space.");
+                Assert.AreEqual(Math.Min(280, star - natural), search.ActualWidth, 0.5,
+                    $"Search is {search.ActualWidth} px with {star} px of star space.");
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task A_long_name_trims_down_to_160_before_search_shrinks_below_280()
+    {
+        using var db = await DatabaseAsync();
+        var list = await db.Get<IListService>().CreateListAsync(
+            "A very long List name that should trim with an ellipsis in the heading", Ct);
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            await viewModel.ShowListAsync(list.Id, Ct);
+            var (heading, filter, search, row) = HeadingRow(window);
+            await UiWait.UntilAsync(() => heading.Text == list.Name && filter.ActualWidth > 0,
+                () => $"The heading read '{heading.Text}'.", Ct);
+
+            foreach (var (star, name, searchWidth) in new[] { (600.0, 320.0, 280.0), (500.0, 220.0, 280.0),
+                (440.0, 160.0, 280.0), (400.0, 160.0, 240.0), (360.0, 160.0, 200.0) })
+            {
+                row.Width = filter.ActualWidth + 16 + star;
+                window.View.UpdateLayout();
+                Assert.IsTrue(heading.IsTextTrimmed, $"The long heading is not trimmed with {star} px of star space.");
+                // The text ends at a letter, so it can be a few px narrower than its column: measure the column, from the
+                // heading's left edge to the gap before Filter.
+                var column = filter.TransformToVisual(heading).TransformPoint(new Point(0, 0)).X - 8;
+                Assert.AreEqual(name, column, 1, $"The name's column is {column} px with {star} px.");
+                Assert.IsLessThanOrEqualTo(column + 0.5, heading.ActualWidth, "The heading runs past its column.");
+                Assert.AreEqual(searchWidth, search.ActualWidth, 1, $"Search is {search.ActualWidth} px with {star} px.");
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static (TextBlock Heading, ToggleButton Filter, TextBox Search, FrameworkElement Row) HeadingRow(MainWindow window)
+    {
+        var search = VisualTree.Find<TextBox>(window.View, "SearchBox");
+        return (VisualTree.Find<TextBlock>(window.View, "PageHeading"),
+            VisualTree.Find<ToggleButton>(window.View, "FilterButton"), search,
+            (FrameworkElement)VisualTreeHelper.GetParent(search));
+    }
+
     // Fourteen Tags in a narrow window cannot share one line with the other Filters: like the WPF app, the bar wraps them.
     [UITestMethod]
     public async Task Tag_chips_that_do_not_fit_on_one_line_wrap_inside_the_Filter_bar()

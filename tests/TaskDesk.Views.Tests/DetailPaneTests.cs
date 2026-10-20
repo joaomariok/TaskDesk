@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
@@ -712,6 +713,97 @@ public sealed class DetailPaneTests
                 () => "Above 1100 px the pane did not dock beside the list.", Ct);
             Assert.IsTrue(viewModel.IsDetailDocked);
             Assert.AreEqual(Visibility.Visible, splitter.Visibility);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task An_overlaid_pane_hides_Filter_and_search_and_closing_it_brings_them_back()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Book dentist");
+        var (window, viewModel) = await OpenAsync(db, width: 1000);
+        try
+        {
+            await ResizeWindowAsync(window, 1100);
+            var filter = VisualTree.Find<ToggleButton>(window.View, "FilterButton");
+            var search = VisualTree.Find<TextBox>(window.View, "SearchBox");
+            var row = (FrameworkElement)VisualTreeHelper.GetParent(search);
+            var rowHeight = row.ActualHeight;
+            Assert.IsGreaterThan(0, rowHeight);
+            await SelectAsync(window, "Book dentist");
+            Assert.AreEqual(Visibility.Visible, filter.Visibility, "A closed overlaid pane hides Filter.");
+
+            Assert.IsTrue(window.View.TaskList.TryShortcut(VirtualKey.Enter, VirtualKeyModifiers.None));
+            await UiWait.UntilAsync(() => window.Details.Pane.ActualWidth > 0, () => "Enter did not open the pane.", Ct);
+            window.Content.UpdateLayout();
+
+            Assert.IsFalse(viewModel.IsDetailDocked);
+            Assert.AreEqual(Visibility.Collapsed, filter.Visibility, "The overlaid pane left Filter in view.");
+            Assert.AreEqual(Visibility.Collapsed, search.Visibility, "The overlaid pane left search in view.");
+            Assert.IsFalse(search.Focus(FocusState.Programmatic), "Search took focus while hidden.");
+            Assert.AreEqual(rowHeight, row.ActualHeight, 0.5, "The heading row changed height under the overlay.");
+
+            viewModel.CloseDetailPaneCommand.Execute(null);
+            window.Content.UpdateLayout();
+            Assert.AreEqual(Visibility.Visible, filter.Visibility, "Closing the pane left Filter hidden.");
+            Assert.AreEqual(Visibility.Visible, search.Visibility, "Closing the pane left search hidden.");
+            Assert.AreEqual(rowHeight, row.ActualHeight, 0.5);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task A_docked_pane_leaves_Filter_and_search_in_view()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Book dentist");
+        var (window, viewModel) = await OpenAsync(db, width: 1200);
+        try
+        {
+            await SelectAsync(window, "Book dentist");
+            await UiWait.UntilAsync(() => window.Details.Pane.ActualWidth > 0,
+                () => "Selecting the Task did not show the docked pane.", Ct);
+            window.Content.UpdateLayout();
+
+            Assert.IsTrue(viewModel.IsDetailDocked);
+            Assert.AreEqual(Visibility.Visible, VisualTree.Find<ToggleButton>(window.View, "FilterButton").Visibility);
+            Assert.AreEqual(Visibility.Visible, VisualTree.Find<TextBox>(window.View, "SearchBox").Visibility);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Ctrl_F_with_an_overlaid_pane_closes_it_and_focuses_search()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Book dentist");
+        var (window, viewModel) = await OpenAsync(db, width: 1000);
+        try
+        {
+            await ResizeWindowAsync(window, 1100);
+            var search = VisualTree.Find<TextBox>(window.View, "SearchBox");
+            search.Text = "den";
+            await SelectAsync(window, "Book dentist");
+            Assert.IsTrue(window.View.TaskList.TryShortcut(VirtualKey.Enter, VirtualKeyModifiers.None));
+            await UiWait.UntilAsync(() => window.Details.Pane.ActualWidth > 0, () => "Enter did not open the pane.", Ct);
+            Assert.AreEqual(Visibility.Collapsed, search.Visibility);
+
+            Assert.IsTrue(window.View.TryShortcut(VirtualKey.F, VirtualKeyModifiers.Control));
+
+            Assert.IsFalse(viewModel.IsDetailPaneOpen, "Ctrl+F left the overlaid pane open.");
+            Assert.AreEqual(Visibility.Visible, search.Visibility);
+            Assert.AreSame(search, FocusManager.GetFocusedElement(window.Content.XamlRoot), "Search did not take focus.");
+            Assert.AreEqual(search.Text.Length, search.SelectionLength, "Search text is not selected.");
         }
         finally
         {
