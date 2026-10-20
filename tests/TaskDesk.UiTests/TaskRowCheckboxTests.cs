@@ -18,7 +18,7 @@ public sealed class TaskRowCheckboxTests : IDisposable
         _app.TypeInto(Ids.QuickAddBox, "Water plants", pressEnter: true);
         _app.WaitForRows(Ids.OpenTaskList, "Water plants");
         var row = AppSession.Eventually(
-            () => _app.Find(Ids.OpenTaskList).FindFirstChild(cf => cf.ByControlType(ControlType.ListItem).And(cf.ByName("Water plants"))),
+            () => _app.FindRow(Ids.OpenTaskList, "Water plants"),
             "No row 'Water plants'.");
         var check = AppSession.Eventually(() => row.FindFirstDescendant(cf => cf.ByControlType(ControlType.CheckBox)),
             "The row has no checkbox.");

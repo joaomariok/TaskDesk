@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The Task list area: the Overdue group (Today view only), the open Tasks, the "Completed (N)" group and the
-    Undo bar. The Completed Smart View shows its completed Tasks as the plain main list and leaves the groups
-    empty. Space completes and Delete deletes the selected Task; Ctrl+Z undoes the last delete or completion.
+    The Task list area: one list over the page's groups (the Overdue group on the Today view only, the open
+    Tasks with no heading, and the collapsible "Completed (N)" group right after them) and the Undo bar. The
+    Completed Smart View shows its completed Tasks as the open group, with no heading. Space completes and Delete
+    deletes the selected Task; Ctrl+Z undoes the last delete or completion.
 -->
 <UserControl
     x:Class="TaskDesk.Views.TaskListView"
@@ -21,6 +22,55 @@
         <DataTemplate x:Key="TaskRowTemplate" x:DataType="presentation:TaskRowViewModel">
             <local:TaskRow Row="{x:Bind Mode=OneTime}" />
         </DataTemplate>
+        <CollectionViewSource x:Name="GroupsSource" IsSourceGrouped="True"
+                              Source="{x:Bind ViewModel.Groups, Mode=OneTime}" />
+        <!-- A group heading's container draws nothing and takes no room or focus of its own: the open group's
+             empty heading leaves no gap, and the arrow keys go from row to row across groups. -->
+        <Style x:Key="GroupHeadingContainer" TargetType="ListViewHeaderItem">
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListViewHeaderItem">
+                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <DataTemplate x:Key="OverdueHeading" x:DataType="presentation:TaskGroup">
+            <TextBlock x:Name="OverdueHeading" Margin="8,0,8,4" Style="{StaticResource BodyStrongText}"
+                       Foreground="{ThemeResource OverdueBrush}"
+                       Text="{x:Bind Heading, Mode=OneWay}" />
+        </DataTemplate>
+        <!-- An empty DataTemplate cannot take x:DataType, so the open group's heading is an empty Grid. -->
+        <DataTemplate x:Key="OpenHeading">
+            <Grid />
+        </DataTemplate>
+        <DataTemplate x:Key="CompletedHeading" x:DataType="presentation:TaskGroup">
+            <local:CollapsibleHeading Margin="0,4,0,0" Padding="8,5" HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Left"
+                                      Background="Transparent" BorderThickness="0"
+                                      AutomationProperties.AutomationId="CompletedHeading"
+                                      AutomationProperties.Name="{x:Bind Heading, Mode=OneWay}"
+                                      IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon FontSize="12"
+                              Glyph="{x:Bind local:CollapsibleHeading.Chevron(IsExpanded), Mode=OneWay, FallbackValue='&#xE76C;'}" />
+                    <TextBlock Style="{StaticResource BodyStrongText}" Text="{x:Bind Heading, Mode=OneWay}" />
+                </StackPanel>
+            </local:CollapsibleHeading>
+        </DataTemplate>
+        <local:TaskGroupHeadingSelector x:Key="GroupHeadingSelector"
+                                        Overdue="{StaticResource OverdueHeading}"
+                                        Open="{StaticResource OpenHeading}"
+                                        Completed="{StaticResource CompletedHeading}" />
     </UserControl.Resources>
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="Z" Modifiers="Control" Invoked="OnUndoInvoked" />
@@ -28,52 +78,32 @@
 
     <Grid RowSpacing="8">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <TextBlock x:Name="OverdueHeading" Style="{StaticResource BodyStrongText}"
-                   Foreground="{ThemeResource OverdueBrush}"
-                   Text="{x:Bind ViewModel.OverdueHeader, Mode=OneWay}"
-                   Visibility="{x:Bind ViewModel.HasOverdueTasks, Mode=OneWay}" />
-        <ListView x:Name="OverdueTaskList" Grid.Row="1" MaxHeight="160" SelectionMode="Single"
-                  AutomationProperties.Name="Overdue tasks"
-                  AutomationProperties.AutomationId="OverdueTaskList"
-                  Visibility="{x:Bind ViewModel.HasOverdueTasks, Mode=OneWay}"
-                  ItemsSource="{x:Bind ViewModel.OverdueTasks, Mode=OneTime}"
-                  ItemContainerStyle="{StaticResource TaskRowContainer}"
-                  ItemTemplate="{StaticResource TaskRowTemplate}"
-                  ContainerContentChanging="OnRowContainerChanging"
-                  SelectionChanged="OnTaskSelectionChanged"
-                  PreviewKeyDown="OnTaskListPreviewKeyDown" />
-        <ListView x:Name="OpenTaskList" Grid.Row="2" SelectionMode="Single"
+        <!-- One list and one scroll; sticky headings are off, so a heading scrolls with its rows. -->
+        <ListView x:Name="OpenTaskList" SelectionMode="Single" IsSynchronizedWithCurrentItem="False"
                   AutomationProperties.Name="Tasks"
                   AutomationProperties.AutomationId="OpenTaskList"
                   CanDragItems="True" AllowDrop="True"
                   DragItemsStarting="OnDragItemsStarting" DragOver="OnTaskDragOver" Drop="OnTaskDrop"
-                  ItemsSource="{x:Bind ViewModel.Tasks, Mode=OneTime}"
+                  ItemsSource="{x:Bind GroupsSource.View, Mode=OneTime}"
                   ItemContainerStyle="{StaticResource TaskRowContainer}"
                   ItemTemplate="{StaticResource TaskRowTemplate}"
                   ContainerContentChanging="OnRowContainerChanging"
                   SelectionChanged="OnTaskSelectionChanged"
-                  PreviewKeyDown="OnTaskListPreviewKeyDown" />
-        <Expander Grid.Row="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                  Header="{x:Bind ViewModel.CompletedHeader, Mode=OneWay}"
-                  IsExpanded="{x:Bind ViewModel.IsCompletedExpanded, Mode=TwoWay}"
-                  Visibility="{x:Bind ViewModel.HasCompletedTasks, Mode=OneWay}">
-            <ListView x:Name="CompletedTaskList" MaxHeight="160" SelectionMode="Single"
-                      AutomationProperties.Name="Completed tasks"
-                      AutomationProperties.AutomationId="CompletedTaskList"
-                      ItemsSource="{x:Bind ViewModel.CompletedTasks, Mode=OneTime}"
-                      ItemContainerStyle="{StaticResource TaskRowContainer}"
-                      ItemTemplate="{StaticResource TaskRowTemplate}"
-                      ContainerContentChanging="OnRowContainerChanging"
-                      SelectionChanged="OnTaskSelectionChanged"
-                      PreviewKeyDown="OnTaskListPreviewKeyDown" />
-        </Expander>
-        <InfoBar x:Name="UndoBar" Grid.Row="4" IsClosable="False"
+                  PreviewKeyDown="OnTaskListPreviewKeyDown">
+            <ListView.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <ItemsStackPanel AreStickyGroupHeadersEnabled="False" />
+                </ItemsPanelTemplate>
+            </ListView.ItemsPanel>
+            <ListView.GroupStyle>
+                <GroupStyle HeaderContainerStyle="{StaticResource GroupHeadingContainer}"
+                            HeaderTemplateSelector="{StaticResource GroupHeadingSelector}" />
+            </ListView.GroupStyle>
+        </ListView>
+        <InfoBar x:Name="UndoBar" Grid.Row="1" IsClosable="False"
                  AutomationProperties.Name="Task deleted"
                  IsOpen="{x:Bind ViewModel.IsUndoBarVisible, Mode=OneWay}"
                  Message="{x:Bind ViewModel.UndoBarText, Mode=OneWay}">

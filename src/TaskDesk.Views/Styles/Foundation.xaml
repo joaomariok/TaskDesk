@@ -70,4 +70,6 @@
     <Style TargetType="local:CommandCheckBox" BasedOn="{StaticResource DefaultCheckBoxStyle}" />
     <Style TargetType="local:CommandToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}" />
     <Style TargetType="local:CommandAppBarToggleButton" BasedOn="{StaticResource DefaultAppBarToggleButtonStyle}" />
+    <!-- The Task list's "Completed (N)" heading draws Fluent's Button. -->
+    <Style TargetType="local:CollapsibleHeading" BasedOn="{StaticResource DefaultButtonStyle}" />
 </ResourceDictionary>

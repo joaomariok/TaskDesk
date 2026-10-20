@@ -113,6 +113,46 @@ public sealed class TaskReorderTests
     }
 
     [UITestMethod]
+    public async Task Only_open_rows_take_part_in_a_drag_with_Completed_N_expanded()
+    {
+        using var db = await DatabaseAsync();
+        foreach (var title in new[] { "A", "B" })
+        {
+            await AddAsync(db, title);
+        }
+
+        await AddAsync(db, "Done", completed: true);
+        var (window, viewModel) = Open(db);
+        try
+        {
+            viewModel.IsCompletedExpanded = true;
+            await viewModel.LoadAsync(Ct);
+            var list = VisualTree.Find<ListView>(window.View, "OpenTaskList");
+            await UiWait.UntilAsync(
+                () => Enumerable.Range(0, 3).All(i => list.ContainerFromIndex(i) is FrameworkElement { ActualHeight: > 0 }),
+                () => "The rows were not realized.", Ct);
+            var taskList = window.View.TaskList;
+
+            // Over a completed row a drop finds no row, so it lands at the end of the open rows.
+            var done = (FrameworkElement)list.ContainerFromItem(viewModel.CompletedTasks.Single());
+            var top = done.TransformToVisual(list).TransformPoint(new Point(0, 0)).Y;
+            Assert.IsNull(taskList.RowAt(new Point(20, top + (done.ActualHeight / 2))));
+
+            await taskList.DropAsync(viewModel.Tasks[0], null);
+            CollectionAssert.AreEqual(new[] { "B", "A" }, viewModel.Tasks.Select(t => t.Title).ToArray());
+
+            // A completed row is not moved among the open ones.
+            await taskList.DropAsync(viewModel.CompletedTasks.Single(), viewModel.Tasks[0]);
+            CollectionAssert.AreEqual(new[] { "B", "A" }, viewModel.Tasks.Select(t => t.Title).ToArray());
+            Assert.AreEqual("Done", viewModel.CompletedTasks.Single().Title);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
     public async Task Dropping_does_nothing_where_reordering_is_off()
     {
         using var db = await DatabaseAsync();
@@ -157,7 +197,7 @@ public sealed class TaskReorderTests
         return db;
     }
 
-    private static async Task AddAsync(TempDatabase db, string title, DateOnly? due = null)
+    private static async Task AddAsync(TempDatabase db, string title, DateOnly? due = null, bool completed = false)
     {
         var listId = (await db.QueryAsync(c => c.Lists.Where(l => l.IsDefault))).Single().Id;
         await using var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync();
@@ -169,6 +209,8 @@ public sealed class TaskReorderTests
             ListId = listId,
             Title = title,
             DueDate = due,
+            IsCompleted = completed,
+            CompletedUtc = completed ? now : null,
             SortOrder = order,
             CreatedUtc = now,
             UpdatedUtc = now,

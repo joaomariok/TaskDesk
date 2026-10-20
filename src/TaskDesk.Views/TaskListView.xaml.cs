@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Input;
 using Microsoft.UI.Xaml;
@@ -10,41 +9,30 @@ using Microsoft.UI.Xaml.Media;
 using TaskDesk.Core.Shell;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
+using Windows.Foundation.Collections;
 using Windows.System;
 using Windows.UI.ViewManagement;
 
 namespace TaskDesk.Views;
 
 /// <summary>
-/// The Task list area: the Overdue, open and "Completed (N)" Task lists, their keyboard shortcuts and the Undo
-/// bar. Only one of the three lists has a selection at a time; it is the view model's selected Task.
+/// The Task list area: one list over the page's groups (Overdue, open, "Completed (N)"), its keyboard shortcuts
+/// and the Undo bar. The list's one selection is the view model's selected Task, both ways.
 /// </summary>
 public sealed partial class TaskListView : UserControl
 {
-    // Each Task list with the view model rows it shows.
-    private readonly (ListView List, ObservableCollection<TaskRowViewModel> Rows)[] _lists;
-    private bool _syncing;
-
     public TaskListView(MainViewModel viewModel)
     {
         ViewModel = viewModel;
         InitializeComponent();
-        _lists =
-        [
-            (OverdueTaskList, viewModel.OverdueTasks), (OpenTaskList, viewModel.Tasks),
-            (CompletedTaskList, viewModel.CompletedTasks),
-        ];
 
         // A completed Task lingers struck through for a moment, unless Windows asks for less animation.
         viewModel.CompletionMoveDelay = () => CompletionHold.For(AnimationsEnabled());
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
-        foreach (var (list, rows) in _lists)
-        {
-            // With no rows (the Completed view, an empty List) a list takes no focus, so Tab skips it.
-            list.IsTabStop = rows.Count > 0;
-            rows.CollectionChanged += (_, _) => list.IsTabStop = rows.Count > 0;
-            list.Tapped += OnTaskListTapped;
-        }
+        // With no row in any group (an empty page) the list takes no focus, so Tab skips it.
+        OpenTaskList.IsTabStop = OpenTaskList.Items.Count > 0;
+        OpenTaskList.Items.VectorChanged += OnRowsChanged;
+        OpenTaskList.Tapped += OnTaskListTapped;
     }
 
     public MainViewModel ViewModel { get; }
@@ -94,8 +82,8 @@ public sealed partial class TaskListView : UserControl
     /// <summary>Selects a Task's row and gives it keyboard focus (after Esc closed the detail pane).</summary>
     public void FocusRow(TaskRowViewModel row)
     {
-        var list = _lists.FirstOrDefault(l => l.Rows.Contains(row)).List;
-        if (list is null)
+        var list = OpenTaskList;
+        if (!list.Items.Contains(row))
         {
             return;
         }
@@ -164,65 +152,66 @@ public sealed partial class TaskListView : UserControl
 
     private void OnTaskSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Removals happen when a row moves between groups; the selection then follows the row.
-        if (_syncing || e.AddedItems.Count == 0 || e.AddedItems[0] is not TaskRowViewModel row)
+        // A selection that only lost its row comes from the row moving between groups: the view model keeps the
+        // selected Task, and the list selects the row again where it lands.
+        if (e.AddedItems.Count > 0 && e.AddedItems[0] is TaskRowViewModel row)
         {
-            return;
+            ViewModel.SelectedTask = row;
         }
-
-        _syncing = true;
-        try
-        {
-            foreach (var (other, _) in _lists)
-            {
-                if (!ReferenceEquals(sender, other))
-                {
-                    other.SelectedItem = null;
-                }
-            }
-        }
-        finally
-        {
-            _syncing = false;
-        }
-
-        ViewModel.SelectedTask = row;
     }
 
-    // Shows the view model's selection (for example after a reload) in whichever list holds the row.
+    // Shows the view model's selection (for example after a reload) on its row, or none while the row is hidden
+    // (in a collapsed "Completed (N)").
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(MainViewModel.SelectedTask))
+        if (e.PropertyName == nameof(MainViewModel.SelectedTask))
         {
-            return;
-        }
-
-        var row = ViewModel.SelectedTask;
-        _syncing = true;
-        try
-        {
-            foreach (var (list, rows) in _lists)
-            {
-                list.SelectedItem = row is not null && rows.Contains(row) ? row : null;
-            }
-        }
-        finally
-        {
-            _syncing = false;
+            ShowSelection();
         }
     }
 
-    // ---- Drag to reorder (the open list, in a List view only) ----
+    private void ShowSelection()
+    {
+        var row = ViewModel.SelectedTask;
+        OpenTaskList.SelectedItem = row is not null && OpenTaskList.Items.Contains(row) ? row : null;
+    }
+
+    private void OnRowsChanged(IObservableVector<object> sender, IVectorChangedEventArgs e)
+    {
+        OpenTaskList.IsTabStop = OpenTaskList.Items.Count > 0;
+
+        // A row that moved between groups left the list for a moment and lost its selection; when it is inserted
+        // again, select it once the list has taken the change in. Only the inserted item is looked at, so a long
+        // load stays linear.
+        if (e.CollectionChange == CollectionChange.ItemInserted && ViewModel.SelectedTask is { } row
+            && ReferenceEquals(sender[(int)e.Index], row) && !ReferenceEquals(OpenTaskList.SelectedItem, row))
+        {
+            DispatcherQueue.TryEnqueue(ShowSelection);
+        }
+    }
+
+    // ---- Drag to reorder (the open rows, in a List view only) ----
 
     private TaskRowViewModel? _dragged;
 
     /// <summary>
-    /// The open Task row under <paramref name="position"/> (relative to the open list), or null over empty space.
+    /// The open Task row under <paramref name="position"/> (relative to the list), or null over empty space, a
+    /// heading or a row of another group.
     /// </summary>
     public TaskRowViewModel? RowAt(Windows.Foundation.Point position)
     {
-        var index = ReorderGeometry.RowAt(RowMeasure.Spans(OpenTaskList), position.Y);
-        return index is { } i ? ViewModel.Tasks[i] : null;
+        var items = OpenTaskList.Items;
+        var spans = RowMeasure.Spans(OpenTaskList);
+        for (var i = 0; i < spans.Length; i++)
+        {
+            if (items[i] is not TaskRowViewModel row || !ViewModel.Tasks.Contains(row))
+            {
+                spans[i] = null;
+            }
+        }
+
+        var index = ReorderGeometry.RowAt(spans, position.Y);
+        return index is { } at ? (TaskRowViewModel)items[at] : null;
     }
 
     /// <summary>
@@ -243,7 +232,9 @@ public sealed partial class TaskListView : UserControl
 
     private void OnDragItemsStarting(object sender, DragItemsStartingEventArgs e)
     {
-        if (!ViewModel.IsReorderEnabled || e.Items.Count != 1 || e.Items[0] is not TaskRowViewModel row)
+        // Only an open row drags: never an Overdue or completed one.
+        if (!ViewModel.IsReorderEnabled || e.Items.Count != 1 || e.Items[0] is not TaskRowViewModel row
+            || !ViewModel.Tasks.Contains(row))
         {
             e.Cancel = true;
             return;

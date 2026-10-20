@@ -33,7 +33,7 @@ public sealed class ReorderTests : IDisposable
 
     private AutomationElement Row(string title) =>
         AppSession.Eventually(
-            () => _app.Find(Ids.OpenTaskList).FindFirstChild(cf => cf.ByControlType(ControlType.ListItem).And(cf.ByName(title))),
+            () => _app.FindRow(Ids.OpenTaskList, title),
             $"No row '{title}'.");
 
     private static Point Centre(AutomationElement element)

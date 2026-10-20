@@ -45,7 +45,7 @@ public sealed partial class MainView : UserControl
         viewModel.FocusQuickAddRequested += (_, _) => FocusQuickAdd();
     }
 
-    /// <summary>The Overdue, open and "Completed (N)" Task lists and the Undo bar.</summary>
+    /// <summary>The one Task list (Overdue, open and "Completed (N)" groups) and the Undo bar.</summary>
     public TaskListView TaskList { get; }
 
     public MainViewModel ViewModel { get; }

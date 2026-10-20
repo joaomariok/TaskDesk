@@ -222,8 +222,22 @@ public sealed class AppSession : IDisposable
             return [];
         }
 
-        return list.FindAllChildren(cf => cf.ByControlType(ControlType.ListItem)).Select(item => item.Name).ToList();
+        return RowItems(list).Select(item => item.Name).ToList();
     }
+
+    /// <summary>A row of a list by its title, or null when the list does not show it.</summary>
+    public AutomationElement? FindRow(string listAutomationId, string title) =>
+        RowItems(Find(listAutomationId)).FirstOrDefault(item => item.Name == title);
+
+    // A list's rows in order: its ListItem children, and those of its groups. The Task list groups its rows (Overdue,
+    // open, Completed), and UI Automation shows each group as a Group child holding its rows.
+    private static IEnumerable<AutomationElement> RowItems(AutomationElement list) =>
+        list.FindAllChildren().SelectMany(child => child.ControlType switch
+        {
+            ControlType.ListItem => [child],
+            ControlType.Group => child.FindAllChildren(cf => cf.ByControlType(ControlType.ListItem)),
+            _ => [],
+        });
 
     public void WaitForRows(string listAutomationId, params string[] expected) =>
         WaitUntil(() => Rows(listAutomationId).SequenceEqual(expected),
@@ -234,7 +248,7 @@ public sealed class AppSession : IDisposable
     public void SelectRow(string listAutomationId, string title)
     {
         var item = Eventually(
-            () => Find(listAutomationId).FindFirstChild(cf => cf.ByControlType(ControlType.ListItem).And(cf.ByName(title))),
+            () => FindRow(listAutomationId, title),
             $"No row '{title}' in {listAutomationId}; rows were [{string.Join(", ", Rows(listAutomationId))}], " +
             $"quick add held '{TextBox(Ids.QuickAddBox).Text}'.").AsListBoxItem();
         item.Select();
