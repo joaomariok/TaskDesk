@@ -58,7 +58,7 @@ public sealed class TaskGroup : ObservableCollection<TaskRowViewModel>
             }
 
             _isExpanded = value;
-            Mirror();
+            ShowOrHideRows();
             OnPropertyChanged(new PropertyChangedEventArgs(nameof(IsExpanded)));
         }
     }
@@ -105,6 +105,26 @@ public sealed class TaskGroup : ObservableCollection<TaskRowViewModel>
         }
 
         OnPropertyChanged(new PropertyChangedEventArgs(nameof(Heading)));
+    }
+
+    // Adds or removes the rows one by one: a reset would make the list rebuild the group, heading and all, and
+    // the heading would lose the keyboard focus that just toggled it.
+    private void ShowOrHideRows()
+    {
+        if (_isExpanded)
+        {
+            for (var i = Count; i < _source.Count; i++)
+            {
+                Add(_source[i]);
+            }
+        }
+        else
+        {
+            while (Count > 0)
+            {
+                RemoveAt(Count - 1);
+            }
+        }
     }
 
     // Shows every source row while expanded, none while collapsed.

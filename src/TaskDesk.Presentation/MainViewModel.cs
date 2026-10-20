@@ -304,6 +304,21 @@ public sealed partial class MainViewModel(
     private Task AddTaskAsync(CancellationToken cancellationToken) =>
         _lifetime.RunAsync(AddTaskInLifetimeAsync, cancellationToken);
 
+    // Tags a Task quick add just created. If the tagging fails, the Task goes again, so no untagged Task is left
+    // behind and a retry of the kept title adds no duplicate.
+    private async Task TagNewTaskAsync(TaskItem task, string tagName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await tagService.AddTagToTaskAsync(task.Id, tagName, cancellationToken);
+        }
+        catch
+        {
+            await taskService.DeleteTaskAsync(task.Id, CancellationToken.None);
+            throw;
+        }
+    }
+
     private async Task AddTaskInLifetimeAsync(CancellationToken cancellationToken)
     {
         if (!CanAddTask())
@@ -319,7 +334,7 @@ public sealed partial class MainViewModel(
             : await taskService.CreateTaskAsync(QuickAddTitle, cancellationToken);
         if (Page is TaskListPage.TagPage tagPage)
         {
-            await tagService.AddTagToTaskAsync(task.Id, tagPage.Tag.Name, cancellationToken);
+            await TagNewTaskAsync(task, tagPage.Tag.Name, cancellationToken);
             await LoadAsync(cancellationToken);
         }
         else if (CurrentView is { } view)

@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using TaskDesk.Core.Lists;
@@ -430,6 +431,75 @@ public sealed class TaskListTests
             window.Close();
         }
     }
+
+    [UITestMethod]
+    public async Task The_Completed_heading_keeps_the_keyboard_focus_while_it_expands_and_collapses()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Pay rent");
+        await AddAsync(db, "Book flights", completed: true);
+        var (window, viewModel) = Open(db);
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            var view = window.View;
+            await WaitForGroupRowsAsync(view, TaskGroupKind.Open, "Pay rent");
+            var heading = await CompletedHeadingAsync(view);
+            Assert.IsTrue(heading.Focus(FocusState.Keyboard), "The Completed heading took no keyboard focus.");
+
+            // Space and Enter on a focused button invoke it, as UI Automation's Invoke does.
+            var invoke = (IInvokeProvider)FrameworkElementAutomationPeer.CreatePeerForElement(heading)
+                .GetPattern(PatternInterface.Invoke);
+            invoke.Invoke();
+            await WaitForGroupRowsAsync(view, TaskGroupKind.Completed, "Book flights");
+            await UiWait.UntilAsync(() => ReferenceEquals(FocusManager.GetFocusedElement(window.Content.XamlRoot), heading),
+                () => $"Expanding moved the focus to {Focused(window)}.", Ct);
+
+            invoke.Invoke();
+            await WaitForRowsAsync(view, "OpenTaskList", "Pay rent");
+            await UiWait.UntilAsync(() => ReferenceEquals(FocusManager.GetFocusedElement(window.Content.XamlRoot), heading),
+                () => $"Collapsing moved the focus to {Focused(window)}.", Ct);
+            Assert.IsFalse(viewModel.IsCompletedExpanded);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Tab_reaches_the_Completed_heading_when_the_page_has_only_collapsed_completed_Tasks()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Book flights", completed: true);
+        var (window, viewModel) = Open(db);
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            var view = window.View;
+            var heading = await CompletedHeadingAsync(view);
+            Assert.IsTrue(VisualTree.Find<TextBox>(view, "QuickAddBox").Focus(FocusState.Keyboard),
+                "Quick add took no keyboard focus.");
+
+            FocusManager.TryMoveFocus(FocusNavigationDirection.Next,
+                new FindNextElementOptions { SearchRoot = window.Content.XamlRoot.Content });
+
+            await UiWait.UntilAsync(() => ReferenceEquals(FocusManager.GetFocusedElement(window.Content.XamlRoot), heading),
+                () => $"Tab from quick add moved the focus to {Focused(window)}.", Ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static string Focused(MainWindow window) =>
+        FocusManager.GetFocusedElement(window.Content.XamlRoot) switch
+        {
+            null => "nothing",
+            FrameworkElement element => $"{element.GetType().Name} '{element.Name}' ({AutomationProperties.GetName(element)})",
+            var other => other.GetType().Name,
+        };
 
     [UITestMethod]
     public async Task On_Today_Overdue_N_heads_the_list_and_the_open_rows_follow_with_no_heading_or_gap()

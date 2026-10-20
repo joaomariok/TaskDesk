@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Time.Testing;
+using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
 using FakeTagService = TaskDesk.Presentation.Tests.MainViewModelTests.FakeTagService;
@@ -364,6 +365,48 @@ public class PageHeadingViewModelTests
         Assert.Equal("Ship it", row.Title);
         Assert.Equal(["work"], row.Tags.Select(t => t.Name));
         Assert.Equal("", vm.QuickAddTitle);
+    }
+
+    [Fact]
+    public async Task Quick_add_on_a_Tags_page_leaves_no_untagged_Task_when_tagging_fails()
+    {
+        var service = new FakeTaskService();
+        var tags = new FailingTagging(new FakeTagService(service));
+        var vm = new MainViewModel(
+            service, tags, new FakeTimeProvider(), dueService: new EmptyDueService(),
+            searchService: new TitleSearchService(service));
+        var tag = await tags.CreateTagAsync("work", Ct);
+        await vm.FilterByTagAsync(tag, Ct);
+        vm.QuickAddTitle = "Ship it";
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => vm.AddTaskCommand.ExecuteAsync(null));
+
+        Assert.Empty(service.All);
+        Assert.Empty(vm.Tasks);
+        Assert.Equal("Ship it", vm.QuickAddTitle);
+    }
+
+    // The Tag service whose tagging always fails; everything else goes to the fake.
+    private sealed class FailingTagging(FakeTagService tags) : ITagService
+    {
+        public Task<IReadOnlyList<Tag>> ListTagsAsync(CancellationToken cancellationToken = default)
+            => tags.ListTagsAsync(cancellationToken);
+
+        public Task<Tag> CreateTagAsync(string name, CancellationToken cancellationToken = default)
+            => tags.CreateTagAsync(name, cancellationToken);
+
+        public Task<Tag> AddTagToTaskAsync(Guid taskId, string name, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("The database is locked.");
+
+        public Task RemoveTagFromTaskAsync(Guid taskId, Guid tagId, CancellationToken cancellationToken = default)
+            => tags.RemoveTagFromTaskAsync(taskId, tagId, cancellationToken);
+
+        public Task DeleteTagAsync(Guid tagId, CancellationToken cancellationToken = default)
+            => tags.DeleteTagAsync(tagId, cancellationToken);
+
+        public Task<IReadOnlyList<TaskItem>> ListTasksByTagAsync(
+            Guid tagId, CancellationToken cancellationToken = default)
+            => tags.ListTasksByTagAsync(tagId, cancellationToken);
     }
 
     [Theory]
