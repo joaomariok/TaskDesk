@@ -136,6 +136,7 @@ public sealed partial class MainViewModel(
     [NotifyPropertyChangedFor(nameof(CurrentListId))]
     [NotifyPropertyChangedFor(nameof(HasMoreCompleted))]
     [NotifyPropertyChangedFor(nameof(ShowsQuickAdd))]
+    [NotifyPropertyChangedFor(nameof(QuickAddTarget))]
     private TaskListPage _page = TaskListPage.DefaultList;
 
     /// <summary>The Smart View being shown, or null on a List's or a Tag's page.</summary>
@@ -311,12 +312,17 @@ public sealed partial class MainViewModel(
         }
 
         // On a List's page the Task goes to that List. Elsewhere it goes to the Default List; in Today it is
-        // also due today.
+        // also due today, and on a Tag's page it gets that Tag.
         var task = Page is TaskListPage.ListPage { ListId: { } listId }
             && _lists.TryGetValue(listId, out var list) && !list.IsDefault
             ? await Creator.CreateTaskInListAsync(QuickAddTitle, listId, cancellationToken)
             : await taskService.CreateTaskAsync(QuickAddTitle, cancellationToken);
-        if (CurrentView is { } view)
+        if (Page is TaskListPage.TagPage tagPage)
+        {
+            await tagService.AddTagToTaskAsync(task.Id, tagPage.Tag.Name, cancellationToken);
+            await LoadAsync(cancellationToken);
+        }
+        else if (CurrentView is { } view)
         {
             if (view == SmartView.Today)
             {

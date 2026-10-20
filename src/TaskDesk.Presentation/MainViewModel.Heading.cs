@@ -32,25 +32,34 @@ public sealed partial class MainViewModel
     };
 
     /// <summary>
-    /// The label of the quick-add box: a List's page adds to that List; a Smart View or a Tag's page adds to
-    /// the Default List.
+    /// The label of the quick-add box, naming what happens to the new Task: a List's page adds to that List;
+    /// Today adds to the Default List, due today; a Tag's page adds to the Default List with that Tag; All
+    /// adds to the Default List.
     /// </summary>
-    public string QuickAddTarget => "Add a task to " + (IsListPage ? CurrentListName : DefaultListName);
+    public string QuickAddTarget => Page switch
+    {
+        TaskListPage.SmartViewPage { View: SmartView.Today } => $"Add a task to {DefaultListName}, due today",
+        TaskListPage.TagPage page => $"Add a task to {DefaultListName}, tagged #{page.Tag.Name}",
+        _ => "Add a task to " + (IsListPage ? CurrentListName : DefaultListName),
+    };
 
-    /// <summary>True when quick add is offered: on every page except the Completed Smart View.</summary>
-    public bool ShowsQuickAdd => CurrentView != SmartView.Completed;
+    /// <summary>
+    /// True when quick add is offered: only where the Task it adds will show, so not on Upcoming, Overdue
+    /// or Completed.
+    /// </summary>
+    public bool ShowsQuickAdd => CurrentView is null or SmartView.Today or SmartView.All;
 
     /// <summary>Raised when the view should put keyboard focus in quick add (Ctrl+N).</summary>
     public event EventHandler? FocusQuickAddRequested;
 
     /// <summary>
-    /// Ctrl+N. On the Completed Smart View, where Tasks cannot be added, it first shows the Default List;
+    /// Ctrl+N. On a page without quick add (Upcoming, Overdue, Completed) it first shows the Default List;
     /// everywhere else it only asks the view to focus quick add.
     /// </summary>
     [RelayCommand]
     private async Task FocusQuickAddAsync(CancellationToken cancellationToken)
     {
-        if (CurrentView == SmartView.Completed)
+        if (!ShowsQuickAdd)
         {
             await ShowSmartViewAsync(null, cancellationToken);
         }

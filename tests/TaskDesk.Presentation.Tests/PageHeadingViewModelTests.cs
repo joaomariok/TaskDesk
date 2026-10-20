@@ -90,7 +90,9 @@ public class PageHeadingViewModelTests
         foreach (var view in Enum.GetValues<SmartView>())
         {
             await vm.ShowSmartViewAsync(view, Ct);
-            Assert.Equal("Add a task to Work", vm.QuickAddTarget);
+            Assert.Equal(
+                view == SmartView.Today ? "Add a task to Work, due today" : "Add a task to Work",
+                vm.QuickAddTarget);
         }
     }
 
@@ -140,7 +142,7 @@ public class PageHeadingViewModelTests
         Assert.False(vm.IsListPage);
         Assert.Equal("", vm.EmptyMessage);
         Assert.False(vm.HasEmptyMessage);
-        Assert.Equal("Add a task to Work", vm.QuickAddTarget);
+        Assert.Equal("Add a task to Work, tagged #work", vm.QuickAddTarget);
     }
 
     [Fact]
@@ -234,11 +236,11 @@ public class PageHeadingViewModelTests
     [Theory]
     [InlineData(null, true)]
     [InlineData(SmartView.Today, true)]
-    [InlineData(SmartView.Overdue, true)]
-    [InlineData(SmartView.Upcoming, true)]
+    [InlineData(SmartView.Overdue, false)]
+    [InlineData(SmartView.Upcoming, false)]
     [InlineData(SmartView.All, true)]
     [InlineData(SmartView.Completed, false)]
-    public async Task Quick_add_is_shown_on_every_page_except_the_Completed_Smart_View(SmartView? view, bool shown)
+    public async Task Quick_add_is_hidden_on_Upcoming_Overdue_and_Completed(SmartView? view, bool shown)
     {
         var (_, _, vm) = Start();
 
@@ -291,6 +293,77 @@ public class PageHeadingViewModelTests
         Assert.True(vm.ShowsQuickAdd);
         Assert.Equal(1, asked);
         Assert.Null(viewWhenAsked);
+    }
+
+    [Theory]
+    [InlineData(SmartView.Upcoming)]
+    [InlineData(SmartView.Overdue)]
+    public async Task Focusing_quick_add_on_Upcoming_or_Overdue_shows_the_Default_List_then_asks_the_view(
+        SmartView view)
+    {
+        var (_, _, vm) = Start();
+        await vm.ShowSmartViewAsync(view, Ct);
+        SmartView? viewWhenAsked = view;
+        var asked = 0;
+        vm.FocusQuickAddRequested += (_, _) =>
+        {
+            asked++;
+            viewWhenAsked = vm.CurrentView;
+        };
+
+        await vm.FocusQuickAddCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.CurrentView);
+        Assert.True(vm.ShowsQuickAdd);
+        Assert.Equal(1, asked);
+        Assert.Null(viewWhenAsked);
+    }
+
+    [Fact]
+    public async Task The_quick_add_label_names_the_Default_List_and_what_the_Task_gets()
+    {
+        var (_, tags, vm) = Start();
+        var tag = await tags.CreateTagAsync("work", Ct);
+
+        await vm.ShowSmartViewAsync(SmartView.Today, Ct);
+        Assert.Equal("Add a task to Work, due today", vm.QuickAddTarget);
+        await vm.FilterByTagAsync(tag, Ct);
+        Assert.Equal("Add a task to Work, tagged #work", vm.QuickAddTarget);
+        await vm.ShowSmartViewAsync(SmartView.All, Ct);
+        Assert.Equal("Add a task to Work", vm.QuickAddTarget);
+        await vm.ShowSmartViewAsync(null, Ct);
+        Assert.Equal("Add a task to Work", vm.QuickAddTarget);
+    }
+
+    [Fact]
+    public async Task Renaming_the_Default_List_updates_the_Today_and_Tag_labels()
+    {
+        var (_, tags, vm) = Start();
+        var tag = await tags.CreateTagAsync("work", Ct);
+
+        await vm.ShowSmartViewAsync(SmartView.Today, Ct);
+        vm.DefaultListName = "Home";
+        Assert.Equal("Add a task to Home, due today", vm.QuickAddTarget);
+        await vm.FilterByTagAsync(tag, Ct);
+        vm.DefaultListName = "Desk";
+        Assert.Equal("Add a task to Desk, tagged #work", vm.QuickAddTarget);
+    }
+
+    [Fact]
+    public async Task Quick_add_on_a_Tags_page_adds_to_the_Default_List_with_the_Tag_and_shows_the_row()
+    {
+        var (service, tags, vm) = Start();
+        var tag = await tags.CreateTagAsync("work", Ct);
+        await vm.FilterByTagAsync(tag, Ct);
+        vm.QuickAddTitle = "Ship it";
+
+        await vm.AddTaskCommand.ExecuteAsync(null);
+
+        Assert.Equal(["Ship it"], service.Created);
+        var row = Assert.Single(vm.Tasks);
+        Assert.Equal("Ship it", row.Title);
+        Assert.Equal(["work"], row.Tags.Select(t => t.Name));
+        Assert.Equal("", vm.QuickAddTitle);
     }
 
     [Theory]

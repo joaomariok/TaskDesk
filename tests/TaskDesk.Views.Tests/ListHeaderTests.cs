@@ -550,6 +550,83 @@ public sealed class ListHeaderTests
     }
 
     [UITestMethod]
+    [DataRow(SmartView.Upcoming, DisplayName = "Upcoming")]
+    [DataRow(SmartView.Overdue, DisplayName = "Overdue")]
+    public async Task Upcoming_and_Overdue_have_no_quick_add_box_in_the_tab_order(SmartView page)
+    {
+        using var db = await DatabaseAsync();
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            var quickAdd = VisualTree.Find<TextBox>(window.View, "QuickAddBox");
+            Assert.AreEqual(Visibility.Visible, quickAdd.Visibility);
+
+            await viewModel.ShowSmartViewAsync(page, Ct);
+
+            await UiWait.UntilAsync(() => quickAdd.Visibility == Visibility.Collapsed,
+                () => $"Quick add was {quickAdd.Visibility} on {page}.", Ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Ctrl_N_on_Overdue_shows_the_Default_List_and_focuses_quick_add()
+    {
+        using var db = await DatabaseAsync();
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            var view = window.View;
+            var quickAdd = VisualTree.Find<TextBox>(view, "QuickAddBox");
+            await viewModel.ShowSmartViewAsync(SmartView.Overdue, Ct);
+            await UiWait.UntilAsync(() => quickAdd.Visibility == Visibility.Collapsed,
+                () => "Quick add showed on Overdue.", Ct);
+
+            Assert.IsTrue(view.TryShortcut(VirtualKey.N, VirtualKeyModifiers.Control));
+
+            var heading = VisualTree.Find<TextBlock>(view, "PageHeading");
+            await UiWait.UntilAsync(() => heading.Text == "Inbox", () => $"The heading read '{heading.Text}'.", Ct);
+            Assert.AreEqual(Visibility.Visible, quickAdd.Visibility);
+            await WaitForFocusAsync(quickAdd);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task The_quick_add_placeholder_says_due_today_on_Today_and_tagged_on_a_Tags_page()
+    {
+        using var db = await DatabaseAsync();
+        var tag = await db.Get<ITagService>().CreateTagAsync("work", Ct);
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            var quickAdd = VisualTree.Find<TextBox>(window.View, "QuickAddBox");
+
+            await viewModel.ShowSmartViewAsync(SmartView.Today, Ct);
+            await UiWait.UntilAsync(() => quickAdd.PlaceholderText == "Add a task to Inbox, due today",
+                () => $"The placeholder read '{quickAdd.PlaceholderText}' on Today.", Ct);
+
+            await viewModel.FilterByTagAsync(tag, Ct);
+            await UiWait.UntilAsync(() => quickAdd.PlaceholderText == "Add a task to Inbox, tagged #work",
+                () => $"The placeholder read '{quickAdd.PlaceholderText}' on a Tag's page.", Ct);
+            Assert.AreEqual(Visibility.Visible, quickAdd.Visibility);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
     [DataRow(null, "No Tasks in Inbox yet. Type above to add one.", DisplayName = "Inbox")]
     [DataRow(SmartView.Today, "Nothing due today.", DisplayName = "Today")]
     [DataRow(SmartView.Overdue, "Nothing is overdue.", DisplayName = "Overdue")]
