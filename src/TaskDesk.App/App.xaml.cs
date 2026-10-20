@@ -27,14 +27,14 @@ public partial class App : Application
 {
     private IHost? _host;
 
-    // Resolved once, while the host is alive: the last exit step disposes the host, and an unhandled exception
+    // Resolved once, while the host is alive: the last exit part disposes the host, and an unhandled exception
     // after that must still reach this logger instead of throwing ObjectDisposedException from the provider.
     private ILogger<App>? _logger;
 
     public App()
     {
         InitializeComponent();
-        // The exit steps (stop the window's view models, which saves a pending edit, then stop the host) run after the main window has closed; ShellController ends the app.
+        // The exit parts (stop the window's view models, which saves a pending edit, then stop the host) run after the main window has closed; ShellController ends the app.
         DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
         // Logged, then the app ends (Handled stays false): an unhandled UI exception ends the app. The log file
         // sink is unbuffered.
@@ -191,12 +191,7 @@ public partial class App : Application
         await window.Lists!.LoadAsync();
 
         var shell = _host.Services.GetRequiredService<ShellController>();
-        // Exit waits for these, in order, before it ends the app. The window closes only once they have run, so it
-        // first takes no more input and stops both view models, which saves a pending detail edit: a reload during
-        // the host stop would query a host being stopped.
-        shell.AddExitStep(window.PrepareForExitAsync);
         var host = _host;
-        shell.AddExitStep(() => host.StopAsync());
         // Closing hides to the tray or exits, per the close-behaviour setting.
         window.AppWindow.Closing += (_, closing) =>
         {
@@ -236,71 +231,85 @@ public partial class App : Application
             || launch?.Action is ReminderAction.MarkDone or ReminderAction.SnoozeShort or ReminderAction.SnoozeLong;
         var exePath = Environment.ProcessPath ?? throw new InvalidOperationException("No process path.");
 
-        // Every exit step is added here, with no await since the first: from shell.StartAsync on, the tray's
-        // Exit and session end can start the exit, and ShellController rejects a step added after that.
         var reminders = _host.Services.GetRequiredService<ReminderScheduler>();
         var updates = _host.Services.GetRequiredService<UpdateScheduler>();
         // The tray's "Restart to update" shows once an update is downloaded.
         var tray = _host.Services.GetRequiredService<WinUiTrayIcon>();
         updates.PendingVersionChanged += () => tray.ShowRestartToUpdate(updates.PendingVersion is not null);
-        StartSystemHooks(shell, reminders, notifications);
 
-        // The last exit step: release the global hotkey, then the shell (tray, single-instance guard) and the host,
-        // which closes the database and the log file. The shell stops the update checks when the exit starts (the
-        // UpdateScheduler it gets from the host); only Restart to update waits for a running download.
-        shell.AddExitStep(async () =>
+        // Session end and resume from sleep reach top-level windows only, so they get a hidden one of their own. The
+        // shell starts them once it holds the exit parts.
+        MessageWindow? systemWindow = null;
+        SessionEndHook? sessionEnd = null;
+        PowerResumeHook? resume = null;
+
+        // The shell runs the exit parts in this order, after the Reminder activations. The window closes only once
+        // they have run, so it first takes no more input and stops both view models, which saves a pending detail
+        // edit: a reload during the host stop would query a host being stopped. Between the hotkey and the host
+        // disposal, the shell releases the tray and the single-instance guard; disposing the host closes the
+        // database and the log file. The shell stops the update checks when the exit starts (the UpdateScheduler it
+        // gets from the host); only Restart to update waits for a running download.
+        var exitParts = new ShellExitParts
         {
-            hotkeys.Dispose();
-            shell.Dispose();
-            if (host is IAsyncDisposable asyncHost)
+            PrepareWindow = window.PrepareForExitAsync,
+            StopHost = () => host.StopAsync(),
+            StopSystemHooks = () =>
             {
-                await asyncHost.DisposeAsync();
-            }
-            else
+                resume?.Dispose();
+                sessionEnd?.Dispose();
+                systemWindow?.Dispose();
+                reminders.Dispose();
+                try
+                {
+                    notifications.Unregister();
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    logger.LogWarning(ex, "Unregistering notifications failed");
+                }
+
+                return Task.CompletedTask;
+            },
+            ReleaseHotkey = () =>
             {
-                host.Dispose();
-            }
-        });
+                hotkeys.Dispose();
+                return Task.CompletedTask;
+            },
+            DisposeHost = async () =>
+            {
+                if (host is IAsyncDisposable asyncHost)
+                {
+                    await asyncHost.DisposeAsync();
+                }
+                else
+                {
+                    host.Dispose();
+                }
+            },
+        };
 
         // The launch's activation and the Reminder checks start only while no exit has started: the exit disposes
         // what they use, and it waits for the activation, so a Mark done or Snooze from the toast is kept. The
         // Reminder checks run on start, every 30 s, on every Task change and on resume from sleep (SPEC 7.4). An
         // installed copy checks for updates on start and every 6 hours, unless the runtime mode turns updates off.
-        await shell.LaunchAsync(
-            minimized,
-            exePath,
-            launch is null ? null : exitStarted => activations.HandleAsync(launch, exitStarted),
-            () =>
+        await shell.LaunchAsync(new ShellLaunch
+        {
+            Minimized = minimized,
+            ExePath = exePath,
+            ExitParts = exitParts,
+            StartSystemHooks = () =>
+            {
+                systemWindow = new MessageWindow(topLevel: true);
+                // Windows signing out or shutting down: exit now (save the pending edit, stop the host), then answer.
+                sessionEnd = new SessionEndHook(systemWindow, shell.ExitAsync);
+                resume = new PowerResumeHook(systemWindow, () => _ = reminders.RequestCheck());
+            },
+            Activation = launch is null ? null : exitStarted => activations.HandleAsync(launch, exitStarted),
+            Running = () =>
             {
                 _ = reminders.StartAsync();
                 updates.Start();
-            });
-    }
-
-    // Session end and resume from sleep reach top-level windows only, so they get a hidden one of their own.
-    private void StartSystemHooks(ShellController shell, ReminderScheduler reminders, INotificationService notifications)
-    {
-        var systemWindow = new MessageWindow(topLevel: true);
-        // Windows signing out or shutting down: exit now (save the pending edit, stop the host), then answer.
-        var sessionEnd = new SessionEndHook(systemWindow, shell.ExitAsync);
-        var resume = new PowerResumeHook(systemWindow, () => _ = reminders.RequestCheck());
-        var logger = _host!.Services.GetRequiredService<ILogger<App>>();
-        shell.AddExitStep(() =>
-        {
-            resume.Dispose();
-            sessionEnd.Dispose();
-            systemWindow.Dispose();
-            reminders.Dispose();
-            try
-            {
-                notifications.Unregister();
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                logger.LogWarning(ex, "Unregistering notifications failed");
-            }
-
-            return Task.CompletedTask;
+            },
         });
     }
 

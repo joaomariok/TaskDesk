@@ -38,7 +38,7 @@ public sealed class ShellControllerTests
 
     // Started with an update check that is downloading and ignores cancellation, as a busy file write can.
     private async Task<(ShellController Controller, UpdateScheduler Checks, TaskCompletionSource Download)>
-        StartedWithRunningCheckAsync()
+        StartedWithRunningCheckAsync(ShellExitParts? parts = null)
     {
         var download = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _updates.Gate = download;
@@ -49,7 +49,15 @@ public sealed class ShellControllerTests
         var controller = new ShellController(
             _tray, _window, _single, _settings, new AutoStartService(_runKey), _lifetime, updates: _updates,
             updateChecks: checks);
-        await controller.StartAsync(false, Exe, TestContext.Current.CancellationToken);
+        if (parts is null)
+        {
+            await controller.StartAsync(false, Exe, TestContext.Current.CancellationToken);
+        }
+        else
+        {
+            await controller.LaunchAsync(Launch(parts), TestContext.Current.CancellationToken);
+        }
+
         return (controller, checks, download);
     }
 
@@ -57,6 +65,51 @@ public sealed class ShellControllerTests
     {
         var controller = Create();
         await controller.StartAsync(minimized, Exe, TestContext.Current.CancellationToken);
+        return controller;
+    }
+
+    private static readonly Func<Task> NoPart = () => Task.CompletedTask;
+
+    private static Func<Task> Part(Action action) => () =>
+    {
+        action();
+        return Task.CompletedTask;
+    };
+
+    private static ShellExitParts Parts(
+        Func<Task>? prepareWindow = null,
+        Func<Task>? stopHost = null,
+        Func<Task>? stopSystemHooks = null,
+        Func<Task>? releaseHotkey = null,
+        Func<Task>? disposeHost = null) => new()
+        {
+            PrepareWindow = prepareWindow ?? NoPart,
+            StopHost = stopHost ?? NoPart,
+            StopSystemHooks = stopSystemHooks ?? NoPart,
+            ReleaseHotkey = releaseHotkey ?? NoPart,
+            DisposeHost = disposeHost ?? NoPart,
+        };
+
+    private static ShellLaunch Launch(
+        ShellExitParts? parts = null,
+        bool minimized = false,
+        Func<CancellationToken, Task>? activation = null,
+        Action? running = null,
+        Action? startSystemHooks = null) => new()
+        {
+            Minimized = minimized,
+            ExePath = Exe,
+            ExitParts = parts ?? Parts(),
+            StartSystemHooks = startSystemHooks ?? (() => { }),
+            Activation = activation,
+            Running = running ?? (() => { }),
+        };
+
+    // Launched with the given exit parts, no launch activation and no background work.
+    private async Task<ShellController> LaunchedAsync(ShellExitParts parts, bool minimized = false)
+    {
+        var controller = Create();
+        await controller.LaunchAsync(Launch(parts, minimized), TestContext.Current.CancellationToken);
         return controller;
     }
 
@@ -131,9 +184,8 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task A_later_launch_while_exiting_is_ignored()
     {
-        var controller = await StartedAsync(minimized: true);
         var flush = new TaskCompletionSource();
-        controller.AddExitStep(() => flush.Task);
+        var controller = await LaunchedAsync(Parts(prepareWindow: () => flush.Task), minimized: true);
         var activations = 0;
         controller.ActivationRequested += _ => activations++;
         var exit = controller.ExitAsync();
@@ -306,20 +358,20 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task Exit_runs_exit_steps_in_order_and_shuts_down_only_after_they_finish()
     {
-        var controller = await StartedAsync();
         var log = new List<string>();
         var flush = new TaskCompletionSource();
-        controller.AddExitStep(async () =>
-        {
-            log.Add("flush started");
-            await flush.Task;
-            log.Add("flush done");
-        });
-        controller.AddExitStep(() =>
-        {
-            log.Add("stop host");
-            return Task.CompletedTask;
-        });
+        var controller = await LaunchedAsync(Parts(
+            prepareWindow: async () =>
+            {
+                log.Add("flush started");
+                await flush.Task;
+                log.Add("flush done");
+            },
+            stopHost: () =>
+            {
+                log.Add("stop host");
+                return Task.CompletedTask;
+            }));
 
         var exit = controller.ExitAsync();
 
@@ -338,14 +390,13 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task Restart_to_update_runs_the_exit_steps_then_applies_the_update()
     {
-        var controller = await StartedAsync();
         var flush = new TaskCompletionSource();
         var restartsDuringStep = -1;
-        controller.AddExitStep(async () =>
+        var controller = await LaunchedAsync(Parts(prepareWindow: async () =>
         {
             await flush.Task;
             restartsDuringStep = _updates.Restarts;
-        });
+        }));
 
         var restart = controller.RestartToUpdateAsync();
         Assert.Equal(0, _updates.Restarts);
@@ -361,13 +412,12 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task Tray_restart_to_update_runs_the_exit_then_applies_the_update()
     {
-        var controller = await StartedAsync();
         var steps = 0;
-        controller.AddExitStep(() =>
+        var controller = await LaunchedAsync(Parts(prepareWindow: () =>
         {
             steps++;
             return Task.CompletedTask;
-        });
+        }));
 
         _tray.ClickRestartToUpdate();
         await controller.ExitAsync();
@@ -444,9 +494,8 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task Restart_to_update_applies_when_the_check_ends_during_the_exit_steps()
     {
-        var (controller, checks, download) = await StartedWithRunningCheckAsync();
         var flush = new TaskCompletionSource();
-        controller.AddExitStep(() => flush.Task);
+        var (controller, checks, download) = await StartedWithRunningCheckAsync(Parts(prepareWindow: () => flush.Task));
 
         var restart = controller.RestartToUpdateAsync();
         _clock.Advance(UpdateScheduler.StopTimeout);
@@ -502,9 +551,8 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task Restart_to_update_once_an_exit_has_started_only_exits()
     {
-        var controller = await StartedAsync();
         var flush = new TaskCompletionSource();
-        controller.AddExitStep(() => flush.Task);
+        var controller = await LaunchedAsync(Parts(prepareWindow: () => flush.Task));
         var exit = controller.ExitAsync();
 
         var restart = controller.RestartToUpdateAsync();
@@ -529,9 +577,8 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task Tray_exit_waits_for_the_exit_steps()
     {
-        var controller = await StartedAsync();
         var flush = new TaskCompletionSource();
-        controller.AddExitStep(() => flush.Task);
+        var controller = await LaunchedAsync(Parts(prepareWindow: () => flush.Task));
 
         _tray.ClickExit();
         Assert.Equal(0, _lifetime.ShutdownCount);
@@ -546,9 +593,8 @@ public sealed class ShellControllerTests
     public async Task Close_with_exit_behavior_waits_for_the_exit_steps()
     {
         _settings.Current = new ShellSettings(CloseBehavior: CloseBehavior.Exit);
-        var controller = await StartedAsync();
         var flush = new TaskCompletionSource();
-        controller.AddExitStep(() => flush.Task);
+        var controller = await LaunchedAsync(Parts(prepareWindow: () => flush.Task));
 
         controller.OnWindowClosing();
         Assert.Equal(0, _lifetime.ShutdownCount);
@@ -562,14 +608,14 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task A_failing_exit_step_does_not_stop_later_steps_or_the_shutdown()
     {
-        var controller = await StartedAsync();
         var ran = false;
-        controller.AddExitStep(() => throw new InvalidOperationException("boom"));
-        controller.AddExitStep(() =>
-        {
-            ran = true;
-            return Task.CompletedTask;
-        });
+        var controller = await LaunchedAsync(Parts(
+            prepareWindow: () => throw new InvalidOperationException("boom"),
+            stopHost: () =>
+            {
+                ran = true;
+                return Task.CompletedTask;
+            }));
 
         await controller.ExitAsync();
 
@@ -578,14 +624,14 @@ public sealed class ShellControllerTests
     }
 
     [Fact]
-    public async Task An_exit_step_added_after_the_exit_started_is_rejected_and_the_exit_still_shuts_down()
+    public async Task Parts_handed_again_after_the_exit_started_are_rejected_and_the_exit_still_shuts_down()
     {
-        var controller = await StartedAsync();
         var flush = new TaskCompletionSource();
-        controller.AddExitStep(() => flush.Task);
+        var controller = await LaunchedAsync(Parts(prepareWindow: () => flush.Task));
         var exit = controller.ExitAsync();
 
-        var late = Record.Exception(() => controller.AddExitStep(() => Task.CompletedTask));
+        var late = await Record.ExceptionAsync(
+            () => controller.LaunchAsync(Launch(), TestContext.Current.CancellationToken));
         flush.SetResult();
         await exit;
 
@@ -597,13 +643,12 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task Exit_requested_twice_runs_the_steps_once()
     {
-        var controller = await StartedAsync();
         var runs = 0;
-        controller.AddExitStep(() =>
+        var controller = await LaunchedAsync(Parts(prepareWindow: () =>
         {
             runs++;
             return Task.CompletedTask;
-        });
+        }));
 
         var first = controller.ExitAsync();
         var second = controller.ExitAsync();
@@ -620,14 +665,14 @@ public sealed class ShellControllerTests
         var steps = new List<string>();
 
         var launched = await controller.LaunchAsync(
-            minimized: false,
-            Exe,
-            cancellationToken =>
-            {
-                steps.Add(cancellationToken.IsCancellationRequested ? "activation (cancelled)" : "activation");
-                return Task.CompletedTask;
-            },
-            () => steps.Add("running"),
+            Launch(
+                minimized: false,
+                activation: cancellationToken =>
+                {
+                    steps.Add(cancellationToken.IsCancellationRequested ? "activation (cancelled)" : "activation");
+                    return Task.CompletedTask;
+                },
+                running: () => steps.Add("running")),
             TestContext.Current.CancellationToken);
 
         Assert.True(launched);
@@ -643,14 +688,14 @@ public sealed class ShellControllerTests
         var activationToken = CancellationToken.None;
         var running = 0;
         var launch = controller.LaunchAsync(
-            minimized: true,
-            Exe,
-            cancellationToken =>
-            {
-                activationToken = cancellationToken;
-                return acting.Task;
-            },
-            () => running++,
+            Launch(
+                minimized: true,
+                activation: cancellationToken =>
+                {
+                    activationToken = cancellationToken;
+                    return acting.Task;
+                },
+                running: () => running++),
             TestContext.Current.CancellationToken);
 
         // The tray's Exit, or session end, while the activation still runs.
@@ -671,20 +716,20 @@ public sealed class ShellControllerTests
         var controller = Create();
         var acting = new TaskCompletionSource();
         var ran = false;
-        controller.AddExitStep(() =>
-        {
-            ran = true;
-            return Task.CompletedTask;
-        });
         var launch = controller.LaunchAsync(
-            minimized: true,
-            Exe,
-            cancellationToken =>
-            {
-                cancellationToken.Register(() => throw new InvalidOperationException("boom"));
-                return acting.Task;
-            },
-            () => { },
+            Launch(
+                Parts(prepareWindow: () =>
+                {
+                    ran = true;
+                    return Task.CompletedTask;
+                }),
+                minimized: true,
+                activation: cancellationToken =>
+                {
+                    cancellationToken.Register(() => throw new InvalidOperationException("boom"));
+                    return acting.Task;
+                },
+                running: () => { }),
             TestContext.Current.CancellationToken);
 
         // The exit waits for the activation before its steps, so the activation ends before the exit is awaited.
@@ -703,21 +748,21 @@ public sealed class ShellControllerTests
         var controller = Create();
         var acting = new TaskCompletionSource();
         var steps = new List<string>();
-        controller.AddExitStep(() =>
-        {
-            steps.Add("flush");
-            return Task.CompletedTask;
-        });
         var launch = controller.LaunchAsync(
-            minimized: true,
-            Exe,
-            async _ =>
-            {
-                // A toast's Mark done: its write must land before the flush and the host stop.
-                await acting.Task;
-                steps.Add("activation");
-            },
-            () => steps.Add("running"),
+            Launch(
+                Parts(prepareWindow: () =>
+                {
+                    steps.Add("flush");
+                    return Task.CompletedTask;
+                }),
+                minimized: true,
+                activation: async _ =>
+                {
+                    // A toast's Mark done: its write must land before the flush and the host stop.
+                    await acting.Task;
+                    steps.Add("activation");
+                },
+                running: () => steps.Add("running")),
             TestContext.Current.CancellationToken);
 
         var exit = controller.ExitAsync();
@@ -735,14 +780,13 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task The_exit_waits_for_an_activation_routed_in_the_running_app_before_its_steps()
     {
-        var controller = await StartedAsync();
         var acting = new TaskCompletionSource();
         var steps = new List<string>();
-        controller.AddExitStep(() =>
+        var controller = await LaunchedAsync(Parts(prepareWindow: () =>
         {
             steps.Add("flush");
             return Task.CompletedTask;
-        });
+        }));
         // A toast's Mark done clicked as the exit starts: its write must land before the flush and the host stop.
         var activation = controller.RunActivationAsync(async exitStarted =>
         {
@@ -765,15 +809,14 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task The_exit_also_waits_for_an_activation_routed_while_it_waits_for_another()
     {
-        var controller = await StartedAsync();
         var first = new TaskCompletionSource();
         var second = new TaskCompletionSource();
         var steps = new List<string>();
-        controller.AddExitStep(() =>
+        var controller = await LaunchedAsync(Parts(prepareWindow: () =>
         {
             steps.Add("flush");
             return Task.CompletedTask;
-        });
+        }));
         var firstActivation = controller.RunActivationAsync(async _ =>
         {
             await first.Task;
@@ -824,9 +867,8 @@ public sealed class ShellControllerTests
     [Fact]
     public async Task An_activation_routed_once_the_exit_steps_have_started_is_dropped()
     {
-        var controller = await StartedAsync();
         var flush = new TaskCompletionSource();
-        controller.AddExitStep(() => flush.Task);
+        var controller = await LaunchedAsync(Parts(prepareWindow: () => flush.Task));
         var exit = controller.ExitAsync();
         var ran = false;
 
@@ -850,10 +892,10 @@ public sealed class ShellControllerTests
         var running = 0;
 
         var launched = await controller.LaunchAsync(
-            minimized: false,
-            Exe,
-            _ => throw new InvalidOperationException("boom"),
-            () => running++,
+            Launch(
+                minimized: false,
+                activation: _ => throw new InvalidOperationException("boom"),
+                running: () => running++),
             TestContext.Current.CancellationToken);
 
         Assert.True(launched);
@@ -866,20 +908,20 @@ public sealed class ShellControllerTests
         var controller = Create();
         var acting = new TaskCompletionSource();
         var ran = false;
-        controller.AddExitStep(() =>
-        {
-            ran = true;
-            return Task.CompletedTask;
-        });
         var launch = controller.LaunchAsync(
-            minimized: true,
-            Exe,
-            async _ =>
-            {
-                await acting.Task;
-                throw new InvalidOperationException("boom");
-            },
-            () => { },
+            Launch(
+                Parts(prepareWindow: () =>
+                {
+                    ran = true;
+                    return Task.CompletedTask;
+                }),
+                minimized: true,
+                activation: async _ =>
+                {
+                    await acting.Task;
+                    throw new InvalidOperationException("boom");
+                },
+                running: () => { }),
             TestContext.Current.CancellationToken);
 
         var exit = controller.ExitAsync();
@@ -888,6 +930,185 @@ public sealed class ShellControllerTests
         await launch;
 
         Assert.True(ran);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task The_exit_runs_the_named_parts_in_order_after_the_activations_and_before_the_shutdown()
+    {
+        var log = new List<string>();
+        Func<Task> Logged(string name) => Part(() =>
+        {
+            var shellReleased = _tray.DisposeCount == 1 && _single.DisposeCount == 1;
+            log.Add(shellReleased ? $"{name} (shell released)" : name);
+            if (_lifetime.ShutdownCount > 0)
+            {
+                log.Add("shut down already");
+            }
+        });
+        var controller = await LaunchedAsync(new ShellExitParts
+        {
+            PrepareWindow = Logged("prepare window"),
+            StopHost = Logged("stop host"),
+            StopSystemHooks = Logged("stop system hooks"),
+            ReleaseHotkey = Logged("release hotkey"),
+            DisposeHost = Logged("dispose host"),
+        });
+        var acting = new TaskCompletionSource();
+        var activation = controller.RunActivationAsync(async _ =>
+        {
+            await acting.Task;
+            log.Add("activation");
+        });
+
+        var exit = controller.ExitAsync();
+        acting.SetResult();
+        await exit;
+        await activation;
+
+        Assert.Equal(
+            ["activation", "prepare window", "stop host", "stop system hooks", "release hotkey",
+                "dispose host (shell released)"],
+            log);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task Every_exit_part_runs_although_each_one_fails()
+    {
+        var ran = new List<string>();
+        Func<Task> Failing(string name) => () =>
+        {
+            ran.Add(name);
+            throw new InvalidOperationException(name);
+        };
+        var controller = await LaunchedAsync(new ShellExitParts
+        {
+            PrepareWindow = async () =>
+            {
+                await Task.Yield();
+                ran.Add("prepare window");
+                throw new InvalidOperationException("prepare window");
+            },
+            StopHost = Failing("stop host"),
+            StopSystemHooks = Failing("stop system hooks"),
+            ReleaseHotkey = Failing("release hotkey"),
+            DisposeHost = Failing("dispose host"),
+        });
+
+        await controller.ExitAsync();
+
+        Assert.Equal(["prepare window", "stop host", "stop system hooks", "release hotkey", "dispose host"], ran);
+        Assert.Equal(1, _tray.DisposeCount);
+        Assert.Equal(1, _single.DisposeCount);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task An_exit_started_from_the_system_hooks_during_the_launch_still_runs_every_part()
+    {
+        var controller = Create();
+        var ran = new List<string>();
+        var running = 0;
+
+        // Session end arrives as soon as its hook is in place.
+        await controller.LaunchAsync(
+            Launch(
+                Parts(
+                    Part(() => ran.Add("prepare window")),
+                    Part(() => ran.Add("stop host")),
+                    Part(() => ran.Add("stop system hooks")),
+                    Part(() => ran.Add("release hotkey")),
+                    Part(() => ran.Add("dispose host"))),
+                running: () => running++,
+                startSystemHooks: () => controller.Exit()),
+            TestContext.Current.CancellationToken);
+        await controller.ExitAsync();
+
+        Assert.Equal(["prepare window", "stop host", "stop system hooks", "release hotkey", "dispose host"], ran);
+        Assert.Equal(0, running);
+        Assert.False(_window.IsVisible);
+        Assert.Equal(1, _tray.DisposeCount);
+        Assert.Equal(1, _single.DisposeCount);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task The_launch_starts_the_system_hooks_before_the_tray_and_the_window()
+    {
+        var controller = Create();
+        bool? trayShown = null;
+        bool? windowShown = null;
+
+        await controller.LaunchAsync(
+            Launch(startSystemHooks: () =>
+            {
+                trayShown = _tray.Shown;
+                windowShown = _window.IsVisible;
+            }),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(trayShown);
+        Assert.False(windowShown);
+        Assert.True(_tray.Shown);
+        Assert.True(_window.IsVisible);
+    }
+
+    [Fact]
+    public async Task The_tray_and_the_guard_are_released_once()
+    {
+        var controller = await LaunchedAsync(Parts());
+
+        _tray.ClickExit();
+        await controller.ExitAsync();
+        controller.Dispose();
+
+        Assert.Equal(1, _tray.DisposeCount);
+        Assert.Equal(1, _single.DisposeCount);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task Parts_handed_twice_are_rejected_and_the_first_parts_run_once()
+    {
+        var first = 0;
+        var second = 0;
+        var hooksStarted = 0;
+        var controller = Create();
+        await controller.LaunchAsync(
+            Launch(Parts(Part(() => first++)), startSystemHooks: () => hooksStarted++),
+            TestContext.Current.CancellationToken);
+
+        var again = await Record.ExceptionAsync(() => controller.LaunchAsync(
+            Launch(Parts(Part(() => second++)), startSystemHooks: () => hooksStarted++),
+            TestContext.Current.CancellationToken));
+        await controller.ExitAsync();
+
+        Assert.IsType<InvalidOperationException>(again);
+        Assert.Equal(1, first);
+        Assert.Equal(0, second);
+        Assert.Equal(1, hooksStarted);
+        Assert.Equal(1, _tray.DisposeCount);
+        Assert.Equal(1, _lifetime.ShutdownCount);
+    }
+
+    [Fact]
+    public async Task Parts_handed_after_the_exit_started_are_rejected_and_never_run()
+    {
+        var controller = Create();
+        var ran = 0;
+        var hooksStarted = 0;
+        var exit = controller.ExitAsync();
+
+        var late = await Record.ExceptionAsync(() => controller.LaunchAsync(
+            Launch(Parts(Part(() => ran++)), startSystemHooks: () => hooksStarted++),
+            TestContext.Current.CancellationToken));
+        await exit;
+
+        Assert.IsType<InvalidOperationException>(late);
+        Assert.Equal(0, ran);
+        Assert.Equal(0, hooksStarted);
+        Assert.False(_tray.Shown);
         Assert.Equal(1, _lifetime.ShutdownCount);
     }
 

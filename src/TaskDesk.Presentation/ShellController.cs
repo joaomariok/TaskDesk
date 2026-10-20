@@ -6,7 +6,8 @@ using TaskDesk.Core.Shell;
 namespace TaskDesk.Presentation;
 
 /// <summary>
-/// Ties the tray icon, main window, single-instance guard and auto-start together, stops the update checks
+/// Ties the tray icon, main window, single-instance guard and auto-start together, runs the exit parts in a fixed
+/// order (<see cref="ShellExitParts"/>), stops the update checks
 /// (<see cref="UpdateScheduler"/>) on exit, and restarts into a downloaded update through <see cref="IAppUpdates"/>
 /// after the normal exit.
 /// </summary>
@@ -25,7 +26,8 @@ public sealed class ShellController(
 
     private readonly ILogger _logger = logger ?? NullLogger<ShellController>.Instance;
     private readonly UpdateScheduler? _updateChecks = updateChecks;
-    private readonly List<Func<Task>> _exitSteps = [];
+    private ShellExitParts? _exitParts;
+    private bool _launched;
 
     // Never disposed: a Reminder activation may still read its token after the exit, and it holds no timer.
     private readonly CancellationTokenSource _exitStarted = new();
@@ -52,7 +54,7 @@ public sealed class ShellController(
     public event Action<NotificationActivation>? ActivationRequested;
 
     /// <summary>
-    /// Sets everything up in the process that owns the single-instance guard: <see cref="LaunchGate"/> has claimed
+    /// Sets everything up in the process that owns the single-instance guard (<see cref="LaunchAsync"/> calls it): <see cref="LaunchGate"/> has claimed
     /// it and forwarded any launch that found another copy, so this only confirms ownership
     /// (<see cref="ISingleInstance.TryAcquire"/> keeps its first answer) and throws when the guard is held
     /// elsewhere. Listens for later launches, then sets up the Run key, the tray and the window. Returns true.
@@ -91,31 +93,45 @@ public sealed class ShellController(
     public CancellationToken ExitStarted => _exitStarted.Token;
 
     /// <summary>
-    /// The end of start-up: <see cref="StartAsync"/>, then the Reminder activation that launched the app, then
-    /// <paramref name="running"/> (work that runs until the exit, such as the Reminder checks). From
-    /// <see cref="StartAsync"/> on, the tray's Exit and session end can start the exit, which disposes what the
-    /// later steps use. The activation gets <see cref="ExitStarted"/>, and the exit waits for it before its steps,
-    /// so a Mark done or Snooze that launched the app is kept. A failing activation is logged and start-up carries
-    /// on. Nothing runs after an exit has started. Returns true.
+    /// Start-up's last step. Records the exit parts, starts the system hooks (session end, resume), then
+    /// <see cref="StartAsync"/> (the tray and the window), then the Reminder activation that launched the app, then
+    /// the work that runs until the exit (such as the Reminder checks). From the hooks on, session end and the tray's
+    /// Exit can start the exit, which runs every part. The activation gets <see cref="ExitStarted"/>, and the exit
+    /// waits for it before its parts, so a Mark done or Snooze that launched the app is kept. A failing activation
+    /// is logged and start-up carries on. Nothing more starts once an exit has started. Handing the parts twice, or
+    /// after the exit started, throws <see cref="InvalidOperationException"/>. Returns true.
     /// </summary>
-    public async Task<bool> LaunchAsync(
-        bool minimized,
-        string exePath,
-        Func<CancellationToken, Task>? launchActivation,
-        Action running,
-        CancellationToken cancellationToken = default)
+    public async Task<bool> LaunchAsync(ShellLaunch launch, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(running);
-        await StartAsync(minimized, exePath, cancellationToken);
-
-        if (launchActivation is not null && !_exiting)
+        ArgumentNullException.ThrowIfNull(launch);
+        if (_exiting)
         {
-            await RunActivationAsync(launchActivation);
+            throw new InvalidOperationException("The exit has already started; hand the exit parts before it can start.");
+        }
+
+        if (_launched)
+        {
+            throw new InvalidOperationException("The exit parts have already been handed; the shell launches once.");
+        }
+
+        _launched = true;
+        _exitParts = launch.ExitParts;
+        launch.StartSystemHooks();
+        if (_exiting)
+        {
+            return true;
+        }
+
+        await StartAsync(launch.Minimized, launch.ExePath, cancellationToken);
+
+        if (launch.Activation is not null && !_exiting)
+        {
+            await RunActivationAsync(launch.Activation);
         }
 
         if (!_exiting)
         {
-            running();
+            launch.Running();
         }
 
         return true;
@@ -123,8 +139,8 @@ public sealed class ShellController(
 
     /// <summary>
     /// Runs a Reminder activation (the toast that launched the app, or a click on a toast or balloon in the running
-    /// app) with <see cref="ExitStarted"/>. The exit waits for every activation still running before its steps, so
-    /// a Mark done or Snooze clicked as the exit starts is kept. One that arrives once the exit steps have started
+    /// app) with <see cref="ExitStarted"/>. The exit waits for every activation still running before its parts, so
+    /// a Mark done or Snooze clicked as the exit starts is kept. One that arrives once the exit parts have started
     /// is dropped: they stop and dispose what it would write to. Callable from any thread; never throws.
     /// </summary>
     public Task RunActivationAsync(Func<CancellationToken, Task> activation)
@@ -215,28 +231,13 @@ public sealed class ShellController(
         return true;
     }
 
-    /// <summary>
-    /// Adds work that must finish before the app shuts down (for example flushing a pending save, then
-    /// stopping the host). Steps run in the order they were added. Every step must be added before anything
-    /// can start the exit: a step added once the exit has started is rejected, never silently skipped.
-    /// </summary>
-    public void AddExitStep(Func<Task> step)
-    {
-        if (_exiting)
-        {
-            throw new InvalidOperationException("The exit has already started; add exit steps before it can start.");
-        }
-
-        _exitSteps.Add(step);
-    }
-
     /// <summary>Starts the restart without waiting for it; see <see cref="RestartToUpdateAsync"/>.</summary>
     public void RestartToUpdate() => _ = RestartToUpdateAsync();
 
     /// <summary>
-    /// Runs the exit (see <see cref="ExitAsync"/>: the Reminder activations, then every exit step, which saves the
+    /// Runs the exit (see <see cref="ExitAsync"/>: the Reminder activations, then the exit parts, which save the
     /// pending edit), then applies the downloaded update, which ends the process and starts the new version. The
-    /// exit waits up to <see cref="UpdateScheduler.StopTimeout"/> for a running update check, or until its steps end
+    /// exit waits up to <see cref="UpdateScheduler.StopTimeout"/> for a running update check, or until its parts end
     /// if they take longer; when one still runs, it skips the apply and starts the current version again, and the
     /// update applies at the next normal start. Once an exit has started it only returns that exit. When applying
     /// fails, the app shuts down as usual.
@@ -261,9 +262,11 @@ public sealed class ShellController(
 
     /// <summary>
     /// Stops the update checks (a running download is cancelled, not waited for), waits for the Reminder activations
-    /// still running (see <see cref="RunActivationAsync"/>), then runs every exit step in order, waiting for each,
-    /// then disposes the tray and the single-instance guard and shuts the app down. A failing step is logged and the
-    /// exit carries on. Calling it again returns the exit already under way.
+    /// still running (see <see cref="RunActivationAsync"/>), then runs the exit parts handed to
+    /// <see cref="LaunchAsync"/>, waiting for each: prepare the window, stop the host, stop the system hooks, release
+    /// the hotkey, release the tray and the single-instance guard (this shell), dispose the host. Then comes Restart
+    /// to update, if one was asked for, and the shutdown. A failing part is logged and the exit carries on. Calling
+    /// it again returns the exit already under way.
     /// </summary>
     public Task ExitAsync() => _exit ??= RunExitAsync();
 
@@ -304,20 +307,21 @@ public sealed class ShellController(
         // before the flush and the host stop.
         await WaitForActivationsAsync();
 
-        foreach (var step in _exitSteps)
+        if (_exitParts is { } parts)
         {
-            try
-            {
-                await step();
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                _logger.LogError(ex, "An exit step failed; exiting anyway");
-            }
+            await RunPartAsync("prepare the window", parts.PrepareWindow);
+            await RunPartAsync("stop the host", parts.StopHost);
+            await RunPartAsync("stop the system hooks", parts.StopSystemHooks);
+            await RunPartAsync("release the hotkey", parts.ReleaseHotkey);
         }
 
         // Releases the single-instance guard, so the restarted process becomes the running copy.
         Dispose();
+        if (_exitParts is { } last)
+        {
+            await RunPartAsync("dispose the host", last.DisposeHost);
+        }
+
         if (_restartToUpdate)
         {
             await RestartAsync(checksEnded);
@@ -326,11 +330,23 @@ public sealed class ShellController(
         lifetime.Shutdown();
     }
 
+    private async Task RunPartAsync(string name, Func<Task> part)
+    {
+        try
+        {
+            await part();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogError(ex, "The exit part \"{Part}\" failed; exiting anyway", name);
+        }
+    }
+
     // Restart to update, after the exit. Either restart opens the window (a restart the owner asked for is not a
     // logon start) and carries LaunchGate.RestartedFlag, so the restarted process never applies at start.
     private async Task RestartAsync(Task<bool> checksEnded)
     {
-        // The timed wait may have given up while the exit steps still ran; a check that ended since then is done.
+        // The timed wait may have given up while the exit parts still ran; a check that ended since then is done.
         if (!await checksEnded && _updateChecks is { CurrentCheck.IsCompleted: false })
         {
             // A download may still write to the packages folder: start this version again, so Reminders keep

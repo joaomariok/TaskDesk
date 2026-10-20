@@ -191,9 +191,26 @@ public sealed class ReminderActivationTests
             new JsonShellSettingsStore(Path.Combine(db.Paths.DataDirectory, "settings.json")),
             new AutoStartService(new FakeRunKey(), Sandbox), new FakeShutdown());
         bool? doneAtFlush = null;
-        // The first exit step: the flush, then the host stop and dispose, which the Mark done must not outlive.
-        shell.AddExitStep(async () =>
-            doneAtFlush = (await db.QueryAsync(c => c.Tasks.Where(t => t.Id == taskId))).Single().IsCompleted);
+        Func<Task> noPart = () => Task.CompletedTask;
+        // The first exit part: the flush, then the host stop and dispose, which the Mark done must not outlive.
+        await shell.LaunchAsync(
+            new ShellLaunch
+            {
+                Minimized = true,
+                ExePath = "TaskDesk.App.exe",
+                ExitParts = new ShellExitParts
+                {
+                    PrepareWindow = async () => doneAtFlush =
+                        (await db.QueryAsync(c => c.Tasks.Where(t => t.Id == taskId))).Single().IsCompleted,
+                    StopHost = noPart,
+                    StopSystemHooks = noPart,
+                    ReleaseHotkey = noPart,
+                    DisposeHost = noPart,
+                },
+                StartSystemHooks = () => { },
+                Running = () => { },
+            },
+            Ct);
         var (window, _, router) = await OpenAsync(db, shell: shell);
         try
         {

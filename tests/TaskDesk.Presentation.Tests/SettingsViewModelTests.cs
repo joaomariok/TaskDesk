@@ -242,11 +242,28 @@ public sealed class SettingsViewModelTests
             new FakeTray(), new FakeWindow(), new FakeSingleInstance(), _store, new AutoStartService(_runKey), lifetime,
             updates: updates);
         var restartsDuringExit = -1;
-        shell.AddExitStep(() =>
-        {
-            restartsDuringExit = updates.Restarts;
-            return Task.CompletedTask;
-        });
+        Func<Task> noPart = () => Task.CompletedTask;
+        await shell.LaunchAsync(
+            new ShellLaunch
+            {
+                Minimized = true,
+                ExePath = @"C:\TaskDesk\TaskDesk.exe",
+                ExitParts = new ShellExitParts
+                {
+                    PrepareWindow = () =>
+                    {
+                        restartsDuringExit = updates.Restarts;
+                        return Task.CompletedTask;
+                    },
+                    StopHost = noPart,
+                    StopSystemHooks = noPart,
+                    ReleaseHotkey = noPart,
+                    DisposeHost = noPart,
+                },
+                StartSystemHooks = () => { },
+                Running = () => { },
+            },
+            TestContext.Current.CancellationToken);
         var vm = CreateWithUpdates(scheduler, shell.RestartToUpdateAsync);
         scheduler.Start();
         await scheduler.CurrentCheck;
