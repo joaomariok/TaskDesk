@@ -6,26 +6,16 @@ using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Presentation;
 
-// The Reminder and Snooze of the selected Task, the Reminder notification actions, and the fallback banner.
+// The Reminders and Snooze of the selected Task, the Reminder notification actions, and the fallback banner.
 public sealed partial class MainViewModel
 {
-    /// <summary>The local date of the selected Task's Reminder; null when it has none.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasDetailReminder))]
-    private DateTime? _detailReminderDate;
+    private ReminderEditorViewModel? _reminderEditor;
 
-    /// <summary>The Reminder time only applies once the Task has a Reminder date, so the pane enables it then.</summary>
-    public bool HasDetailReminder => DetailReminderDate is not null;
+    /// <summary>The selected Task's Reminders, the one that fires first first.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<ReminderRowViewModel> DetailReminders { get; } = [];
 
-    /// <summary>
-    /// The local time of the selected Task's Reminder as a time of day, bindable to a time picker's selected
-    /// time; null without a Reminder date. A date-only Reminder shows the "Default reminder time" setting
-    /// (<see cref="ReminderCalculator.DefaultReminderTime"/> when no settings are available), which is the time
-    /// it fires at.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ClearDetailReminderTimeCommand))]
-    private TimeSpan? _detailReminderTime;
+    /// <summary>The Reminder flyout, opened by "Add reminder" or a click on a row.</summary>
+    public ReminderEditorViewModel ReminderEditor => _reminderEditor ??= new(DefaultReminderTime, SaveReminder);
 
     /// <summary>"Snoozed until ..." in local time for the selected Task; null when it is not snoozed.</summary>
     [ObservableProperty]
@@ -47,22 +37,104 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private void DismissNotificationBanner() => NotificationBanner = null;
 
-    // Called while _loadingDetail is set, so these assignments do not save.
     private void LoadReminderDetail(TaskItem? task)
     {
-        if (task?.ReminderUtc is { } reminderUtc)
+        ReminderEditor.CancelCommand.Execute(null);
+        LoadReminderRows(task);
+        LoadSnoozeDetail(task);
+    }
+
+    private void LoadReminderRows(TaskItem? task)
+    {
+        DetailReminders.Clear();
+        if (task is null)
         {
-            var (date, time) = ReminderCalculator.ToLocal(reminderUtc, _clock.LocalTimeZone);
-            DetailReminderDate = date.ToDateTime(TimeOnly.MinValue);
-            DetailReminderTime = time.ToTimeSpan();
-        }
-        else
-        {
-            DetailReminderDate = null;
-            DetailReminderTime = null;
+            return;
         }
 
-        LoadSnoozeDetail(task);
+        var now = _clock.GetUtcNow().UtcDateTime;
+        var today = DueCalculator.LocalToday(_clock.GetUtcNow(), _clock.LocalTimeZone);
+        var rows = task.Reminders
+            .Select(r => (Reminder: r, At: ReminderCalculator.MomentOf(r)))
+            .Where(r => r.At is not null)
+            .OrderBy(r => r.At)
+            .ThenBy(r => r.Reminder.Id);
+        foreach (var (reminder, at) in rows)
+        {
+            var (date, time) = ReminderCalculator.ToLocal(at!.Value, _clock.LocalTimeZone);
+            DetailReminders.Add(new ReminderRowViewModel(
+                reminder.Id, at.Value, DueDisplay.Format(date, time, today), at.Value <= now, EditReminder,
+                RemoveReminderAsync));
+        }
+    }
+
+    /// <summary>Opens the Reminder flyout on a new Reminder ("Add reminder").</summary>
+    [RelayCommand]
+    private void AddReminder() => ReminderEditor.Open(null, null, null);
+
+    private void EditReminder(ReminderRowViewModel row)
+    {
+        var (date, time) = ReminderCalculator.ToLocal(row.FiresAtUtc, _clock.LocalTimeZone);
+        ReminderEditor.Open(row.Id, date.ToDateTime(TimeOnly.MinValue), time.ToTimeSpan());
+    }
+
+    // The flyout's Save: false keeps it open with the error under Reminders.
+    private bool SaveReminder(ReminderEditorViewModel editor)
+    {
+        if (DetailTask is not { } row)
+        {
+            return false;
+        }
+
+        if (editor.Date is not { } day)
+        {
+            ShowFieldError(
+                ErrorPlace.Reminder,
+                editor.Time is null ? "A Reminder needs a date." : "A Reminder time needs a Reminder date.");
+            return false;
+        }
+
+        // The default time is read on every save, so a change in Settings applies without a restart.
+        TimeOnly? time = editor.Time is { } picked ? TimeOnly.FromTimeSpan(picked) : null;
+        var value = ReminderValue.Fixed(ReminderCalculator.ToUtc(
+            DateOnly.FromDateTime(day), time, _clock.LocalTimeZone, DefaultReminderTime()));
+        var editingId = editor.EditingId;
+        _ = Saves.Enqueue(
+            () => StoreReminderAsync(row, () => editingId is { } id
+                ? Reminders.UpdateReminderAsync(id, value)
+                : Reminders.AddReminderAsync(row.Id, value)),
+            accepted: () => ErrorMessage = null);
+        return true;
+    }
+
+    private Task RemoveReminderAsync(ReminderRowViewModel reminder)
+    {
+        if (DetailTask is not { } row)
+        {
+            return Task.CompletedTask;
+        }
+
+        return Saves.Enqueue(
+            () => StoreReminderAsync(row, () => Reminders.RemoveReminderAsync(reminder.Id)),
+            accepted: () => ErrorMessage = null) ?? Task.CompletedTask;
+    }
+
+    // A refused Reminder (a duplicate) shows its reason under Reminders and stores nothing.
+    private async Task<bool> StoreReminderAsync(TaskRowViewModel row, Func<Task<TaskItem>> store)
+    {
+        TaskItem task;
+        try
+        {
+            task = await store();
+        }
+        catch (ArgumentException ex)
+        {
+            ShowFieldError(ErrorPlace.Reminder, ex.Message);
+            return false;
+        }
+
+        ApplyReminderChange(row, task);
+        return true;
     }
 
     private void LoadSnoozeDetail(TaskItem? task)
@@ -128,90 +200,9 @@ public sealed partial class MainViewModel
         row.Apply(task);
         if (DetailTask == row)
         {
+            LoadReminderRows(task);
             LoadSnoozeDetail(task);
         }
-    }
-
-    partial void OnDetailReminderDateChanged(DateTime? value)
-    {
-        if (_loadingDetail)
-        {
-            return;
-        }
-
-        if (value is null && DetailReminderTime is not null)
-        {
-            // Clearing the date clears the whole Reminder.
-            _loadingDetail = true;
-            DetailReminderTime = null;
-            _loadingDetail = false;
-        }
-
-        ScheduleReminderSave();
-    }
-
-    partial void OnDetailReminderTimeChanged(TimeSpan? value) => ScheduleReminderSave();
-
-    /// <summary>
-    /// Clears the Reminder time (the pane's "Clear Reminder time" button): the Reminder falls back to the
-    /// default Reminder time, which the pane then shows. Disabled while the pane already shows the default time,
-    /// where clearing would change nothing.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanClearDetailReminderTime))]
-    private void ClearDetailReminderTime() => DetailReminderTime = null;
-
-    private bool CanClearDetailReminderTime() =>
-        DetailReminderTime is { } shown && shown != DefaultReminderTime().ToTimeSpan();
-
-    private void ScheduleReminderSave()
-    {
-        if (_loadingDetail || DetailTask is not { } row)
-        {
-            return;
-        }
-
-        TimeOnly? time = DetailReminderTime is { } picked ? TimeOnly.FromTimeSpan(picked) : null;
-        DateTime? reminderUtc = null;
-        TimeOnly? firesAt = null;
-        if (DetailReminderDate is { } day)
-        {
-            // Read on every save, so a change in Settings applies without a restart.
-            var defaultTime = DefaultReminderTime();
-            reminderUtc = ReminderCalculator.ToUtc(
-                DateOnly.FromDateTime(day), time, _clock.LocalTimeZone, defaultTime);
-            if (time is null)
-            {
-                firesAt = defaultTime;
-            }
-        }
-        else if (time is not null)
-        {
-            // The pane can't reach this (its time picker needs a date, and clearing the date clears the time);
-            // it guards callers that set the time directly.
-            ShowFieldError(ErrorPlace.Reminder, "A Reminder time needs a Reminder date.");
-            return;
-        }
-
-        _ = Saves.Enqueue(
-            () => StoreReminderAsync(row, reminderUtc),
-            accepted: () =>
-            {
-                if (firesAt is { } shown)
-                {
-                    // Show the time a date-only Reminder fires at.
-                    _loadingDetail = true;
-                    DetailReminderTime = shown.ToTimeSpan();
-                    _loadingDetail = false;
-                }
-
-                ErrorMessage = null;
-            });
-    }
-
-    private async Task<bool> StoreReminderAsync(TaskRowViewModel row, DateTime? reminderUtc)
-    {
-        ApplyReminderChange(row, await Reminders.SetReminderAsync(row.Id, reminderUtc));
-        return true;
     }
 
     private TimeOnly DefaultReminderTime() =>

@@ -21,6 +21,13 @@
             <Setter Property="MinHeight" Value="28" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+        <!-- A Reminder row: its text as a quiet, full-width button that opens the Reminder flyout. -->
+        <Style x:Key="ReminderRowButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
         <!-- The row's Tag chip, with room on the right for its remove button. -->
         <Style x:Key="DetailTagChip" TargetType="Border">
             <Setter Property="CornerRadius" Value="10" />
@@ -227,34 +234,105 @@
                                Text="{x:Bind ViewModel.DueError, Mode=OneWay}"
                                Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.DueError), Mode=OneWay, FallbackValue=Collapsed}" />
 
-                    <!-- Reminder: a calendar date, then an optional time picked once the date is set; without a time
-                         the picker shows the default Reminder time. -->
-                    <TextBlock Text="Reminder" Style="{StaticResource FieldLabel}" />
-                    <CalendarDatePicker x:Name="ReminderDatePicker" HorizontalAlignment="Stretch"
-                                        Margin="{StaticResource FieldMargin}"
-                                        AutomationProperties.Name="Reminder date"
-                                        Date="{x:Bind local:DetailPane.ToPickerDate(ViewModel.DetailReminderDate), BindBack=SetReminderDate, Mode=TwoWay, FallbackValue={x:Null}}" />
-                    <TextBlock Text="Reminder time" Style="{StaticResource FieldLabel}" />
-                    <Grid Margin="{StaticResource FieldMargin}" ColumnSpacing="4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TimePicker x:Name="ReminderTimePicker" HorizontalAlignment="Stretch" MinWidth="0"
-                                    MinuteIncrement="1"
-                                    AutomationProperties.Name="Reminder time"
-                                    AutomationProperties.AutomationId="ReminderTimePicker"
-                                    AutomationProperties.HelpText="Needs a Reminder date; clearing it uses the default Reminder time"
-                                    IsEnabled="{x:Bind ViewModel.HasDetailReminder, Mode=OneWay}"
-                                    SelectedTime="{x:Bind ViewModel.DetailReminderTime, Mode=TwoWay}" />
-                        <Button x:Name="ClearReminderTimeButton" Grid.Column="1" Style="{StaticResource SmallIconButton}"
-                                ToolTipService.ToolTip="Clear Reminder time"
-                                AutomationProperties.Name="Clear Reminder time"
-                                AutomationProperties.AutomationId="ClearReminderTimeButton"
-                                Command="{x:Bind ViewModel.ClearDetailReminderTimeCommand, Mode=OneTime}">
-                            <FontIcon Glyph="&#xE711;" FontSize="12" />
+                    <!-- Reminders: one row per Reminder, the first to fire first. A click on a row opens the flyout
+                         on it, its × removes it, and "Add reminder" opens the flyout on a new one. -->
+                    <StackPanel x:Name="ReminderSection">
+                        <FlyoutBase.AttachedFlyout>
+                            <Flyout x:Name="ReminderFlyout" Placement="Bottom" Opened="OnReminderFlyoutOpened"
+                                    Closed="OnReminderFlyoutClosed">
+                                <StackPanel x:Name="ReminderEditorPanel" MinWidth="240" Spacing="4"
+                                            AutomationProperties.Name="Reminder editor">
+                                    <TextBlock Style="{StaticResource BodyStrongText}"
+                                               Text="{x:Bind ReminderEditor.Heading, Mode=OneWay}" />
+                                    <TextBlock Text="Date" Style="{StaticResource FieldLabel}" />
+                                    <CalendarDatePicker x:Name="ReminderDatePicker" HorizontalAlignment="Stretch"
+                                                        AutomationProperties.Name="Reminder date"
+                                                        AutomationProperties.AutomationId="ReminderDatePicker"
+                                                        Date="{x:Bind local:DetailPane.ToPickerDate(ReminderEditor.Date), BindBack=SetReminderDate, Mode=TwoWay, FallbackValue={x:Null}}" />
+                                    <!-- The time is optional: left empty, the Reminder fires at the default
+                                         Reminder time. -->
+                                    <TextBlock Text="Time (optional)" Style="{StaticResource FieldLabel}" />
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TimePicker x:Name="ReminderTimePicker" HorizontalAlignment="Stretch" MinWidth="0"
+                                                    MinuteIncrement="1"
+                                                    AutomationProperties.Name="Reminder time"
+                                                    AutomationProperties.AutomationId="ReminderTimePicker"
+                                                    AutomationProperties.HelpText="Needs a date; left empty, the Reminder fires at the default Reminder time"
+                                                    IsEnabled="{x:Bind ReminderEditor.HasDate, Mode=OneWay}"
+                                                    SelectedTime="{x:Bind ReminderEditor.Time, Mode=TwoWay}" />
+                                        <Button x:Name="ClearReminderTimeButton" Grid.Column="1"
+                                                Style="{StaticResource SmallIconButton}"
+                                                ToolTipService.ToolTip="Clear Reminder time"
+                                                AutomationProperties.Name="Clear Reminder time"
+                                                AutomationProperties.AutomationId="ClearReminderTimeButton"
+                                                Command="{x:Bind ReminderEditor.ClearTimeCommand, Mode=OneTime}">
+                                            <FontIcon Glyph="&#xE711;" FontSize="12" />
+                                        </Button>
+                                    </Grid>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8"
+                                                Margin="0,8,0,0">
+                                        <Button x:Name="CancelReminderButton" Content="Cancel"
+                                                AutomationProperties.Name="Cancel"
+                                                AutomationProperties.AutomationId="CancelReminderButton"
+                                                Command="{x:Bind ReminderEditor.CancelCommand, Mode=OneTime}" />
+                                        <Button x:Name="SaveReminderButton" Content="Save"
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                AutomationProperties.Name="Save reminder"
+                                                AutomationProperties.AutomationId="SaveReminderButton"
+                                                Command="{x:Bind ReminderEditor.SaveCommand, Mode=OneTime}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Flyout>
+                        </FlyoutBase.AttachedFlyout>
+                        <TextBlock Text="Reminders" Style="{StaticResource FieldLabel}" />
+                        <ItemsControl x:Name="ReminderList" IsTabStop="False"
+                                      AutomationProperties.Name="Reminders"
+                                      AutomationProperties.AutomationId="ReminderList"
+                                      ItemsSource="{x:Bind ViewModel.DetailReminders, Mode=OneTime}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="presentation:ReminderRowViewModel">
+                                    <Grid Margin="0,2" ColumnSpacing="2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button Style="{StaticResource ReminderRowButton}"
+                                                AutomationProperties.Name="{x:Bind AccessibleName, Mode=OneTime}"
+                                                ToolTipService.ToolTip="Edit reminder"
+                                                Click="OnEditReminderClick">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Style="{StaticResource BodyText}" TextWrapping="NoWrap"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Text="{x:Bind Text, Mode=OneTime}" />
+                                                <TextBlock Style="{StaticResource SecondaryCaptionText}"
+                                                           VerticalAlignment="Center" Text="past"
+                                                           Visibility="{x:Bind IsPast, Mode=OneTime}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Grid.Column="1" Style="{StaticResource SmallIconButton}"
+                                                ToolTipService.ToolTip="Remove reminder"
+                                                AutomationProperties.Name="{x:Bind RemoveName, Mode=OneTime}"
+                                                Command="{x:Bind RemoveCommand, Mode=OneTime}">
+                                            <FontIcon Glyph="&#xE711;" FontSize="12" />
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button x:Name="AddReminderButton" Margin="{StaticResource FieldMargin}"
+                                AutomationProperties.Name="Add reminder"
+                                AutomationProperties.AutomationId="AddReminderButton"
+                                Click="OnAddReminderClick">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE710;" FontSize="12" />
+                                <TextBlock Text="Add reminder" />
+                            </StackPanel>
                         </Button>
-                    </Grid>
+                    </StackPanel>
                     <TextBlock x:Name="ReminderErrorText" Style="{StaticResource FieldErrorText}"
                                Text="{x:Bind ViewModel.ReminderError, Mode=OneWay}"
                                Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.ReminderError), Mode=OneWay, FallbackValue=Collapsed}" />

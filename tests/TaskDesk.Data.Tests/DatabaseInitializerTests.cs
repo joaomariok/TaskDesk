@@ -111,4 +111,67 @@ public class DatabaseInitializerTests
         due = Assert.Single(await reminders.ListDueAsync(ct));
         Assert.Equal(("armed future", now.AddHours(1)), (due.Title, due.DueAtUtc));
     }
+
+    // ---- Ticket 116: each Reminder becomes a row owned by its Task ----
+
+    private static async Task<Guid> InsertNotifiedTaskAsync(
+        TaskDeskDbContext context, Guid listId, string title, DateTime? reminder, DateTime? notifiedThrough)
+    {
+        var id = Guid.NewGuid();
+        var created = Sql(new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
+        await context.Database.ExecuteSqlAsync(
+            $"""
+            INSERT INTO Tasks (Id, ListId, Title, Priority, IsCompleted, SortOrder, CreatedUtc, UpdatedUtc,
+                ReminderUtc, NotifiedThroughUtc)
+            VALUES ({id.ToString().ToUpperInvariant()}, {listId.ToString().ToUpperInvariant()}, {title},
+                0, 0, 1, {created}, {created}, NULLIF({Sql(reminder)}, ''), NULLIF({Sql(notifiedThrough)}, ''))
+            """,
+            TestContext.Current.CancellationToken);
+        return id;
+    }
+
+    [Fact]
+    public async Task Upgrading_turns_each_Reminder_into_one_Fixed_Reminder_and_changes_nothing_about_what_fires()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var db = new TempDatabase();
+        db.Paths.EnsureDirectories();
+        var now = db.Clock.GetUtcNow().UtcDateTime;
+        Guid fired, armedPast, armedFuture, plain;
+        await using (var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(ct))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync("20261020230021_Ticket115_NotifiedThrough", ct);
+            var listId = Guid.NewGuid();
+            await context.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO Lists (Id, Name, SortOrder, IsDefault, CreatedUtc)
+                VALUES ({listId.ToString().ToUpperInvariant()}, 'Inbox', 0, 1, {Sql(now)})
+                """,
+                ct);
+            fired = await InsertNotifiedTaskAsync(context, listId, "fired", now.AddHours(-1), now.AddHours(-1));
+            armedPast = await InsertNotifiedTaskAsync(context, listId, "armed past", now.AddHours(-2), now.AddHours(-3));
+            armedFuture = await InsertNotifiedTaskAsync(context, listId, "armed future", now.AddHours(1), now.AddHours(-3));
+            plain = await InsertNotifiedTaskAsync(context, listId, "no reminder", null, null);
+        }
+
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
+
+        var tasks = (await db.Get<TaskDesk.Core.Tasks.ITaskService>().ListDefaultListTasksAsync(ct)).ToDictionary(t => t.Id);
+        Assert.Equal(
+            [(ReminderKind.Fixed, (DateTime?)now.AddHours(-1))],
+            tasks[fired].Reminders.Select(r => (r.Kind, r.AtUtc)));
+        Assert.Equal([(DateTime?)now.AddHours(-2)], tasks[armedPast].Reminders.Select(r => r.AtUtc));
+        Assert.Equal([(DateTime?)now.AddHours(1)], tasks[armedFuture].Reminders.Select(r => r.AtUtc));
+        Assert.Empty(tasks[plain].Reminders);
+        Assert.Equal(3, (await db.QueryAsync(c => c.Reminders)).Count);
+
+        var reminders = db.Get<IReminderService>();
+        var due = Assert.Single(await reminders.ListDueAsync(ct));
+        Assert.Equal((armedPast, now.AddHours(-2)), (due.TaskId, due.DueAtUtc));
+        Assert.True(await reminders.TryMarkFiredAsync(due.TaskId, due.DueAtUtc, ct));
+
+        db.Clock.Advance(TimeSpan.FromHours(1));
+        due = Assert.Single(await reminders.ListDueAsync(ct));
+        Assert.Equal((armedFuture, now.AddHours(1)), (due.TaskId, due.DueAtUtc));
+    }
 }

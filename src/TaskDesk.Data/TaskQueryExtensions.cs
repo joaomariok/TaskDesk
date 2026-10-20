@@ -7,11 +7,13 @@ namespace TaskDesk.Data;
 internal static class TaskQueryExtensions
 {
     /// <summary>
-    /// Loads a Task's Tags ordered by normalized name and its Subtasks ordered by sort order. Recurrence is an
-    /// owned type stored in the Tasks table, so it loads with the Task and needs no Include.
+    /// Loads a Task's Tags ordered by normalized name, its Subtasks ordered by sort order and its Reminders ordered
+    /// by the moment they fire. Recurrence is an owned type stored in the Tasks table, so it loads with the Task
+    /// and needs no Include.
     /// </summary>
     public static IQueryable<TaskItem> WithDetails(this IQueryable<TaskItem> tasks) =>
         tasks
             .Include(t => t.Tags.OrderBy(g => g.NormalizedName))
-            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder));
+            .Include(t => t.Subtasks.OrderBy(s => s.SortOrder))
+            .Include(t => t.Reminders.OrderBy(r => r.AtUtc).ThenBy(r => r.Id));
 }

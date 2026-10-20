@@ -77,9 +77,10 @@ public sealed class DetailPaneTests
 
             Assert.IsTrue(pane.ActualWidth >= PaneLayout.DetailOverlayMinWidth - 0.5,
                 $"The docked pane is {pane.ActualWidth} px wide, narrower than the overlaid pane.");
-            foreach (var pickerName in new[] { "DueTimePicker", "ReminderTimePicker" })
+            var editor = await OpenReminderFlyoutAsync(pane, VisualTree.Find<Button>(pane, "AddReminderButton"));
+            foreach (var (root, pickerName) in new[] { ((FrameworkElement)pane, "DueTimePicker"), (editor, "ReminderTimePicker") })
             {
-                var picker = VisualTree.Find<TimePicker>(pane, pickerName);
+                var picker = VisualTree.Find<TimePicker>(root, pickerName);
                 foreach (var part in new[] { "HourTextBlock", "MinuteTextBlock" })
                 {
                     // Measured without a limit, the text's own width; clipped when its slot is narrower. The
@@ -122,8 +123,14 @@ public sealed class DetailPaneTests
             AssertIds(pane, "DetailDueDatePicker", "Due date");
             AssertIds(pane, "DueTimePicker", "Due time");
             AssertIds(pane, "ClearDueTimeButton", "Clear Due time");
-            AssertIds(pane, "ReminderTimePicker", "Reminder time");
-            AssertIds(pane, "ClearReminderTimeButton", "Clear Reminder time");
+            AssertIds(pane, "ReminderList", "Reminders");
+            AssertIds(pane, "AddReminderButton", "Add reminder");
+            var editor = await OpenReminderFlyoutAsync(pane, VisualTree.Find<Button>(pane, "AddReminderButton"));
+            AssertIds(editor, "ReminderDatePicker", "Reminder date");
+            AssertIds(editor, "ReminderTimePicker", "Reminder time");
+            AssertIds(editor, "ClearReminderTimeButton", "Clear Reminder time");
+            AssertIds(editor, "SaveReminderButton", "Save reminder");
+            AssertIds(editor, "CancelReminderButton", "Cancel");
             var splitter = VisualTree.Find<GridSplitter>(window.Details, "DetailSplitter");
             Assert.AreEqual("DetailSplitter", AutomationProperties.GetAutomationId(splitter));
             Assert.AreEqual("Resize detail pane", AutomationProperties.GetName(splitter));
@@ -204,7 +211,7 @@ public sealed class DetailPaneTests
     }
 
     [UITestMethod]
-    public async Task The_date_pickers_show_each_selected_Tasks_own_dates_and_none_it_lacks()
+    public async Task The_Due_picker_and_Reminder_rows_show_each_selected_Tasks_own_dates_and_none_it_lacks()
     {
         using var db = await DatabaseAsync();
         var reminder = new DateTime(2030, 10, 24, 9, 0, 0, DateTimeKind.Local).ToUniversalTime();
@@ -218,29 +225,32 @@ public sealed class DetailPaneTests
             var pane = window.Details.Pane;
             await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
             var due = VisualTree.Find<CalendarDatePicker>(pane, "DetailDueDatePicker");
-            var remind = VisualTree.Find<CalendarDatePicker>(pane, "ReminderDatePicker");
             DateTime? Day(CalendarDatePicker picker) => picker.Date?.ToLocalTime().Date;
+            string Reminders() => string.Join(", ", ReminderRows(pane).Select(r => r.FiresAtUtc.ToString("O")));
 
-            await UiWait.UntilAsync(() => Day(due) == new DateTime(2030, 10, 25) && Day(remind) == new DateTime(2030, 10, 24),
-                () => $"The dated Task shows Due {Day(due)} and Reminder {Day(remind)}.", Ct);
+            await UiWait.UntilAsync(
+                () => Day(due) == new DateTime(2030, 10, 25) && Reminders() == reminder.ToString("O"),
+                () => $"The dated Task shows Due {Day(due)} and Reminders [{Reminders()}].", Ct);
 
             await SelectAsync(window, "Plain");
-            await UiWait.UntilAsync(() => due.Date is null && remind.Date is null,
-                () => $"A Task without dates shows Due {Day(due)} and Reminder {Day(remind)}.", Ct);
+            await UiWait.UntilAsync(() => due.Date is null && Reminders() == "",
+                () => $"A Task without dates shows Due {Day(due)} and Reminders [{Reminders()}].", Ct);
 
             await SelectAsync(window, "Dated");
-            await UiWait.UntilAsync(() => Day(remind) == new DateTime(2030, 10, 24), () => "The Reminder did not show again.", Ct);
+            await UiWait.UntilAsync(() => Reminders() == reminder.ToString("O"), () => "The Reminder did not show again.", Ct);
             await SelectAsync(window, "Due only");
-            await UiWait.UntilAsync(() => Day(due) == new DateTime(2030, 11, 2) && remind.Date is null,
-                () => $"A Task with only a Due date shows Due {Day(due)} and Reminder {Day(remind)}.", Ct);
+            await UiWait.UntilAsync(() => Day(due) == new DateTime(2030, 11, 2) && Reminders() == "",
+                () => $"A Task with only a Due date shows Due {Day(due)} and Reminders [{Reminders()}].", Ct);
 
             await viewModel.FlushPendingSaveAsync();
-            var saved = (await db.QueryAsync(c => c.Tasks)).ToDictionary(t => t.Title);
+            var saved = (await db.QueryAsync(
+                c => Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(c.Tasks, t => t.Reminders)))
+                .ToDictionary(t => t.Title);
             Assert.AreEqual(new DateOnly(2030, 10, 25), saved["Dated"].DueDate, "Moving between Tasks changed a Due date.");
-            Assert.AreEqual(reminder, saved["Dated"].ReminderUtc, "Moving between Tasks changed a Reminder.");
+            Assert.AreEqual(reminder, saved["Dated"].Reminders.Single().AtUtc, "Moving between Tasks changed a Reminder.");
             Assert.IsNull(saved["Plain"].DueDate);
-            Assert.IsNull(saved["Plain"].ReminderUtc);
-            Assert.IsNull(saved["Due only"].ReminderUtc);
+            Assert.IsEmpty(saved["Plain"].Reminders);
+            Assert.IsEmpty(saved["Due only"].Reminders);
         }
         finally
         {
@@ -273,7 +283,17 @@ public sealed class DetailPaneTests
                     viewModel.DetailDueDate = new DateTime(2030, 10, 25);
                 });
             await ShowThenClearAsync(pane, "ReminderErrorText",
-                () => viewModel.DetailReminderTime = new TimeSpan(14, 30, 0), () => viewModel.DetailReminderTime = null);
+                () =>
+                {
+                    viewModel.AddReminderCommand.Execute(null);
+                    viewModel.ReminderEditor.Time = new TimeSpan(14, 30, 0);
+                    viewModel.ReminderEditor.SaveCommand.Execute(null);
+                },
+                () =>
+                {
+                    viewModel.ReminderEditor.Date = new DateTime(2030, 10, 24);
+                    viewModel.ReminderEditor.SaveCommand.Execute(null);
+                });
             await ShowThenClearAsync(pane, "RepeatErrorText",
                 () =>
                 {
@@ -511,10 +531,11 @@ public sealed class DetailPaneTests
             await SelectAsync(window, "Book dentist");
             var pane = window.Details.Pane;
             await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
-            var time = VisualTree.Find<TimePicker>(pane, "ReminderTimePicker");
-            var clear = VisualTree.Find<Button>(pane, "ClearReminderTimeButton");
+            var editor = await OpenReminderFlyoutAsync(pane, VisualTree.Find<Button>(pane, "AddReminderButton"));
+            var time = VisualTree.Find<TimePicker>(editor, "ReminderTimePicker");
+            var clear = VisualTree.Find<Button>(editor, "ClearReminderTimeButton");
 
-            Assert.IsTrue(Label(pane, "Reminder time").ActualHeight > 0, "The Reminder time has no visible label.");
+            Assert.IsTrue(Label(editor, "Time (optional)").ActualHeight > 0, "The Reminder time has no visible label.");
             Assert.AreEqual(1, time.MinuteIncrement);
             Assert.IsNull(time.SelectedTime);
             Assert.IsFalse(time.IsEnabled, "The Reminder time picker is enabled without a Reminder date.");
@@ -538,33 +559,46 @@ public sealed class DetailPaneTests
             await SelectAsync(window, "Book dentist");
             var pane = window.Details.Pane;
             await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
-            var time = VisualTree.Find<TimePicker>(pane, "ReminderTimePicker");
-            var clear = VisualTree.Find<Button>(pane, "ClearReminderTimeButton");
+            var add = VisualTree.Find<Button>(pane, "AddReminderButton");
 
-            VisualTree.Find<CalendarDatePicker>(pane, "ReminderDatePicker").Date =
+            // A date only: the row and the flyout opened on it show the default time it fires at.
+            var editor = await OpenReminderFlyoutAsync(pane, add);
+            var time = VisualTree.Find<TimePicker>(editor, "ReminderTimePicker");
+            var clear = VisualTree.Find<Button>(editor, "ClearReminderTimeButton");
+            VisualTree.Find<CalendarDatePicker>(editor, "ReminderDatePicker").Date =
                 new DateTimeOffset(new DateTime(2030, 10, 25, 0, 0, 0, DateTimeKind.Local));
+            Invoke(VisualTree.Find<Button>(editor, "SaveReminderButton"));
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 1, () => "The Reminder has no row.", Ct);
+            await viewModel.FlushPendingSaveAsync();
+            StringAssert.EndsWith(ReminderRows(pane)[0].Text, " 09:00");
+            editor = await OpenReminderFlyoutAsync(pane, await RowButtonAsync(pane, 0));
             await UiWait.UntilAsync(() => time.SelectedTime == new TimeSpan(9, 0, 0),
                 () => $"A date-only Reminder shows {time.SelectedTime}.", Ct);
-            await viewModel.FlushPendingSaveAsync();
+            Assert.IsFalse(clear.IsEnabled, "The clear button is enabled at the default time.");
 
             time.SelectedTime = new TimeSpan(14, 7, 0);
-            await UiWait.UntilAsync(() => viewModel.DetailReminderTime == new TimeSpan(14, 7, 0),
+            await UiWait.UntilAsync(() => viewModel.ReminderEditor.Time == new TimeSpan(14, 7, 0),
                 () => "The Reminder time was not taken.", Ct);
+            Invoke(VisualTree.Find<Button>(editor, "SaveReminderButton"));
             await viewModel.FlushPendingSaveAsync();
-            var picked = (await db.QueryAsync(c => c.Tasks)).Single().ReminderUtc;
+            var picked = (await db.QueryAsync(c => c.Reminders)).Single().AtUtc;
             Assert.AreEqual(new DateTime(2030, 10, 25, 14, 7, 0, DateTimeKind.Utc),
                 picked);
 
-            Assert.IsTrue(clear.IsEnabled, "The clear button is disabled with a Reminder time.");
+            editor = await OpenReminderFlyoutAsync(pane, await RowButtonAsync(pane, 0));
+            await UiWait.UntilAsync(() => clear.IsEnabled, () => "The clear button is disabled with a Reminder time.", Ct);
             ((IInvokeProvider)FrameworkElementAutomationPeer.CreatePeerForElement(clear)).Invoke();
-            await UiWait.UntilAsync(() => time.SelectedTime == new TimeSpan(9, 0, 0),
+            await UiWait.UntilAsync(() => time.SelectedTime is null,
                 () => $"Clearing the time left the picker at {time.SelectedTime}.", Ct);
+            Invoke(VisualTree.Find<Button>(editor, "SaveReminderButton"));
             await viewModel.FlushPendingSaveAsync();
 
-            var saved = (await db.QueryAsync(c => c.Tasks)).Single().ReminderUtc;
+            var saved = (await db.QueryAsync(c => c.Reminders)).SingleOrDefault()?.AtUtc;
             Assert.IsNotNull(saved, "Clearing the time cleared the whole Reminder.");
             Assert.AreEqual(new DateTime(2030, 10, 25, 9, 0, 0, DateTimeKind.Utc),
                 saved);
+            await UiWait.UntilAsync(() => ReminderRows(pane) is [var only] && only.Text.EndsWith(" 09:00", StringComparison.Ordinal),
+                () => "The row does not show the default time.", Ct);
         }
         finally
         {
@@ -573,32 +607,36 @@ public sealed class DetailPaneTests
     }
 
     [UITestMethod]
-    public async Task Clearing_the_Reminder_date_picker_clears_the_whole_Reminder()
+    public async Task Clearing_the_flyout_date_clears_its_time_and_the_x_removes_the_whole_Reminder()
     {
         using var db = await DatabaseAsync();
-        await AddAsync(db, "Book dentist");
+        await AddAsync(db, "Book dentist", reminderUtc: new DateTime(2030, 10, 25, 14, 30, 0, DateTimeKind.Utc));
         var (window, viewModel) = await OpenAsync(db, width: 1200);
         try
         {
             await SelectAsync(window, "Book dentist");
             var pane = window.Details.Pane;
             await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "The pane did not show.", Ct);
-            var time = VisualTree.Find<TimePicker>(pane, "ReminderTimePicker");
-            var date = VisualTree.Find<CalendarDatePicker>(pane, "ReminderDatePicker");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 1, () => "The Reminder has no row.", Ct);
 
-            date.Date = new DateTimeOffset(new DateTime(2030, 10, 25, 0, 0, 0, DateTimeKind.Local));
-            await UiWait.UntilAsync(() => time.IsEnabled, () => "Picking a date did not enable the time.", Ct);
-            time.SelectedTime = new TimeSpan(14, 30, 0);
-            await UiWait.UntilAsync(() => viewModel.DetailReminderTime == new TimeSpan(14, 30, 0),
-                () => "The Reminder time was not taken.", Ct);
-            await viewModel.FlushPendingSaveAsync();
+            var editor = await OpenReminderFlyoutAsync(pane, await RowButtonAsync(pane, 0));
+            var time = VisualTree.Find<TimePicker>(editor, "ReminderTimePicker");
+            var date = VisualTree.Find<CalendarDatePicker>(editor, "ReminderDatePicker");
+            await UiWait.UntilAsync(() => time.SelectedTime == new TimeSpan(14, 30, 0),
+                () => $"The flyout shows {time.SelectedTime}.", Ct);
 
             date.Date = null;
-            await UiWait.UntilAsync(() => time.SelectedTime is null && !time.IsEnabled,
-                () => $"Clearing the Reminder date left the time at {time.SelectedTime} ({time.IsEnabled}).", Ct);
+            await UiWait.UntilAsync(() => time.SelectedTime is null,
+                () => $"Clearing the Reminder date left the time at {time.SelectedTime}.", Ct);
+            viewModel.ReminderEditor.CancelCommand.Execute(null);
+
+            var row = ReminderRows(pane).Single();
+            Invoke(VisualTree.Descendants(pane).OfType<Button>()
+                .Single(b => AutomationProperties.GetName(b) == row.RemoveName));
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 0, () => "The x kept the row.", Ct);
             await viewModel.FlushPendingSaveAsync();
 
-            Assert.IsNull((await db.QueryAsync(c => c.Tasks)).Single().ReminderUtc);
+            Assert.IsEmpty(await db.QueryAsync(c => c.Reminders));
         }
         finally
         {
@@ -1095,11 +1133,38 @@ public sealed class DetailPaneTests
             Priority = priority,
             DueDate = due,
             DueTime = dueTime,
-            ReminderUtc = reminderUtc,
+            Reminders = reminderUtc is { } at ? [new Reminder { Id = Guid.CreateVersion7(), AtUtc = at }] : [],
             SortOrder = order,
             CreatedUtc = now,
             UpdatedUtc = now,
         });
         await context.SaveChangesAsync();
+    }
+
+    private static void Invoke(Button button) => new ButtonAutomationPeer(button).Invoke();
+
+    // The Reminder rows the pane shows (realized and laid out), in order.
+    private static List<ReminderRowViewModel> ReminderRows(DetailPane pane) =>
+        [.. RowButtons(pane).Select(b => (ReminderRowViewModel)b.DataContext)];
+
+    private async Task<Button> RowButtonAsync(DetailPane pane, int index)
+    {
+        await UiWait.UntilAsync(() => RowButtons(pane).Count > index, () => $"No Reminder row {index}.", Ct);
+        return RowButtons(pane)[index];
+    }
+
+    private static List<Button> RowButtons(DetailPane pane) =>
+        [.. VisualTree.Descendants(VisualTree.Find<ItemsControl>(pane, "ReminderList")).OfType<Button>()
+            .Where(b => b.DataContext is ReminderRowViewModel && b.Content is StackPanel && b.ActualHeight > 0)];
+
+    // Invokes what opens the Reminder flyout and waits for its editor to show.
+    private async Task<FrameworkElement> OpenReminderFlyoutAsync(DetailPane pane, Button opener)
+    {
+        var flyout = (Flyout)FlyoutBase.GetAttachedFlyout(VisualTree.Find<StackPanel>(pane, "ReminderSection"));
+        Invoke(opener);
+        var editor = (FrameworkElement)flyout.Content;
+        await UiWait.UntilAsync(() => flyout.IsOpen && editor.IsLoaded && editor.ActualHeight > 0,
+            () => "The Reminder flyout did not open.", Ct);
+        return editor;
     }
 }

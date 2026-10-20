@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Time.Testing;
 using TaskDesk.Core.Reminders;
+using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Presentation.Tests;
 
@@ -139,7 +140,8 @@ public class ReminderSchedulerTests
         await s.Scheduler.StartAsync();
         var task = s.Reminders.Add("a", null);
 
-        await s.Reminders.SetReminderAsync(task.Id, Start.AddSeconds(1), TestContext.Current.CancellationToken);
+        await s.Reminders.AddReminderAsync(
+            task.Id, ReminderValue.Fixed(Start.AddSeconds(1)), TestContext.Current.CancellationToken);
         s.Clock.Advance(TimeSpan.FromSeconds(1)); // far less than the timer's interval
         s.Changes.Raise();
         await s.Scheduler.CurrentCheck;
@@ -214,7 +216,7 @@ public class ReminderSchedulerTests
         var summary = Assert.Single(s.Notifications.Summaries);
         Assert.Equal(5, summary.Count);
         Assert.Equal("5 reminders missed", summary.Title);
-        Assert.All(tasks, t => Assert.Equal(t.ReminderUtc, t.NotifiedThroughUtc));
+        Assert.All(tasks, t => Assert.Equal(Assert.Single(t.Reminders).AtUtc, t.NotifiedThroughUtc));
 
         s.Clock.Advance(ReminderScheduler.Interval);
         await s.Scheduler.CurrentCheck;
@@ -269,7 +271,51 @@ public class ReminderSchedulerTests
         s.Clock.Advance(TimeSpan.FromMinutes(1));
         await s.Scheduler.RequestCheck();
         Assert.Equal(2, s.Notifications.Shown.Count);
-        Assert.Equal(Start.AddMinutes(-1), task.ReminderUtc);
+        Assert.Equal(Start.AddMinutes(-1), Assert.Single(task.Reminders).AtUtc);
+    }
+
+    // A Task whose Reminders all fell due while TaskDesk was closed.
+    private static TaskItem AddWithReminders(Setup s, string title, params int[] minutesAgo)
+    {
+        var task = s.Reminders.Add(title, null);
+        task.Reminders.AddRange(minutesAgo.Select(m => new Reminder
+        {
+            Id = Guid.CreateVersion7(),
+            TaskId = task.Id,
+            AtUtc = Start.AddMinutes(-m),
+        }));
+        return task;
+    }
+
+    [Fact]
+    public async Task A_Task_with_several_due_Reminders_shows_one_notification()
+    {
+        var s = Create();
+        var task = AddWithReminders(s, "a", 30, 10, 20);
+
+        await s.Scheduler.StartAsync();
+
+        Assert.Equal(task.Id, Assert.Single(s.Notifications.Shown).TaskId);
+        Assert.Equal(Start.AddMinutes(-10), task.NotifiedThroughUtc);
+
+        s.Clock.Advance(ReminderScheduler.Interval);
+        await s.Scheduler.CurrentCheck;
+        Assert.Single(s.Notifications.Shown);
+    }
+
+    [Fact]
+    public async Task The_missed_summary_counts_Tasks_not_Reminders()
+    {
+        var s = Create();
+        for (var i = 1; i <= 4; i++)
+        {
+            AddWithReminders(s, $"missed {i}", 60 * i, 60 * i + 5, 60 * i + 10);
+        }
+
+        await s.Scheduler.StartAsync();
+
+        Assert.Equal("4 reminders missed", Assert.Single(s.Notifications.Summaries).Title);
+        Assert.Empty(s.Notifications.Shown);
     }
 
     [Fact]

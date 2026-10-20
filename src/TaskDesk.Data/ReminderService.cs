@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TaskDesk.Core.Reminders;
@@ -10,9 +11,57 @@ internal sealed class ReminderService(
     TimeProvider clock,
     ILogger<ReminderService> logger) : IReminderService
 {
-    public Task<TaskItem> SetReminderAsync(
-        Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default) =>
-        ChangeAsync(taskId, t => ReminderCalculator.SetPlanned(t, reminderUtc, clock.GetUtcNow()), "Reminder changed", cancellationToken);
+    public async Task<TaskItem> AddReminderAsync(
+        Guid taskId, ReminderValue reminder, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await FindAsync(context, t => t.Id == taskId, $"Task {taskId} does not exist.", cancellationToken);
+        var added = ReminderCalculator.AddReminder(task, reminder, clock.GetUtcNow());
+        context.Reminders.Add(added);
+        await SaveAsync(context, task, "Reminder added", cancellationToken);
+        return task;
+    }
+
+    public async Task<TaskItem> UpdateReminderAsync(
+        Guid reminderId, ReminderValue reminder, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await FindOwnerAsync(context, reminderId, cancellationToken);
+        if (ReminderCalculator.UpdateReminder(task, reminderId, reminder, clock.GetUtcNow()))
+        {
+            await SaveAsync(context, task, "Reminder changed", cancellationToken);
+        }
+
+        return task;
+    }
+
+    public async Task<TaskItem> RemoveReminderAsync(Guid reminderId, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await FindOwnerAsync(context, reminderId, cancellationToken);
+        context.Reminders.Remove(ReminderCalculator.RemoveReminder(task, reminderId, clock.GetUtcNow()));
+        await SaveAsync(context, task, "Reminder removed", cancellationToken);
+        return task;
+    }
+
+    private static Task<TaskItem> FindOwnerAsync(
+        TaskDeskDbContext context, Guid reminderId, CancellationToken cancellationToken) =>
+        FindAsync(
+            context, t => t.Reminders.Any(r => r.Id == reminderId), $"Reminder {reminderId} does not exist.",
+            cancellationToken);
+
+    private static async Task<TaskItem> FindAsync(
+        TaskDeskDbContext context, Expression<Func<TaskItem, bool>> match, string missing,
+        CancellationToken cancellationToken) =>
+        await context.Tasks.WithDetails().SingleOrDefaultAsync(match, cancellationToken)
+        ?? throw new KeyNotFoundException(missing);
+
+    private async Task SaveAsync(TaskDeskDbContext context, TaskItem task, string what, CancellationToken cancellationToken)
+    {
+        task.UpdatedUtc = clock.GetUtcNow().UtcDateTime;
+        await context.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("Task {TaskId}: {Change}", task.Id, what);
+    }
 
     public Task<TaskItem> SnoozeAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default) =>
         ChangeAsync(
@@ -26,16 +75,10 @@ internal sealed class ReminderService(
         Guid taskId, Func<TaskItem, bool> change, string what, CancellationToken cancellationToken)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        var task = await context.Tasks
-            .WithDetails()
-            .SingleOrDefaultAsync(t => t.Id == taskId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
-
+        var task = await FindAsync(context, t => t.Id == taskId, $"Task {taskId} does not exist.", cancellationToken);
         if (change(task))
         {
-            task.UpdatedUtc = clock.GetUtcNow().UtcDateTime;
-            await context.SaveChangesAsync(cancellationToken);
-            logger.LogInformation("Task {TaskId}: {Change}", taskId, what);
+            await SaveAsync(context, task, what, cancellationToken);
         }
 
         return task;
@@ -50,8 +93,10 @@ internal sealed class ReminderService(
         // The SQL narrows to the candidates (SPEC 7.4); the due rule itself is the Core function, in memory.
         var candidates = await context.Tasks
             .AsNoTracking()
+            .WithDetails()
             .Where(t => !t.IsCompleted && (t.SnoozedUntilUtc == null || t.SnoozedUntilUtc <= nowUtc)
-                && ((t.ReminderUtc <= nowUtc && (t.NotifiedThroughUtc == null || t.ReminderUtc > t.NotifiedThroughUtc))
+                && (t.Reminders.Any(r => r.AtUtc <= nowUtc
+                        && (t.NotifiedThroughUtc == null || r.AtUtc > t.NotifiedThroughUtc))
                     || (t.SnoozedUntilUtc <= nowUtc
                         && (t.NotifiedThroughUtc == null || t.SnoozedUntilUtc > t.NotifiedThroughUtc))))
             .ToListAsync(cancellationToken);

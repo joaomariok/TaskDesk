@@ -17,8 +17,6 @@ public sealed class TaskItem
     /// <summary>Due time: a local wall-clock time; only allowed when <see cref="DueDate"/> is set.</summary>
     public TimeOnly? DueTime { get; set; }
 
-    /// <summary>The planned Reminder instant (UTC), independent of Due. Never changed by a Snooze.</summary>
-    public DateTime? ReminderUtc { get; set; }
 
     /// <summary>
     /// The end of the Task's Snooze (UTC): nothing notifies before it, and the Task notifies once when it ends.
@@ -53,4 +51,10 @@ public sealed class TaskItem
 
     /// <summary>Subtasks in their manual order, loaded only by queries that include them.</summary>
     public List<Subtask> Subtasks { get; set; } = [];
+
+    /// <summary>
+    /// The Task's Reminders, the one that fires first first, loaded only by queries that include them. Never
+    /// changed by a Snooze.
+    /// </summary>
+    public List<TaskDesk.Core.Reminders.Reminder> Reminders { get; set; } = [];
 }

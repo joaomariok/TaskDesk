@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Reminders;
@@ -19,8 +20,9 @@ using Windows.System;
 namespace TaskDesk.Views.Tests;
 
 /// <summary>
-/// The detail pane's Subtasks, Reminder, Repeat and Tags over a real database: Subtasks are added, ticked
-/// through their Toggle pattern, moved and deleted; a Reminder is set, its error placed and its Snooze cleared;
+/// The detail pane's Subtasks, Reminders, Repeat and Tags over a real database: Subtasks are added, ticked
+/// through their Toggle pattern, moved and deleted; Reminders are added and edited in their flyout, listed as
+/// rows and removed, their errors placed and their Snooze cleared;
 /// the Repeat editor saves a Recurrence and deleting an Occurrence asks "this occurrence or stop repeating";
 /// Tags are added with Enter and removed with their chip's own button.
 /// </summary>
@@ -109,7 +111,7 @@ public sealed class DetailPaneSectionsTests
     }
 
     [UITestMethod]
-    public async Task A_Reminder_set_in_the_pane_is_saved_and_clearing_its_date_clears_it()
+    public async Task A_Reminder_added_in_the_flyout_is_saved_listed_as_a_row_and_removed_with_its_x()
     {
         using var db = await DatabaseAsync();
         await AddAsync(db, "Call the bank");
@@ -117,24 +119,30 @@ public sealed class DetailPaneSectionsTests
         try
         {
             var pane = await OpenPaneAsync(window, "Call the bank");
-            var time = VisualTree.Find<TimePicker>(pane, "ReminderTimePicker");
+            Assert.IsEmpty(ReminderRows(pane));
+
+            var (flyout, editor) = await OpenReminderFlyoutAsync(pane, Named<Button>(pane, "Add reminder"));
+            var time = VisualTree.Find<TimePicker>(editor, "ReminderTimePicker");
             Assert.AreEqual("Reminder time", AutomationProperties.GetName(time));
             Assert.IsNull(time.SelectedTime);
-
-            var picker = Named<CalendarDatePicker>(pane, "Reminder date");
-            picker.Date = new DateTimeOffset(new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Local));
-            await UiWait.UntilAsync(() => time.IsEnabled, () => "Picking a Reminder date did not enable the time.", Ct);
+            VisualTree.Find<CalendarDatePicker>(editor, "ReminderDatePicker").Date =
+                new DateTimeOffset(new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Local));
             time.SelectedTime = new TimeSpan(14, 30, 0);
-            await UiWait.UntilAsync(() => viewModel.DetailReminderTime == new TimeSpan(14, 30, 0),
-                () => "The time was not taken.", Ct);
-            await viewModel.FlushPendingSaveAsync();
+            Invoke(VisualTree.Find<Button>(editor, "SaveReminderButton"));
 
-            var saved = (await db.QueryAsync(c => c.Tasks)).Single();
-            Assert.AreEqual(new DateTime(2026, 10, 20, 14, 30, 0, DateTimeKind.Utc), saved.ReminderUtc);
-
-            picker.Date = null;
+            await UiWait.UntilAsync(() => !flyout.IsOpen, () => "Save did not close the flyout.", Ct);
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 1, () => "The new Reminder has no row.", Ct);
             await viewModel.FlushPendingSaveAsync();
-            Assert.IsNull((await db.QueryAsync(c => c.Tasks)).Single().ReminderUtc, "Clearing the date kept the Reminder.");
+            Assert.AreEqual(
+                new DateTime(2026, 10, 20, 14, 30, 0, DateTimeKind.Utc),
+                (await db.QueryAsync(c => c.Reminders)).Single().AtUtc);
+            var row = viewModel.DetailReminders.Single();
+            Assert.AreEqual(row.AccessibleName, AutomationProperties.GetName(ReminderRows(pane)[0]));
+
+            Invoke(Named<Button>(pane, row.RemoveName));
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 0, () => "The removed Reminder kept its row.", Ct);
+            await viewModel.FlushPendingSaveAsync();
+            Assert.IsEmpty(await db.QueryAsync(c => c.Reminders), "The x kept the Reminder.");
         }
         finally
         {
@@ -143,7 +151,138 @@ public sealed class DetailPaneSectionsTests
     }
 
     [UITestMethod]
-    public async Task A_Reminder_time_without_a_date_error_shows_right_under_the_Reminder_field_above_the_Priority_label()
+    public async Task Closing_the_Reminder_flyout_without_Save_saves_nothing_and_returns_focus_to_its_opener()
+    {
+        using var db = await DatabaseAsync();
+        var id = await AddAsync(db, "Call the bank");
+        await db.Get<IReminderService>().AddReminderAsync(
+            id, ReminderValue.Fixed(new DateTime(2026, 10, 20, 14, 30, 0, DateTimeKind.Utc)), Ct);
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Call the bank");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 1, () => "The Reminder has no row.", Ct);
+
+            // A click on the row opens the flyout on that Reminder; closing it (Esc) leaves it as it was.
+            var rowButton = ReminderRows(pane)[0];
+            var (flyout, editor) = await OpenReminderFlyoutAsync(pane, rowButton);
+            var time = VisualTree.Find<TimePicker>(editor, "ReminderTimePicker");
+            Assert.AreEqual(new TimeSpan(14, 30, 0), time.SelectedTime);
+            Assert.IsTrue(viewModel.ReminderEditor.IsEditing);
+            time.SelectedTime = new TimeSpan(8, 0, 0);
+            flyout.Hide();
+
+            await UiWait.UntilAsync(() => !viewModel.ReminderEditor.IsOpen, () => "Closing kept the editor open.", Ct);
+            await UiWait.UntilAsync(
+                () => ReferenceEquals(FocusManager.GetFocusedElement(pane.XamlRoot), rowButton),
+                () => $"The focus went to {FocusManager.GetFocusedElement(pane.XamlRoot)}, not the row.", Ct);
+            await viewModel.FlushPendingSaveAsync();
+            Assert.AreEqual(
+                new DateTime(2026, 10, 20, 14, 30, 0, DateTimeKind.Utc),
+                (await db.QueryAsync(c => c.Reminders)).Single().AtUtc);
+
+            // "Add reminder" gets the focus back the same way.
+            var add = Named<Button>(pane, "Add reminder");
+            (flyout, _) = await OpenReminderFlyoutAsync(pane, add);
+            flyout.Hide();
+            await UiWait.UntilAsync(() => !viewModel.ReminderEditor.IsOpen, () => "Closing kept the editor open.", Ct);
+            await UiWait.UntilAsync(
+                () => ReferenceEquals(FocusManager.GetFocusedElement(pane.XamlRoot), add),
+                () => $"The focus went to {FocusManager.GetFocusedElement(pane.XamlRoot)}, not Add reminder.", Ct);
+            Assert.HasCount(1, await db.QueryAsync(c => c.Reminders));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task A_past_Reminder_row_shows_and_announces_past_and_each_Task_shows_its_own_rows()
+    {
+        using var db = await DatabaseAsync();
+        var id = await AddAsync(db, "Call the bank");
+        await AddAsync(db, "Plain");
+        var reminders = db.Get<IReminderService>();
+        var now = db.Clock.GetUtcNow().UtcDateTime;
+        await reminders.AddReminderAsync(id, ReminderValue.Fixed(now.AddHours(1)), Ct);
+        await reminders.AddReminderAsync(id, ReminderValue.Fixed(now.AddHours(2)), Ct);
+        db.Clock.Advance(TimeSpan.FromMinutes(90));
+        var (window, _) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Call the bank");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 2, () => "The Reminders have no rows.", Ct);
+            var names = ReminderRows(pane).Select(AutomationProperties.GetName).ToList();
+            StringAssert.EndsWith(names[0], ", past");
+            Assert.IsFalse(names[1].Contains("past", StringComparison.Ordinal), names[1]);
+            Assert.AreEqual(Visibility.Visible, PastLabels(ReminderRows(pane)[0]).Single().Visibility);
+            Assert.AreEqual(Visibility.Collapsed, PastLabels(ReminderRows(pane)[1]).Single().Visibility);
+
+            await OpenPaneAsync(window, "Plain");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 0, () => "Another Task kept the rows.", Ct);
+            await OpenPaneAsync(window, "Call the bank");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 2, () => "The rows did not come back.", Ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Every_Reminder_control_is_reachable_with_Tab_and_has_a_name()
+    {
+        using var db = await DatabaseAsync();
+        var id = await AddAsync(db, "Call the bank");
+        await db.Get<IReminderService>().AddReminderAsync(
+            id, ReminderValue.Fixed(new DateTime(2026, 10, 20, 14, 30, 0, DateTimeKind.Utc)), Ct);
+        var (window, _) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Call the bank");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 1, () => "The Reminder has no row.", Ct);
+
+            var row = ReminderRows(pane)[0];
+            var remove = Named<Button>(pane, "Remove reminder " + viewModelText(row));
+            foreach (var control in new Control[] { row, remove, Named<Button>(pane, "Add reminder") })
+            {
+                Assert.IsTrue(control.IsTabStop && control.Focus(FocusState.Keyboard),
+                    $"{AutomationProperties.GetName(control)} takes no keyboard focus.");
+            }
+
+            var (flyout, editor) = await OpenReminderFlyoutAsync(pane, Named<Button>(pane, "Add reminder"));
+            window.ViewModel.ReminderEditor.Date = new DateTime(2026, 10, 21); // the time needs a date
+            editor.UpdateLayout();
+            foreach (var name in new[]
+            {
+                "ReminderDatePicker", "ReminderTimePicker", "ClearReminderTimeButton", "CancelReminderButton",
+                "SaveReminderButton",
+            })
+            {
+                var control = VisualTree.Find<Control>(editor, name);
+                Assert.IsFalse(string.IsNullOrEmpty(AutomationProperties.GetName(control)), $"{name} has no name.");
+                if (name != "ClearReminderTimeButton") // enabled only once there is a time to clear
+                {
+                    Assert.IsTrue(control.Focus(FocusState.Keyboard), $"{name} takes no keyboard focus.");
+                }
+            }
+
+            Assert.IsTrue(VisualTree.Descendants(editor).OfType<TextBlock>().Any(t => t.Text == "Date"), "No Date label.");
+            Assert.IsTrue(
+                VisualTree.Descendants(editor).OfType<TextBlock>().Any(t => t.Text == "Time (optional)"), "No Time label.");
+            flyout.Hide();
+        }
+        finally
+        {
+            window.Close();
+        }
+
+        static string viewModelText(Button row) => ((ReminderRowViewModel)row.DataContext).Text;
+    }
+
+    [UITestMethod]
+    public async Task A_Reminder_time_without_a_date_error_shows_right_under_the_Reminders_above_the_Priority_label()
     {
         using var db = await DatabaseAsync();
         await AddAsync(db, "Call the bank");
@@ -152,16 +291,19 @@ public sealed class DetailPaneSectionsTests
         {
             var pane = await OpenPaneAsync(window, "Call the bank");
 
-            viewModel.DetailReminderTime = new TimeSpan(14, 30, 0);
+            viewModel.AddReminderCommand.Execute(null);
+            viewModel.ReminderEditor.Time = new TimeSpan(14, 30, 0);
+            viewModel.ReminderEditor.SaveCommand.Execute(null);
             pane.UpdateLayout();
 
             var error = ShownText(pane, "A Reminder time needs a Reminder date.");
-            var picker = VisualTree.Find<TimePicker>(pane, "ReminderTimePicker");
-            Assert.IsTrue(Top(error, pane) >= Bottom(picker, pane) - 0.5, "The error is above the Reminder field.");
+            var add = Named<Button>(pane, "Add reminder");
+            Assert.IsTrue(Top(error, pane) >= Bottom(add, pane) - 0.5, "The error is above the Reminders.");
             Assert.IsTrue(Bottom(error, pane) <= Top(Label(pane, "Priority"), pane) + 0.5,
                 "The error is below the Priority label.");
-            Assert.IsTrue(Top(Label(pane, "Reminder"), pane) >= Bottom(Named<CalendarDatePicker>(pane, "Due date"), pane),
-                "Reminder is not under Due.");
+            Assert.IsTrue(Top(Label(pane, "Reminders"), pane) >= Bottom(Named<CalendarDatePicker>(pane, "Due date"), pane),
+                "Reminders are not under Due.");
+            viewModel.ReminderEditor.CancelCommand.Execute(null);
         }
         finally
         {
@@ -170,12 +312,66 @@ public sealed class DetailPaneSectionsTests
     }
 
     [UITestMethod]
+    public async Task A_duplicate_Reminder_error_shows_under_the_Reminders()
+    {
+        using var db = await DatabaseAsync();
+        var id = await AddAsync(db, "Call the bank");
+        await db.Get<IReminderService>().AddReminderAsync(
+            id, ReminderValue.Fixed(new DateTime(2026, 10, 20, 14, 30, 0, DateTimeKind.Utc)), Ct);
+        var (window, viewModel) = await OpenAsync(db, height: 1000);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Call the bank");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 1, () => "The Reminder has no row.", Ct);
+
+            viewModel.AddReminderCommand.Execute(null);
+            viewModel.ReminderEditor.Date = new DateTime(2026, 10, 20);
+            viewModel.ReminderEditor.Time = new TimeSpan(14, 30, 0);
+            viewModel.ReminderEditor.SaveCommand.Execute(null);
+            await viewModel.FlushPendingSaveAsync();
+            pane.UpdateLayout();
+
+            var error = ShownText(pane, "The Task already has this Reminder.");
+            Assert.IsTrue(Top(error, pane) >= Bottom(Named<Button>(pane, "Add reminder"), pane) - 0.5,
+                "The error is above the Reminders.");
+            Assert.HasCount(1, ReminderRows(pane));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // The realized row buttons of the Reminders list, which open the flyout on their Reminder.
+    private static List<Button> ReminderRows(DetailPane pane)
+    {
+        var list = VisualTree.Find<ItemsControl>(pane, "ReminderList");
+        return [.. VisualTree.Descendants(list).OfType<Button>()
+            .Where(b => b.DataContext is ReminderRowViewModel && b.Content is StackPanel)];
+    }
+
+    private static List<TextBlock> PastLabels(Button row) =>
+        [.. VisualTree.Descendants(row).OfType<TextBlock>().Where(t => t.Text == "past")];
+
+    // Invokes a control that opens the Reminder flyout and waits for the flyout's editor to show.
+    private async Task<(Flyout Flyout, FrameworkElement Editor)> OpenReminderFlyoutAsync(DetailPane pane, Button opener)
+    {
+        var flyout = (Flyout)FlyoutBase.GetAttachedFlyout(VisualTree.Find<StackPanel>(pane, "ReminderSection"));
+        opener.Focus(FocusState.Programmatic);
+        Invoke(opener);
+        var editor = (FrameworkElement)flyout.Content;
+        await UiWait.UntilAsync(() => flyout.IsOpen && editor.IsLoaded && editor.ActualHeight > 0,
+            () => "The Reminder flyout did not open.", Ct);
+        return (flyout, editor);
+    }
+
+    [UITestMethod]
     public async Task A_snoozed_Reminder_shows_its_Snooze_and_Clear_Snooze_clears_it()
     {
         using var db = await DatabaseAsync();
         var id = await AddAsync(db, "Call the bank");
         var reminders = db.Get<IReminderService>();
-        await reminders.SetReminderAsync(id, new DateTime(2026, 10, 16, 9, 0, 0, DateTimeKind.Utc), Ct);
+        await reminders.AddReminderAsync(id, ReminderValue.Fixed(new DateTime(2026, 10, 16, 9, 0, 0, DateTimeKind.Utc)), Ct);
         await reminders.SnoozeAsync(id, TimeSpan.FromMinutes(10), Ct);
         var (window, _) = await OpenAsync(db);
         try

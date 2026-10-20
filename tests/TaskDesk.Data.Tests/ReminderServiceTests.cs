@@ -26,8 +26,14 @@ public class ReminderServiceTests
     private static async Task<TaskItem> AddAsync(TempDatabase db, string title, DateTime? reminderUtc)
     {
         var task = await db.Get<ITaskService>().CreateTaskAsync(title, Ct);
-        return reminderUtc is null ? task : await db.Get<IReminderService>().SetReminderAsync(task.Id, reminderUtc, Ct);
+        return reminderUtc is { } at
+            ? await db.Get<IReminderService>().AddReminderAsync(task.Id, ReminderValue.Fixed(at), Ct)
+            : task;
     }
+
+    private static Guid ReminderId(TaskItem task) => Assert.Single(task.Reminders).Id;
+
+    private static List<DateTime?> Moments(TaskItem task) => [.. task.Reminders.Select(r => r.AtUtc)];
 
     // A Task whose Reminder at Now - 1 min is due now.
     private static async Task<TaskItem> AddDueAsync(TempDatabase db, string title = "a")
@@ -50,33 +56,141 @@ public class ReminderServiceTests
         [.. (await db.Get<IReminderService>().ListDueAsync(Ct)).Select(r => r.Title)];
 
     private static async Task<TaskItem> StoredAsync(TempDatabase db, Guid taskId) =>
-        Assert.Single(await db.QueryAsync(c => c.Tasks.Where(t => t.Id == taskId)));
+        Assert.Single(await db.QueryAsync(
+            c => c.Tasks.Include(t => t.Reminders.OrderBy(r => r.AtUtc)).Where(t => t.Id == taskId)));
 
     [Fact]
-    public async Task A_Reminder_is_stored_as_a_UTC_instant_and_can_be_cleared()
+    public async Task A_Reminder_is_stored_as_a_UTC_instant_and_can_be_removed()
     {
         using var db = await StartAsync();
         var task = await AddAsync(db, "a", null);
         var at = new DateTime(2026, 10, 20, 12, 0, 0, DateTimeKind.Utc);
 
-        var updated = await db.Get<IReminderService>().SetReminderAsync(task.Id, at, Ct);
+        var updated = await db.Get<IReminderService>().AddReminderAsync(task.Id, ReminderValue.Fixed(at), Ct);
         var stored = Assert.Single(await db.Get<ITaskService>().ListDefaultListTasksAsync(Ct));
 
-        Assert.Equal(at, updated.ReminderUtc);
-        Assert.Equal(at, stored.ReminderUtc);
-        Assert.Equal(DateTimeKind.Utc, stored.ReminderUtc!.Value.Kind);
+        Assert.Equal([at], Moments(updated));
+        Assert.Equal([at], Moments(stored));
+        Assert.Equal(ReminderKind.Fixed, stored.Reminders[0].Kind);
+        Assert.Equal(DateTimeKind.Utc, stored.Reminders[0].AtUtc!.Value.Kind);
 
-        await db.Get<IReminderService>().SetReminderAsync(task.Id, null, Ct);
-        Assert.Null(Assert.Single(await db.Get<ITaskService>().ListDefaultListTasksAsync(Ct)).ReminderUtc);
+        var removed = await db.Get<IReminderService>().RemoveReminderAsync(ReminderId(updated), Ct);
+        Assert.Empty(removed.Reminders);
+        Assert.Empty(Assert.Single(await db.Get<ITaskService>().ListDefaultListTasksAsync(Ct)).Reminders);
     }
 
     [Fact]
-    public async Task Setting_the_Reminder_of_a_missing_Task_throws()
+    public async Task A_Task_holds_several_Reminders_the_one_that_fires_first_first()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddHours(2));
+        var reminders = db.Get<IReminderService>();
+
+        await reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Now.AddHours(-1)), Ct);
+        var updated = await reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Now.AddHours(1)), Ct);
+
+        List<DateTime?> expected = [Now.AddHours(-1), Now.AddHours(1), Now.AddHours(2)];
+        Assert.Equal(expected, Moments(updated));
+        Assert.Equal(expected, Moments(await StoredAsync(db, task.Id)));
+        Assert.Equal(expected, Moments(Assert.Single(await db.Get<ITaskService>().ListDefaultListTasksAsync(Ct))));
+    }
+
+    [Fact]
+    public async Task A_duplicate_Reminder_is_refused_and_changes_nothing()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddHours(1));
+        var reminders = db.Get<IReminderService>();
+        var other = await reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Now.AddHours(2)), Ct);
+        var otherId = other.Reminders.Single(r => r.AtUtc == Now.AddHours(2)).Id;
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Now.AddHours(1)), Ct));
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => reminders.UpdateReminderAsync(otherId, ReminderValue.Fixed(Now.AddHours(1)), Ct));
+
+        Assert.Equal([Now.AddHours(1), Now.AddHours(2)], Moments(await StoredAsync(db, task.Id)));
+    }
+
+    [Fact]
+    public async Task The_same_moment_on_two_Tasks_is_not_a_duplicate()
+    {
+        using var db = await StartAsync();
+        await AddAsync(db, "a", Now.AddHours(1));
+
+        var b = await AddAsync(db, "b", Now.AddHours(1));
+
+        Assert.Equal([Now.AddHours(1)], Moments(b));
+    }
+
+    [Fact]
+    public async Task Adding_a_Reminder_to_a_missing_Task_throws()
     {
         using var db = await StartAsync();
 
         await Assert.ThrowsAsync<KeyNotFoundException>(
-            () => db.Get<IReminderService>().SetReminderAsync(Guid.NewGuid(), Now, Ct));
+            () => db.Get<IReminderService>().AddReminderAsync(Guid.NewGuid(), ReminderValue.Fixed(Now), Ct));
+    }
+
+    [Fact]
+    public async Task Changing_or_removing_a_missing_Reminder_throws()
+    {
+        using var db = await StartAsync();
+        var reminders = db.Get<IReminderService>();
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(
+            () => reminders.UpdateReminderAsync(Guid.NewGuid(), ReminderValue.Fixed(Now), Ct));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => reminders.RemoveReminderAsync(Guid.NewGuid(), Ct));
+    }
+
+    [Fact]
+    public async Task Reminders_are_deleted_with_their_Task()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddHours(1));
+        await db.Get<IReminderService>().AddReminderAsync(task.Id, ReminderValue.Fixed(Now.AddHours(2)), Ct);
+
+        await db.Get<ITaskService>().DeleteTaskAsync(task.Id, Ct);
+
+        Assert.Empty(await db.QueryAsync(c => c.Reminders));
+    }
+
+    [Fact]
+    public async Task Several_Reminders_due_together_give_one_entry_at_the_latest_due_moment()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddHours(-2));
+        var reminders = db.Get<IReminderService>();
+        await reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Now.AddMinutes(-1)), Ct);
+        await reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Now.AddMinutes(-30)), Ct);
+        await reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Now.AddMinutes(30)), Ct);
+        AdvanceToNow(db);
+
+        var due = Assert.Single(await reminders.ListDueAsync(Ct));
+        Assert.Equal(Now.AddMinutes(-1), due.DueAtUtc);
+        Assert.True(await reminders.TryMarkFiredAsync(task.Id, due.DueAtUtc, Ct));
+        Assert.Empty(await DueTitlesAsync(db));
+
+        db.Clock.Advance(TimeSpan.FromMinutes(30));
+        due = Assert.Single(await reminders.ListDueAsync(Ct));
+        Assert.Equal(Now.AddMinutes(30), due.DueAtUtc);
+    }
+
+    [Fact]
+    public async Task Removing_a_Reminder_counts_moments_already_past_as_notified()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddMinutes(-1));
+        var reminders = db.Get<IReminderService>();
+        var withLater = await reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Now.AddHours(1)), Ct);
+        var later = withLater.Reminders.Single(r => r.AtUtc == Now.AddHours(1)).Id;
+        AdvanceToNow(db);
+        Assert.Equal(["a"], await DueTitlesAsync(db));
+
+        var removed = await reminders.RemoveReminderAsync(later, Ct);
+
+        Assert.Equal([Now.AddMinutes(-1)], Moments(removed));
+        Assert.Empty(await DueTitlesAsync(db));
     }
 
     [Fact]
@@ -104,7 +218,7 @@ public class ReminderServiceTests
         var list = await db.Get<IListService>().CreateListAsync("Home", Ct);
         var task = await db.Get<ITaskCreator>().CreateTaskInListAsync("Pay rent", list.Id, new DateOnly(2026, 10, 20), Ct);
         await db.Get<IDueService>().SetDueAsync(task.Id, new DateOnly(2026, 10, 20), new TimeOnly(14, 30), Ct);
-        await db.Get<IReminderService>().SetReminderAsync(task.Id, Now.AddMinutes(-1), Ct);
+        await db.Get<IReminderService>().AddReminderAsync(task.Id, ReminderValue.Fixed(Now.AddMinutes(-1)), Ct);
         AdvanceToNow(db);
 
         var due = Assert.Single(await db.Get<IReminderService>().ListDueAsync(Ct));
@@ -169,7 +283,7 @@ public class ReminderServiceTests
         var task = await AddDueAsync(db);
         var reminders = db.Get<IReminderService>();
         var first = await reminders.TryClaimAsync(task.Id, Now.AddMinutes(-1), Ct);
-        await reminders.SetReminderAsync(task.Id, Now.AddMinutes(1), Ct); // re-armed since
+        await reminders.UpdateReminderAsync(ReminderId(task), ReminderValue.Fixed(Now.AddMinutes(1)), Ct); // re-armed since
         db.Clock.Advance(TimeSpan.FromMinutes(2));
         var second = await reminders.TryClaimAsync(task.Id, Now.AddMinutes(1), Ct);
 
@@ -196,7 +310,7 @@ public class ReminderServiceTests
         using var db = await StartAsync();
         var task = await AddDueAsync(db);
         var reminders = db.Get<IReminderService>();
-        await reminders.SetReminderAsync(task.Id, Now.AddMinutes(1), Ct);
+        await reminders.UpdateReminderAsync(ReminderId(task), ReminderValue.Fixed(Now.AddMinutes(1)), Ct);
 
         Assert.False(await reminders.TryMarkFiredAsync(task.Id, Now.AddMinutes(-1), Ct));
 
@@ -236,12 +350,13 @@ public class ReminderServiceTests
         AdvanceToNow(db);
         var set = await AddAsync(db, "set in the past", Now.AddMinutes(-1));
         var moved = await AddAsync(db, "moved to the past", Now.AddHours(1));
-        await db.Get<IReminderService>().SetReminderAsync(moved.Id, Now.AddMinutes(-5), Ct);
+        await db.Get<IReminderService>().UpdateReminderAsync(
+            ReminderId(moved), ReminderValue.Fixed(Now.AddMinutes(-5)), Ct);
 
         Assert.Empty(await DueTitlesAsync(db));
         db.Clock.Advance(TimeSpan.FromDays(1));
         Assert.Empty(await DueTitlesAsync(db));
-        Assert.Equal(Now.AddMinutes(-1), (await StoredAsync(db, set.Id)).ReminderUtc);
+        Assert.Equal(Now.AddMinutes(-1), Assert.Single((await StoredAsync(db, set.Id)).Reminders).AtUtc);
     }
 
     [Fact]
@@ -312,8 +427,8 @@ public class ReminderServiceTests
         var reminders = db.Get<IReminderService>();
         await reminders.TryMarkFiredAsync(task.Id, Now.AddMinutes(-1), Ct);
 
-        var updated = await reminders.SetReminderAsync(task.Id, Now.AddMinutes(5), Ct);
-        Assert.True(updated.NotifiedThroughUtc < updated.ReminderUtc);
+        var updated = await reminders.UpdateReminderAsync(ReminderId(task), ReminderValue.Fixed(Now.AddMinutes(5)), Ct);
+        Assert.True(updated.NotifiedThroughUtc < updated.Reminders[0].AtUtc);
         Assert.Empty(await DueTitlesAsync(db));
 
         db.Clock.Advance(TimeSpan.FromMinutes(5));
@@ -328,7 +443,7 @@ public class ReminderServiceTests
         var reminders = db.Get<IReminderService>();
         await reminders.TryMarkFiredAsync(task.Id, Now.AddMinutes(-1), Ct);
 
-        await reminders.SetReminderAsync(task.Id, Now.AddMinutes(-1), Ct);
+        await reminders.UpdateReminderAsync(ReminderId(task), ReminderValue.Fixed(Now.AddMinutes(-1)), Ct);
 
         Assert.Empty(await DueTitlesAsync(db));
     }
@@ -341,7 +456,8 @@ public class ReminderServiceTests
         await SnoozeAsync(db, task.Id, Now.AddHours(1));
         AdvanceToNow(db);
 
-        var updated = await db.Get<IReminderService>().SetReminderAsync(task.Id, Now.AddMinutes(1), Ct);
+        var updated = await db.Get<IReminderService>().UpdateReminderAsync(
+            ReminderId(task), ReminderValue.Fixed(Now.AddMinutes(1)), Ct);
 
         Assert.Null(updated.SnoozedUntilUtc);
         db.Clock.Advance(TimeSpan.FromMinutes(1));
@@ -358,7 +474,7 @@ public class ReminderServiceTests
         var completed = await db.Get<ITaskService>().SetCompletedAsync(task.Id, true, Ct);
 
         Assert.Null(completed.SnoozedUntilUtc);
-        Assert.Equal(Now.AddHours(-1), completed.ReminderUtc);
+        Assert.Equal(Now.AddHours(-1), Assert.Single(completed.Reminders).AtUtc);
     }
 
     [Theory]
@@ -376,7 +492,7 @@ public class ReminderServiceTests
         var stored = Assert.Single(await db.Get<ITaskService>().ListDefaultListTasksAsync(Ct));
         Assert.Equal(Now.AddMinutes(minutes), snoozed.SnoozedUntilUtc);
         Assert.Equal(Now.AddMinutes(minutes), stored.SnoozedUntilUtc);
-        Assert.Equal(Now.AddMinutes(-1), stored.ReminderUtc);
+        Assert.Equal(Now.AddMinutes(-1), Assert.Single(stored.Reminders).AtUtc);
         Assert.Equal(Now.AddMinutes(-1), stored.NotifiedThroughUtc);
         Assert.Empty(await DueTitlesAsync(db));
 
@@ -448,7 +564,7 @@ public class ReminderServiceTests
         var deleted = await service.DeleteTaskAsync(task.Id, Ct);
         var restored = await service.RestoreTaskAsync(deleted, Ct);
 
-        Assert.Equal(Now.AddHours(-1), restored.ReminderUtc);
+        Assert.Equal(Now.AddHours(-1), Assert.Single(restored.Reminders).AtUtc);
         Assert.Equal(Now.AddHours(1), restored.SnoozedUntilUtc);
         Assert.Equal(Start, restored.NotifiedThroughUtc);
         Assert.Equal(Start, (await StoredAsync(db, task.Id)).NotifiedThroughUtc);
@@ -468,6 +584,27 @@ public class ReminderServiceTests
     }
 
     [Fact]
+    public async Task Undoing_a_delete_restores_every_Reminder()
+    {
+        using var db = await StartAsync();
+        var task = await AddAsync(db, "a", Now.AddHours(2));
+        var withBoth = await db.Get<IReminderService>().AddReminderAsync(task.Id, ReminderValue.Fixed(Now.AddHours(1)), Ct);
+        var service = db.Get<ITaskService>();
+
+        var restored = await service.RestoreTaskAsync(await service.DeleteTaskAsync(task.Id, Ct), Ct);
+
+        Assert.Equal([Now.AddHours(1), Now.AddHours(2)], Moments(restored));
+        var stored = await StoredAsync(db, task.Id);
+        Assert.Equal(
+            withBoth.Reminders.Select(r => (r.Id, r.AtUtc)),
+            stored.Reminders.OrderBy(r => r.AtUtc).Select(r => (r.Id, r.AtUtc)));
+
+        AdvanceToNow(db);
+        db.Clock.Advance(TimeSpan.FromHours(1));
+        Assert.Equal(["a"], await DueTitlesAsync(db));
+    }
+
+    [Fact]
     public async Task Saving_a_Task_raises_TasksChanged_and_other_saves_do_not()
     {
         using var db = await StartAsync();
@@ -480,7 +617,14 @@ public class ReminderServiceTests
         var task = await db.Get<ITaskService>().CreateTaskAsync("a", Ct);
         Assert.Equal(1, raised);
 
-        await db.Get<IReminderService>().SetReminderAsync(task.Id, Now, Ct);
+        var withReminder = await db.Get<IReminderService>().AddReminderAsync(task.Id, ReminderValue.Fixed(Now), Ct);
         Assert.Equal(2, raised);
+
+        await db.Get<IReminderService>().UpdateReminderAsync(
+            ReminderId(withReminder), ReminderValue.Fixed(Now.AddHours(1)), Ct);
+        Assert.Equal(3, raised);
+
+        await db.Get<IReminderService>().RemoveReminderAsync(ReminderId(withReminder), Ct);
+        Assert.Equal(4, raised);
     }
 }

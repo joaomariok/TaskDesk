@@ -19,11 +19,92 @@ public class ReminderCalculatorTests
         {
             Id = Guid.CreateVersion7(),
             Title = "Task",
-            ReminderUtc = reminder,
+            Reminders = reminder is { } at ? [new Reminder { Id = Guid.CreateVersion7(), AtUtc = at }] : [],
             SnoozedUntilUtc = snoozed,
             NotifiedThroughUtc = notifiedThrough,
             IsCompleted = completed,
         };
+
+    private static Guid Id(TaskItem task) => Assert.Single(task.Reminders).Id;
+
+    // A Task with a Reminder at each of these minutes after 12:00 UTC.
+    private static TaskItem TaskWith(params int[] reminders) => new()
+    {
+        Id = Guid.CreateVersion7(),
+        Title = "Task",
+        Reminders = [.. reminders.Select(m => new Reminder { Id = Guid.CreateVersion7(), AtUtc = Planned.AddMinutes(m) })],
+    };
+
+    public static TheoryData<string, int[], int?, int, int?> SeveralRemindersCases => new()
+    {
+        // description, Reminders, notified through, now, expected due instant (minutes after 12:00 UTC)
+        { "none reached yet", [10, 20], null, 5, null },
+        { "the first reached", [10, 20], null, 15, 10 },
+        { "both missed: one entry at the latest", [10, 20], null, 60, 20 },
+        { "listed in any order", [20, 10], null, 60, 20 },
+        { "the first notified, the second reached", [10, 20], 10, 25, 20 },
+        { "both notified", [10, 20], 20, 60, null },
+    };
+
+    [Theory]
+    [MemberData(nameof(SeveralRemindersCases))]
+    public void A_Task_with_several_Reminders_is_due_once_at_the_latest_reached_one(
+        string description, int[] reminders, int? notifiedThrough, int now, int? expected)
+    {
+        var task = TaskWith(reminders);
+        task.NotifiedThroughUtc = At(notifiedThrough);
+
+        Assert.True(At(expected) == ReminderCalculator.DueInstant(task, NowAt(now)), description);
+    }
+
+    [Fact]
+    public void Added_Reminders_are_kept_in_the_order_they_fire()
+    {
+        var task = TaskWith(30);
+
+        ReminderCalculator.AddReminder(task, ReminderValue.Fixed(Planned.AddMinutes(10)), NowAt(0));
+        ReminderCalculator.AddReminder(task, ReminderValue.Fixed(Planned.AddMinutes(20)), NowAt(0));
+
+        Assert.Equal([At(10), At(20), At(30)], task.Reminders.Select(r => r.AtUtc));
+        Assert.All(task.Reminders, r => Assert.Equal(ReminderKind.Fixed, r.Kind));
+    }
+
+    [Fact]
+    public void A_duplicate_Reminder_is_refused_and_changes_nothing()
+    {
+        var task = TaskWith(10, 20);
+        task.NotifiedThroughUtc = At(-5);
+        var second = task.Reminders[1].Id;
+
+        Assert.Throws<ArgumentException>(
+            () => ReminderCalculator.AddReminder(task, ReminderValue.Fixed(Planned.AddMinutes(10)), NowAt(0)));
+        Assert.Throws<ArgumentException>(
+            () => ReminderCalculator.UpdateReminder(task, second, ReminderValue.Fixed(Planned.AddMinutes(10)), NowAt(0)));
+
+        Assert.Equal([At(10), At(20)], task.Reminders.Select(r => r.AtUtc));
+        Assert.Equal(At(-5), task.NotifiedThroughUtc);
+    }
+
+    [Fact]
+    public void Changing_or_removing_a_Reminder_the_Task_does_not_have_throws()
+    {
+        var task = TaskWith(10);
+
+        Assert.Throws<KeyNotFoundException>(
+            () => ReminderCalculator.UpdateReminder(task, Guid.NewGuid(), ReminderValue.Fixed(Planned), NowAt(0)));
+        Assert.Throws<KeyNotFoundException>(() => ReminderCalculator.RemoveReminder(task, Guid.NewGuid(), NowAt(0)));
+    }
+
+    [Fact]
+    public void Removing_one_of_several_Reminders_counts_past_moments_as_notified()
+    {
+        var task = TaskWith(10, 20);
+
+        ReminderCalculator.RemoveReminder(task, task.Reminders[1].Id, NowAt(15));
+
+        Assert.Equal([At(10)], task.Reminders.Select(r => r.AtUtc));
+        Assert.False(ReminderCalculator.IsDue(task, NowAt(15)));
+    }
 
     // Minutes after the planned Reminder (12:00 UTC); null means not set.
     private static DateTime? At(int? minutes) => minutes is { } m ? Planned.AddMinutes(m) : null;
@@ -80,7 +161,7 @@ public class ReminderCalculatorTests
     {
         var task = Task();
 
-        Assert.True(ReminderCalculator.SetPlanned(task, At(-10), NowAt(0)));
+        ReminderCalculator.AddReminder(task, ReminderValue.Fixed(At(-10)!.Value), NowAt(0));
 
         Assert.False(ReminderCalculator.IsDue(task, NowAt(0)));
         Assert.False(ReminderCalculator.IsDue(task, NowAt(600)));
@@ -245,10 +326,10 @@ public class ReminderCalculatorTests
     {
         var task = Task(Planned, snoozed: Utc(12, 10), notifiedThrough: Utc(12, 10));
 
-        var changed = ReminderCalculator.SetPlanned(task, Utc(15, 0), ClockAtUtc(12, 20).GetUtcNow());
+        var changed = ReminderCalculator.UpdateReminder(task, Id(task), ReminderValue.Fixed(Utc(15, 0)), ClockAtUtc(12, 20).GetUtcNow());
 
         Assert.True(changed);
-        Assert.Equal(Utc(15, 0), task.ReminderUtc);
+        Assert.Equal(Utc(15, 0), Assert.Single(task.Reminders).AtUtc);
         Assert.Null(task.SnoozedUntilUtc);
         Assert.False(ReminderCalculator.IsDue(task, ClockAtUtc(14, 59).GetUtcNow()));
         Assert.Equal(Utc(15, 0), ReminderCalculator.DueInstant(task, ClockAtUtc(15, 0).GetUtcNow()));
@@ -259,20 +340,20 @@ public class ReminderCalculatorTests
     {
         var task = Task(Planned, notifiedThrough: Utc(12, 0));
 
-        var changed = ReminderCalculator.SetPlanned(task, Planned, ClockAtUtc(12, 20).GetUtcNow());
+        var changed = ReminderCalculator.UpdateReminder(task, Id(task), ReminderValue.Fixed(Planned), ClockAtUtc(12, 20).GetUtcNow());
 
         Assert.False(changed);
         Assert.Equal(Utc(12, 0), task.NotifiedThroughUtc);
     }
 
     [Fact]
-    public void Clearing_a_Reminder_clears_its_Snooze_and_counts_past_moments_as_notified()
+    public void Removing_a_Reminder_clears_its_Snooze_and_counts_past_moments_as_notified()
     {
         var task = Task(Planned, snoozed: Utc(12, 10), notifiedThrough: Utc(12, 0));
 
-        Assert.True(ReminderCalculator.SetPlanned(task, null, ClockAtUtc(12, 5).GetUtcNow()));
+        Assert.Equal(Planned, ReminderCalculator.RemoveReminder(task, Id(task), ClockAtUtc(12, 5).GetUtcNow()).AtUtc);
 
-        Assert.Null(task.ReminderUtc);
+        Assert.Empty(task.Reminders);
         Assert.Null(task.SnoozedUntilUtc);
         Assert.Equal(Utc(12, 5), task.NotifiedThroughUtc);
     }
@@ -296,7 +377,7 @@ public class ReminderCalculatorTests
         Assert.True(ReminderCalculator.Snooze(task, clock.GetUtcNow(), TimeSpan.FromMinutes(minutes)), description);
 
         Assert.Equal(Utc(12, 3).AddMinutes(minutes), task.SnoozedUntilUtc);
-        Assert.Equal(Planned, task.ReminderUtc);
+        Assert.Equal(Planned, Assert.Single(task.Reminders).AtUtc);
         Assert.Equal(Utc(12, 0), task.NotifiedThroughUtc);
         Assert.False(ReminderCalculator.IsDue(task, clock.GetUtcNow()));
         clock.Advance(TimeSpan.FromMinutes(minutes));
@@ -330,7 +411,7 @@ public class ReminderCalculatorTests
         Assert.True(ReminderCalculator.ClearSnooze(task));
 
         Assert.Null(task.SnoozedUntilUtc);
-        Assert.Equal(Planned, task.ReminderUtc);
+        Assert.Equal(Planned, Assert.Single(task.Reminders).AtUtc);
         Assert.True(ReminderCalculator.IsDue(task, ClockAtUtc(13, 5).GetUtcNow()));
         Assert.Equal(Planned, ReminderCalculator.DueInstant(task, ClockAtUtc(13, 5).GetUtcNow()));
     }

@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using TaskDesk.Core.Export;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
@@ -47,7 +48,21 @@ public sealed class ExportServiceTests
             Priority = Priority.High,
             DueDate = new DateOnly(2026, 10, 20),
             DueTime = new TimeOnly(14, 0),
-            ReminderUtc = new DateTime(2026, 10, 20, 13, 0, 0, DateTimeKind.Utc),
+            Reminders =
+            [
+                new Reminder
+                {
+                    Id = Guid.CreateVersion7(),
+                    TaskId = RecurringId,
+                    AtUtc = new DateTime(2026, 10, 20, 13, 0, 0, DateTimeKind.Utc),
+                },
+                new Reminder
+                {
+                    Id = Guid.CreateVersion7(),
+                    TaskId = RecurringId,
+                    AtUtc = new DateTime(2026, 10, 19, 21, 0, 0, DateTimeKind.Utc),
+                },
+            ],
             SnoozedUntilUtc = new DateTime(2026, 10, 20, 13, 15, 0, DateTimeKind.Utc),
             NotifiedThroughUtc = new DateTime(2026, 10, 20, 13, 0, 1, DateTimeKind.Utc),
             SortOrder = 1.5,
@@ -102,7 +117,7 @@ public sealed class ExportServiceTests
             var expected = $$"""
                 {
                   "format": "taskdesk-export",
-                  "schemaVersion": 1,
+                  "schemaVersion": 2,
                   "exportedUtc": "2026-10-16T09:30:00Z",
                   "appVersion": "1.0.0",
                   "lists": [
@@ -144,7 +159,7 @@ public sealed class ExportServiceTests
                       "priority": "None",
                       "dueDate": "2026-03-14",
                       "dueTime": null,
-                      "reminderUtc": null,
+                      "reminders": [],
                       "snoozedUntilUtc": null,
                       "isCompleted": true,
                       "completedUtc": "2026-10-16T02:30:00Z",
@@ -173,7 +188,16 @@ public sealed class ExportServiceTests
                       "priority": "High",
                       "dueDate": "2026-10-20",
                       "dueTime": "14:00",
-                      "reminderUtc": "2026-10-20T13:00:00Z",
+                      "reminders": [
+                        {
+                          "kind": "Fixed",
+                          "atUtc": "2026-10-19T21:00:00Z"
+                        },
+                        {
+                          "kind": "Fixed",
+                          "atUtc": "2026-10-20T13:00:00Z"
+                        }
+                      ],
                       "snoozedUntilUtc": "2026-10-20T13:15:00Z",
                       "isCompleted": false,
                       "completedUtc": null,

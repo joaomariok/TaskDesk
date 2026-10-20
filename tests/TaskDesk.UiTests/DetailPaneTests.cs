@@ -45,6 +45,28 @@ public sealed class DetailPaneTests : IDisposable
     }
 
     [Fact]
+    public void Esc_closes_the_Reminder_flyout_without_saving_and_returns_focus_to_Add_reminder()
+    {
+        _app.ResizeTo(1200, 800);
+        AddAndSelect("Book dentist");
+        AppSession.Press(VirtualKeyShort.RETURN);
+        AppSession.WaitUntil(PaneIsOpen, () => "The pane did not open.");
+        _app.Focus(Ids.AddReminderButton);
+
+        AppSession.Press(VirtualKeyShort.RETURN);
+        AppSession.WaitUntil(
+            () => _app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.ReminderDatePicker)) is not null,
+            () => "Enter on Add reminder did not open the flyout.");
+        AppSession.Press(VirtualKeyShort.ESCAPE);
+
+        AppSession.WaitUntil(
+            () => _app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.ReminderDatePicker)) is null
+                && _app.FocusedAutomationId() == Ids.AddReminderButton,
+            () => $"Esc left the flyout open or focus on '{_app.FocusedAutomationId()}'.");
+        Assert.True(PaneIsOpen(), "Esc in the flyout closed the pane too.");
+    }
+
+    [Fact]
     public void The_pane_overlays_the_list_at_1100_px_and_docks_beside_it_above()
     {
         AddAndSelect("Book dentist");

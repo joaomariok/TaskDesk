@@ -59,9 +59,12 @@ public static class ReminderCalculator
     // The moments a Task notifies at.
     private static IEnumerable<DateTime> Moments(TaskItem task)
     {
-        if (task.ReminderUtc is { } reminder)
+        foreach (var reminder in task.Reminders)
         {
-            yield return reminder;
+            if (MomentOf(reminder) is { } moment)
+            {
+                yield return moment;
+            }
         }
 
         if (task.SnoozedUntilUtc is { } snoozeEnd)
@@ -138,23 +141,106 @@ public static class ReminderCalculator
         return (DateOnly.FromDateTime(local), TimeOnly.FromDateTime(local));
     }
 
-    /// <summary>
-    /// Sets or clears the planned Reminder and clears any Snooze. Moments already past at
-    /// <paramref name="now"/> count as notified (<see cref="MarkPastNotified"/>), so a Reminder moved to a
-    /// later moment fires there even if it had fired before, and one set in the past never fires.
-    /// Returns false, changing nothing, when the Reminder already has this value.
-    /// </summary>
-    public static bool SetPlanned(TaskItem task, DateTime? reminderUtc, DateTimeOffset now)
+    /// <summary>The instant (UTC) a Reminder fires at.</summary>
+    public static DateTime? MomentOf(Reminder reminder) => reminder.Kind switch
     {
-        if (task.ReminderUtc == reminderUtc)
+        ReminderKind.Fixed => reminder.AtUtc is { } at ? DateTime.SpecifyKind(at, DateTimeKind.Utc) : null,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Adds a Reminder to the Task. Like every change to a Reminder, it clears any Snooze and counts moments
+    /// already past at <paramref name="now"/> as notified (<see cref="MarkPastNotified"/>), so a Reminder set in
+    /// the past never fires. Returns the new Reminder.
+    /// </summary>
+    /// <exception cref="ArgumentException">The Task already has this Reminder, or the value is incomplete.</exception>
+    public static Reminder AddReminder(TaskItem task, ReminderValue value, DateTimeOffset now)
+    {
+        Validate(value);
+        RefuseDuplicate(task, value, except: null);
+        var reminder = new Reminder
+        {
+            Id = Guid.CreateVersion7(),
+            TaskId = task.Id,
+            Kind = value.Kind,
+            AtUtc = value.AtUtc,
+        };
+        task.Reminders.Add(reminder);
+        Order(task);
+        Changed(task, now);
+        return reminder;
+    }
+
+    /// <summary>
+    /// Changes a Reminder of the Task, under the rules of <see cref="AddReminder"/>: a Reminder moved to a later
+    /// moment fires there even if it had fired before. Returns false, changing nothing, when the Reminder
+    /// already has this value.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">The Task has no Reminder with this id.</exception>
+    /// <exception cref="ArgumentException">Another Reminder of the Task has this value, or it is incomplete.</exception>
+    public static bool UpdateReminder(TaskItem task, Guid reminderId, ReminderValue value, DateTimeOffset now)
+    {
+        var reminder = Find(task, reminderId);
+        Validate(value);
+        if (reminder.Value == value)
         {
             return false;
         }
 
-        task.ReminderUtc = reminderUtc;
+        RefuseDuplicate(task, value, except: reminder);
+        reminder.Kind = value.Kind;
+        reminder.AtUtc = value.AtUtc;
+        Order(task);
+        Changed(task, now);
+        return true;
+    }
+
+    /// <summary>
+    /// Removes a Reminder from the Task, under the rules of <see cref="AddReminder"/>. Returns the removed
+    /// Reminder.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">The Task has no Reminder with this id.</exception>
+    public static Reminder RemoveReminder(TaskItem task, Guid reminderId, DateTimeOffset now)
+    {
+        var reminder = Find(task, reminderId);
+        task.Reminders.Remove(reminder);
+        Changed(task, now);
+        return reminder;
+    }
+
+    /// <summary>Puts the Task's Reminders in the order they fire, the first one first.</summary>
+    public static void Order(TaskItem task) =>
+        task.Reminders.Sort(static (a, b) =>
+        {
+            var byMoment = Nullable.Compare(MomentOf(a), MomentOf(b));
+            return byMoment != 0 ? byMoment : a.Id.CompareTo(b.Id);
+        });
+
+    private static Reminder Find(TaskItem task, Guid reminderId) =>
+        task.Reminders.Find(r => r.Id == reminderId)
+        ?? throw new KeyNotFoundException($"Reminder {reminderId} does not exist.");
+
+    private static void Validate(ReminderValue value)
+    {
+        if (value.Kind != ReminderKind.Fixed || value.AtUtc is null)
+        {
+            throw new ArgumentException("A Reminder needs a date and time.");
+        }
+    }
+
+    private static void RefuseDuplicate(TaskItem task, ReminderValue value, Reminder? except)
+    {
+        if (task.Reminders.Any(r => r != except && r.Value == value))
+        {
+            throw new ArgumentException("The Task already has this Reminder.");
+        }
+    }
+
+    // A change to a Reminder clears the Snooze (as it did with a single Reminder) and applies the past-moment rule.
+    private static void Changed(TaskItem task, DateTimeOffset now)
+    {
         task.SnoozedUntilUtc = null;
         MarkPastNotified(task, now);
-        return true;
     }
 
     /// <summary>

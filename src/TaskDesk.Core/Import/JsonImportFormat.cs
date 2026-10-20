@@ -1,6 +1,7 @@
 using System.Text.Json;
 using TaskDesk.Core.Export;
 using TaskDesk.Core.Lists;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
@@ -31,8 +32,35 @@ public static class JsonImportFormat
             throw new ImportException($"The TaskDesk export is damaged and cannot be read: {ex.Message}", ex);
         }
 
+        document = Upgrade(document);
         Validate(document);
         return document;
+    }
+
+    // Brings a file of an older schema version to the current layout: a version 1 Task's single "reminderUtc"
+    // becomes one Fixed Reminder. A version 2 file never carries "reminderUtc", so it is ignored there.
+    private static ExportDocument Upgrade(ExportDocument document)
+    {
+        if (document.Tasks is null)
+        {
+            return document with { SchemaVersion = JsonExportFormat.SchemaVersion };
+        }
+
+        var version1 = document.SchemaVersion == 1;
+        return document with
+        {
+            SchemaVersion = JsonExportFormat.SchemaVersion,
+            Tasks =
+            [
+                .. document.Tasks.Select(task => task is null ? null! : task with
+                {
+                    Reminders = version1
+                        ? task.ReminderUtc is { } at ? [new ExportReminder(ReminderKind.Fixed, at)] : []
+                        : task.Reminders,
+                    ReminderUtc = null,
+                }),
+            ],
+        };
     }
 
     /// <summary>
@@ -43,7 +71,7 @@ public static class JsonImportFormat
     /// <summary>The Task an imported row becomes. Instants come back as UTC; text is normalized.</summary>
     /// <param name="task">The validated row.</param>
     /// <param name="listId">The List it goes into (a Merge may map it to a local List).</param>
-    /// <returns>A new Task without Tags or Subtasks.</returns>
+    /// <returns>A new Task with its Reminders, without Tags or Subtasks.</returns>
     public static TaskItem ToTask(ExportTask task, Guid listId) => new()
     {
         Id = task.Id,
@@ -53,7 +81,16 @@ public static class JsonImportFormat
         Priority = task.Priority,
         DueDate = task.DueDate,
         DueTime = task.DueTime,
-        ReminderUtc = Utc(task.ReminderUtc),
+        Reminders =
+        [
+            .. task.Reminders.Select(r => new Reminder
+            {
+                Id = Guid.CreateVersion7(),
+                TaskId = task.Id,
+                Kind = r.Kind,
+                AtUtc = Utc(r.AtUtc),
+            }),
+        ],
         SnoozedUntilUtc = Utc(task.SnoozedUntilUtc),
         IsCompleted = task.IsCompleted,
         CompletedUtc = Utc(task.CompletedUtc),
@@ -145,11 +182,11 @@ public static class JsonImportFormat
 
         if (version.ValueKind != JsonValueKind.Number
             || !version.TryGetInt32(out var number)
-            || number != JsonExportFormat.SchemaVersion)
+            || number is < 1 or > JsonExportFormat.SchemaVersion)
         {
             var shown = version.ValueKind == JsonValueKind.Undefined ? "none" : version.GetRawText();
             throw new ImportException(
-                $"The export has schema version {shown}; this version of TaskDesk reads only schema version "
+                $"The export has schema version {shown}; this version of TaskDesk reads schema versions 1 to "
                 + $"{JsonExportFormat.SchemaVersion}.");
         }
     }
@@ -226,6 +263,15 @@ public static class JsonImportFormat
         Require(TaskNotes.IsValid(task.Notes), $"Task {task.Id} has notes longer than {TaskNotes.MaxLength} characters.");
         Require(Enum.IsDefined(task.Priority), $"Task {task.Id} has an unknown priority.");
         Require(task.DueTime is null || task.DueDate is not null, $"Task {task.Id} has a Due time without a Due date.");
+        Require(task.Reminders is not null && task.Reminders.All(r => r is not null), $"Task {task.Id} has no \"reminders\".");
+        foreach (var reminder in task.Reminders!)
+        {
+            Require(reminder.Kind == ReminderKind.Fixed && reminder.AtUtc is not null,
+                $"Task {task.Id} has a Reminder that is not a Fixed Reminder with \"atUtc\".");
+        }
+
+        Require(task.Reminders!.Select(r => r.AtUtc).Distinct().Count() == task.Reminders!.Count,
+            $"Task {task.Id} has the same Reminder twice.");
         if (task.Recurrence is null)
         {
             return;

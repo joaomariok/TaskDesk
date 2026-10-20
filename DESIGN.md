@@ -243,7 +243,7 @@ One heading row: on the left, the subtitle-size name of what is shown; a long na
 ### Inputs / Fields
 - **Style:** Fluent's text boxes, combo boxes and date pickers, unrestyled, each with a visible label above (`FieldLabel`) and an accessible name.
 - **Focus:** Fluent's focus visual. An empty list takes no keyboard focus, so no outline is drawn around nothing.
-- **Time:** the native time picker (minute steps of 1, the system clock), with a quiet clear button beside it where the time is optional (Due time, Reminder time). A date-only Reminder shows the default Reminder time in its picker.
+- **Time:** the native time picker (minute steps of 1, the system clock), with a quiet clear button beside it where the time is optional (Due time, the Reminder flyout's time). A Reminder saved with a date only fires at the default Reminder time, which its picker shows when the flyout is reopened.
 - **Errors:** a validation error shows in Overdue Red caption text directly under its field; an error that belongs to no field (a failed save) shows under the detail pane's fixed header, which a hairline parts from the scrolling fields.
 - **Read-only facts:** shown as text, never as a read-only box (the detail pane's List is its dot or ring and name).
 

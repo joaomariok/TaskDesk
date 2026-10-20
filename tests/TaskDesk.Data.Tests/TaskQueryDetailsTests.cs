@@ -1,3 +1,4 @@
+using System.Globalization;
 using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
@@ -6,11 +7,11 @@ namespace TaskDesk.Data.Tests;
 
 /// <summary>
 /// Every public query that returns Tasks loads them through the shared path: Tags ordered by normalized name,
-/// Subtasks ordered by sort order, and the owned Recurrence.
+/// Subtasks ordered by sort order, the owned Recurrence, and Reminders in the order they fire.
 /// </summary>
 public class TaskQueryDetailsTests
 {
-    private const string Expected = "zeta-first: Alpha,Zeta | first,second | Daily";
+    private const string Expected = "zeta-first: Alpha,Zeta | first,second | Daily | 10-20 09:00,10-21 09:00";
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -19,7 +20,8 @@ public class TaskQueryDetailsTests
     private static string Describe(TaskItem task) =>
         $"{task.Title}: {string.Join(',', task.Tags.Select(t => t.Name))}"
         + $" | {string.Join(',', task.Subtasks.Select(s => s.Title))}"
-        + $" | {task.Recurrence?.Frequency.ToString() ?? "none"}";
+        + $" | {task.Recurrence?.Frequency.ToString() ?? "none"}"
+        + $" | {string.Join(',', task.Reminders.Select(r => r.AtUtc?.ToString("MM-dd HH:mm", CultureInfo.InvariantCulture)))}";
 
     private static void AssertDetails(string query, TaskItem task) =>
         Assert.Equal($"{query} => {Expected}", $"{query} => {Describe(task)}");
@@ -37,11 +39,15 @@ public class TaskQueryDetailsTests
         var first = await db.Get<ITaskService>().AddSubtaskAsync(task.Id, "first", Ct);
         await db.Get<ITaskService>().MoveSubtaskAsync(first.Id, 0, Ct);
         await db.Get<IDueService>().SetDueAsync(task.Id, Today, null, Ct);
+        await db.Get<IReminderService>().AddReminderAsync(task.Id, ReminderValue.Fixed(Utc(21)), Ct);
+        await db.Get<IReminderService>().AddReminderAsync(task.Id, ReminderValue.Fixed(Utc(20)), Ct);
         return await db.Get<IRecurrenceService>().SetRecurrenceAsync(task.Id, Recurrence.Daily(), Ct);
     }
 
+    private static DateTime Utc(int day) => new(2026, 10, day, 9, 0, 0, DateTimeKind.Utc);
+
     [Fact]
-    public async Task Every_public_query_returning_Tasks_loads_Tags_Subtasks_and_Recurrence()
+    public async Task Every_public_query_returning_Tasks_loads_Tags_Subtasks_Recurrence_and_Reminders()
     {
         using var db = new TempDatabase();
         await db.Get<IDatabaseInitializer>().InitializeAsync(Ct);
@@ -72,8 +78,13 @@ public class TaskQueryDetailsTests
         AssertDetails("SetDueAsync (upcoming)", await due.SetDueAsync(id, Today.AddDays(1), null, Ct));
         AssertDetails("ListSmartViewAsync(Upcoming)", await due.ListSmartViewAsync(SmartView.Upcoming, 0, Ct), id);
 
-        var remindAt = db.Clock.GetUtcNow().UtcDateTime.AddHours(2);
-        AssertDetails("SetReminderAsync", await reminders.SetReminderAsync(id, remindAt, Ct));
+        var added = await reminders.AddReminderAsync(id, ReminderValue.Fixed(Utc(22)), Ct);
+        Assert.Equal($"AddReminderAsync => {Expected},10-22 09:00", $"AddReminderAsync => {Describe(added)}");
+        var third = added.Reminders.Single(r => r.AtUtc == Utc(22)).Id;
+        AssertDetails("RemoveReminderAsync", await reminders.RemoveReminderAsync(third, Ct));
+        var last = task.Reminders.Single(r => r.AtUtc == Utc(21)).Id;
+        await reminders.UpdateReminderAsync(last, ReminderValue.Fixed(Utc(23)), Ct);
+        AssertDetails("UpdateReminderAsync", await reminders.UpdateReminderAsync(last, ReminderValue.Fixed(Utc(21)), Ct));
         AssertDetails("SnoozeAsync", await reminders.SnoozeAsync(id, TimeSpan.FromMinutes(10), Ct));
         AssertDetails("ClearSnoozeAsync", await reminders.ClearSnoozeAsync(id, Ct));
 

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Core.Export;
@@ -18,6 +20,11 @@ public sealed record ExportList(
 
 public sealed record ExportTag(Guid Id, string Name, string? ColorHex);
 
+/// <param name="Reminders">The Task's Reminders (schema version 2), the one that fires first first.</param>
+/// <param name="ReminderUtc">
+/// The single Reminder of a schema version 1 file, read only for import, which turns it into one Fixed Reminder.
+/// Never written.
+/// </param>
 public sealed record ExportTask(
     Guid Id,
     Guid ListId,
@@ -26,7 +33,7 @@ public sealed record ExportTask(
     Priority Priority,
     DateOnly? DueDate,
     TimeOnly? DueTime,
-    DateTime? ReminderUtc,
+    IReadOnlyList<ExportReminder> Reminders,
     DateTime? SnoozedUntilUtc,
     bool IsCompleted,
     DateTime? CompletedUtc,
@@ -37,7 +44,13 @@ public sealed record ExportTask(
     IReadOnlyList<Guid> TagIds,
     IReadOnlyList<ExportSubtask> Subtasks,
     DateTime CreatedUtc,
-    DateTime UpdatedUtc);
+    DateTime UpdatedUtc,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ReminderUtc = null);
+
+/// <summary>A Reminder of a Task: its kind and, for a Fixed Reminder, its instant.</summary>
+public sealed record ExportReminder(
+    ReminderKind Kind,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? AtUtc);
 
 public sealed record ExportRecurrence(
     RecurrenceFrequency Frequency,

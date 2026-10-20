@@ -28,10 +28,10 @@ public class SampleDataGeneratorTests
 
         await SampleDataGenerator.GenerateAsync(db.Paths, 300, ct);
 
-        var tasks = await db.QueryAsync(c => c.Tasks);
+        var tasks = await db.QueryAsync(c => c.Tasks.Include(t => t.Reminders));
         Assert.All(tasks, t =>
         {
-            Assert.Null(t.ReminderUtc);
+            Assert.Empty(t.Reminders);
             Assert.Null(t.SnoozedUntilUtc);
         });
     }

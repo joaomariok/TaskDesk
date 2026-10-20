@@ -84,7 +84,8 @@ public sealed partial class SystemHooksTests
     {
         using var db = await DatabaseAsync();
         var task = await AddAsync(db, "Call the bank");
-        await db.Get<IReminderService>().SetReminderAsync(task, db.Clock.GetUtcNow().UtcDateTime.AddMinutes(5), Ct);
+        await db.Get<IReminderService>().AddReminderAsync(
+            task, ReminderValue.Fixed(db.Clock.GetUtcNow().UtcDateTime.AddMinutes(5)), Ct);
         var tray = new FakeBalloonTray();
         using var services = NotificationsFor(Sandbox, tray);
         var notifications = services.GetRequiredService<INotificationService>();

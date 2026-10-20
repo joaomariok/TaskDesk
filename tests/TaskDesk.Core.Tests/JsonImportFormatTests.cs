@@ -1,6 +1,7 @@
 using System.Text;
 using TaskDesk.Core.Export;
 using TaskDesk.Core.Import;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Core.Tests;
@@ -13,6 +14,7 @@ public sealed class JsonImportFormatTests
     private static readonly Guid TaskId = new("00000000-0000-0000-0000-0000000000b1");
     private static readonly Guid SubtaskId = new("00000000-0000-0000-0000-0000000000d1");
     private static readonly DateTime Created = new(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime ReminderAt = new(2026, 10, 20, 12, 0, 0, DateTimeKind.Utc);
 
     private static ExportList Inbox => new(InboxId, "Inbox", null, 0, true, Created);
 
@@ -20,7 +22,7 @@ public sealed class JsonImportFormatTests
 
     private static ExportTask ValidTask => new(
         TaskId, InboxId, "Pay rent", null, Priority.High, new DateOnly(2026, 10, 20), new TimeOnly(14, 0),
-        null, null, false, null, 1.0, null, null,
+        [new ExportReminder(ReminderKind.Fixed, ReminderAt)], null, false, null, 1.0, null, null,
         new ExportRecurrence(RecurrenceFrequency.Weekly, 1, [RecurrenceDays.Monday], null, null, RecurrenceAnchor.DueDate, null),
         [TagId], [new ExportSubtask(SubtaskId, "draft", false, 0)], Created, Created);
 
@@ -68,7 +70,7 @@ public sealed class JsonImportFormatTests
     }
 
     [Theory]
-    [InlineData("2")]
+    [InlineData("3")]
     [InlineData("0")]
     [InlineData("\"1\"")]
     [InlineData("null")]
@@ -77,6 +79,43 @@ public sealed class JsonImportFormatTests
         var error = Reject($$"""{ "format": "taskdesk-export", "schemaVersion": {{version}}, "lists": [], "tags": [], "tasks": [] }""");
 
         Assert.Contains("schema version", error.Message);
+    }
+
+    [Fact]
+    public void A_version_1_reminderUtc_is_read_as_one_Fixed_Reminder()
+    {
+        var json = Encoding.UTF8.GetString(JsonExportFormat.Serialize(Valid with
+        {
+            Tasks = [ValidTask, ValidTask with { Id = Guid.NewGuid(), Reminders = [], Subtasks = [] }],
+        }));
+        // A version 1 export: "reminderUtc" on each Task, no "reminders".
+        var version1 = json
+            .Replace("\"schemaVersion\": 2", "\"schemaVersion\": 1", StringComparison.Ordinal)
+            .Replace(
+                "\"reminders\": [\n        {\n          \"kind\": \"Fixed\",\n          \"atUtc\": \"2026-10-20T12:00:00Z\"\n        }\n      ]",
+                "\"reminderUtc\": \"2026-10-20T12:00:00Z\"",
+                StringComparison.Ordinal)
+            .Replace("\"reminders\": []", "\"reminderUtc\": null", StringComparison.Ordinal);
+        Assert.DoesNotContain("\"reminders\"", version1, StringComparison.Ordinal);
+
+        var read = JsonImportFormat.Read(Encoding.UTF8.GetBytes(version1));
+
+        Assert.Equal(JsonExportFormat.SchemaVersion, read.SchemaVersion);
+        Assert.Equal([new ExportReminder(ReminderKind.Fixed, ReminderAt)], read.Tasks[0].Reminders);
+        Assert.Empty(read.Tasks[1].Reminders);
+        Assert.All(read.Tasks, t => Assert.Null(t.ReminderUtc));
+        Assert.Equal(json, Encoding.UTF8.GetString(JsonExportFormat.Serialize(read)));
+    }
+
+    [Fact]
+    public void A_version_2_file_needs_reminders_on_every_Task()
+    {
+        var json = Encoding.UTF8.GetString(JsonExportFormat.Serialize(WithTask(t => t with { Reminders = [] })))
+            .Replace("\"reminders\": [],", "", StringComparison.Ordinal);
+
+        var error = Reject(json);
+
+        Assert.Contains("reminders", error.Message);
     }
 
     [Fact]
@@ -129,7 +168,8 @@ public sealed class JsonImportFormatTests
         "tag with hash", "bad tag colour", "duplicate task id", "blank title", "long title", "long notes",
         "unknown priority", "due time without date", "recurrence without date", "weekly without days",
         "interval zero", "feb 30", "duplicate subtask id", "blank subtask title", "tag twice on task",
-        "null tag ids", "null subtasks", "null list name",
+        "null tag ids", "null subtasks", "null list name", "null reminders", "reminder without instant",
+        "same reminder twice",
     ];
 
     [Theory]
@@ -170,6 +210,9 @@ public sealed class JsonImportFormatTests
             "tag twice on task" => WithTask(t => t with { TagIds = [TagId, TagId] }),
             "null tag ids" => WithTask(t => t with { TagIds = null! }),
             "null subtasks" => WithTask(t => t with { Subtasks = null! }),
+            "null reminders" => WithTask(t => t with { Reminders = null! }),
+            "reminder without instant" => WithTask(t => t with { Reminders = [new ExportReminder(ReminderKind.Fixed, null)] }),
+            "same reminder twice" => WithTask(t => t with { Reminders = [t.Reminders[0], t.Reminders[0]] }),
             _ => throw new ArgumentOutOfRangeException(nameof(problem)),
         };
 

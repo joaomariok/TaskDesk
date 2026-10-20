@@ -12,7 +12,7 @@ public static class JsonExportFormat
     public const string FormatName = "taskdesk-export";
 
     /// <summary>The version of this file layout; bump it only with a breaking change to the layout.</summary>
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = 2;
 
     private static readonly RecurrenceDays[] WeekDays =
     [
@@ -70,7 +70,7 @@ public static class JsonExportFormat
         t.Priority,
         t.DueDate,
         t.DueTime,
-        Utc(t.ReminderUtc),
+        [.. OrderedReminders(t).Select(r => new ExportReminder(r.Kind, Utc(r.AtUtc)))],
         Utc(t.SnoozedUntilUtc),
         t.IsCompleted,
         Utc(t.CompletedUtc),
@@ -86,6 +86,10 @@ public static class JsonExportFormat
     /// <summary>A Task's Tags in the same order the export lists them.</summary>
     internal static IEnumerable<TaskDesk.Core.Tags.Tag> OrderedTags(TaskItem task) =>
         task.Tags.OrderBy(tag => tag.NormalizedName, StringComparer.Ordinal).ThenBy(tag => tag.Id);
+
+    /// <summary>A Task's Reminders in the order they fire, as the export lists them.</summary>
+    internal static IEnumerable<TaskDesk.Core.Reminders.Reminder> OrderedReminders(TaskItem task) =>
+        task.Reminders.OrderBy(TaskDesk.Core.Reminders.ReminderCalculator.MomentOf).ThenBy(r => r.Id);
 
     /// <summary>A Task's Subtasks in the same order the export lists them.</summary>
     internal static IEnumerable<Subtask> OrderedSubtasks(TaskItem task) =>

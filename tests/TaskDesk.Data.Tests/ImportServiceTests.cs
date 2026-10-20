@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TaskDesk.Core.Export;
 using TaskDesk.Core.Import;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
@@ -48,7 +49,7 @@ public sealed class ImportServiceTests
             CompletedUtc = new DateTime(2026, 10, 13, 12, 0, 0, DateTimeKind.Utc),
             DueDate = new DateOnly(2026, 10, 13),
             DueTime = new TimeOnly(14, 0),
-            ReminderUtc = new DateTime(2026, 10, 13, 13, 0, 0, DateTimeKind.Utc),
+            Reminders = [new Reminder { Id = Guid.CreateVersion7(), AtUtc = new DateTime(2026, 10, 13, 13, 0, 0, DateTimeKind.Utc) }],
             SortOrder = 1.5,
             SeriesId = SeriesId,
             NextOccurrenceId = RecurringId,
@@ -66,7 +67,11 @@ public sealed class ImportServiceTests
             Priority = Priority.High,
             DueDate = new DateOnly(2026, 10, 20),
             DueTime = new TimeOnly(14, 0),
-            ReminderUtc = new DateTime(2026, 10, 20, 13, 0, 0, DateTimeKind.Utc),
+            Reminders =
+            [
+                new Reminder { Id = Guid.CreateVersion7(), AtUtc = new DateTime(2026, 10, 20, 13, 0, 0, DateTimeKind.Utc) },
+                new Reminder { Id = Guid.CreateVersion7(), AtUtc = new DateTime(2026, 10, 19, 21, 0, 0, DateTimeKind.Utc) },
+            ],
             SnoozedUntilUtc = new DateTime(2026, 10, 20, 13, 15, 0, DateTimeKind.Utc),
             SortOrder = 2.5,
             SeriesId = SeriesId,
@@ -87,7 +92,7 @@ public sealed class ImportServiceTests
             ListId = inbox.Id,
             Title = "Birthday",
             DueDate = new DateOnly(2027, 3, 14),
-            ReminderUtc = new DateTime(2026, 10, 10, 12, 0, 0, DateTimeKind.Utc), // already past, never fired
+            Reminders = [new Reminder { Id = Guid.CreateVersion7(), AtUtc = new DateTime(2026, 10, 10, 12, 0, 0, DateTimeKind.Utc) }], // already past, never fired
             SortOrder = 1,
             Recurrence = Recurrence.Yearly(3, 14) with { Anchor = RecurrenceAnchor.CompletionDate },
             CreatedUtc = new DateTime(2026, 10, 2, 9, 5, 0, DateTimeKind.Utc),
@@ -189,6 +194,51 @@ public sealed class ImportServiceTests
         var due = Assert.Single(await reminders.ListDueAsync(Ct));
         Assert.Equal(RecurringId, due.TaskId);
     }
+    [Fact]
+    public async Task A_version_1_file_turns_each_reminderUtc_into_one_Fixed_Reminder()
+    {
+        using var source = await SeedSourceAsync();
+        using var target = await FreshAsync();
+        // The same data as a version 1 export: one "reminderUtc" per Task instead of "reminders".
+        var document = System.Text.Json.Nodes.JsonNode.Parse(await ExportAsync(source))!;
+        document["schemaVersion"] = 1;
+        foreach (var task in document["tasks"]!.AsArray())
+        {
+            var first = task!["reminders"]!.AsArray().FirstOrDefault();
+            task.AsObject().Remove("reminders");
+            task["reminderUtc"] = first?["atUtc"]?.DeepClone();
+        }
+
+        await target.Get<IImportService>().ImportJsonAsync(
+            await WriteFileAsync(target, System.Text.Encoding.UTF8.GetBytes(document.ToJsonString())),
+            ImportMode.Replace, Ct);
+
+        var tasks = (await target.QueryAsync(c => c.Tasks.Include(t => t.Reminders))).ToDictionary(t => t.Id);
+        Assert.Equal(
+            [(ReminderKind.Fixed, (DateTime?)new DateTime(2026, 10, 19, 21, 0, 0, DateTimeKind.Utc))],
+            tasks[RecurringId].Reminders.Select(r => (r.Kind, r.AtUtc)));
+        Assert.Equal(
+            [(DateTime?)new DateTime(2026, 10, 10, 12, 0, 0, DateTimeKind.Utc)],
+            tasks[BirthdayId].Reminders.Select(r => r.AtUtc));
+        Assert.Equal(target.Clock.GetUtcNow().UtcDateTime, tasks[RecurringId].NotifiedThroughUtc);
+    }
+
+    [Fact]
+    public async Task Imported_Reminders_are_restored_in_full()
+    {
+        using var source = await SeedSourceAsync();
+        using var target = await FreshAsync();
+
+        await target.Get<IImportService>().ImportJsonAsync(
+            await WriteFileAsync(target, await ExportAsync(source)), ImportMode.Merge, Ct);
+
+        var recurring = Assert.Single(await target.QueryAsync(
+            c => c.Tasks.Include(t => t.Reminders).Where(t => t.Id == RecurringId)));
+        Assert.Equal(
+            [new DateTime(2026, 10, 19, 21, 0, 0, DateTimeKind.Utc), new DateTime(2026, 10, 20, 13, 0, 0, DateTimeKind.Utc)],
+            recurring.Reminders.Select(r => r.AtUtc!.Value).Order());
+    }
+
     /// <summary>A target whose Default List is "Caixa" and which has its own "WORK" List, "Work" Tag and a Task with DoneId.</summary>
     private static async Task<(TempDatabase Db, Guid CaixaId, Guid LocalWorkId, Guid LocalTagId)> SeedTargetAsync()
     {
@@ -274,7 +324,7 @@ public sealed class ImportServiceTests
     public static TheoryData<string, ImportMode> RejectedFiles() => new()
     {
         { """{ "format": "something-else", "schemaVersion": 1, "lists": [], "tags": [], "tasks": [] }""", ImportMode.Replace },
-        { """{ "format": "taskdesk-export", "schemaVersion": 2, "lists": [], "tags": [], "tasks": [] }""", ImportMode.Replace },
+        { """{ "format": "taskdesk-export", "schemaVersion": 3, "lists": [], "tags": [], "tasks": [] }""", ImportMode.Replace },
         { "{ \"format\": \"taskdesk-export\", \"schemaVersion\": 1, \"lists\": [", ImportMode.Replace },
         { "dangling list", ImportMode.Replace },
         { "dangling list", ImportMode.Merge },

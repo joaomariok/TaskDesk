@@ -60,6 +60,7 @@ internal sealed class ImportService(
     {
         await context.TaskTags.ExecuteDeleteAsync(cancellationToken);
         await context.Subtasks.ExecuteDeleteAsync(cancellationToken);
+        await context.Reminders.ExecuteDeleteAsync(cancellationToken);
         await context.Tasks.ExecuteDeleteAsync(cancellationToken);
         await context.Tags.ExecuteDeleteAsync(cancellationToken);
         await context.Lists.ExecuteDeleteAsync(cancellationToken);

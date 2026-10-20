@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
@@ -14,7 +15,7 @@ namespace TaskDesk.Views;
 
 /// <summary>
 /// The detail pane of the Task the view model shows (<see cref="MainViewModel.DetailTask"/>): its title and
-/// completion, Subtasks, Due, Reminder, Repeat, Priority, List, Tags and Notes. Edits save through the view
+/// completion, Subtasks, Due, Reminders, Repeat, Priority, List, Tags and Notes. Edits save through the view
 /// model. <see cref="DetailDock"/> shows it beside or over the list.
 /// </summary>
 public sealed partial class DetailPane : UserControl
@@ -23,13 +24,19 @@ public sealed partial class DetailPane : UserControl
     {
         ViewModel = viewModel;
         Repeat = viewModel.Repeat;
+        ReminderEditor = viewModel.ReminderEditor;
         InitializeComponent();
+        Loaded += (_, _) => ReminderEditor.PropertyChanged += OnReminderEditorChanged;
+        Unloaded += (_, _) => ReminderEditor.PropertyChanged -= OnReminderEditorChanged;
     }
 
     public MainViewModel ViewModel { get; }
 
     /// <summary>The Repeat editor of the view model, which never changes.</summary>
     public RepeatEditorViewModel Repeat { get; }
+
+    /// <summary>The Reminder flyout's editor, which never changes.</summary>
+    public ReminderEditorViewModel ReminderEditor { get; }
 
     /// <summary>The Repeat choices, in the order of <see cref="RepeatPreset"/>'s values.</summary>
     public static string[] RepeatNames { get; } = Enum.GetNames<RepeatPreset>();
@@ -151,14 +158,69 @@ public sealed partial class DetailPane : UserControl
         }
     }
 
-    /// <summary>The picked Reminder day; clearing the picker clears the whole Reminder.</summary>
+    /// <summary>The picked Reminder day in the flyout; clearing the picker clears the time too.</summary>
     public void SetReminderDate(DateTimeOffset? picked)
     {
         var date = ToDay(picked);
-        if (ViewModel.DetailReminderDate != date)
+        if (ReminderEditor.Date != date)
         {
-            ViewModel.DetailReminderDate = date;
+            ReminderEditor.Date = date;
         }
+    }
+
+    // What opened the Reminder flyout, which takes the focus back when it closes.
+    private Control? _reminderOpener;
+
+    private void OnAddReminderClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.AddReminderCommand.Execute(null);
+        ShowReminderFlyout((Control)sender);
+    }
+
+    private void OnEditReminderClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ReminderRowViewModel row })
+        {
+            row.EditCommand.Execute(null);
+            ShowReminderFlyout((Control)sender);
+        }
+    }
+
+    // Each ShowAt counts; the flyout's Closed can arrive after the next ShowAt, and then belongs to an earlier one.
+    private int _reminderShows;
+    private int _reminderShowOpened;
+
+    private void ShowReminderFlyout(Control opener)
+    {
+        _reminderOpener = opener;
+        _reminderShows++;
+        ReminderFlyout.ShowAt(opener);
+    }
+
+    private void OnReminderFlyoutOpened(object? sender, object e) => _reminderShowOpened = _reminderShows;
+
+    // Save and Cancel close the editor; the flyout follows.
+    private void OnReminderEditorChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ReminderEditorViewModel.IsOpen) && !ReminderEditor.IsOpen && ReminderFlyout.IsOpen)
+        {
+            ReminderFlyout.Hide();
+        }
+    }
+
+    // Esc or a click outside closes the flyout without saving; the focus goes back to what opened it, or to
+    // "Add reminder" when that row is gone.
+    private void OnReminderFlyoutClosed(object? sender, object e)
+    {
+        if (_reminderShowOpened != _reminderShows)
+        {
+            return; // shown again since: the editor and the focus belong to that showing
+        }
+
+        ReminderEditor.CancelCommand.Execute(null);
+        var target = _reminderOpener is { IsLoaded: true } opener ? opener : AddReminderButton;
+        _reminderOpener = null;
+        target.Focus(FocusState.Programmatic);
     }
 
     /// <summary>The picked Repeat end day; clearing the picker removes the end.</summary>

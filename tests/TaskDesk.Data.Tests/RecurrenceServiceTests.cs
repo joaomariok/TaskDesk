@@ -39,7 +39,7 @@ public class RecurrenceServiceTests
     }
 
     private static Task<List<TaskItem>> AllTasksAsync(TempDatabase db) =>
-        db.QueryAsync(c => c.Tasks.Include(t => t.Tags).Include(t => t.Subtasks).OrderBy(t => t.CreatedUtc).ThenBy(t => t.Id));
+        db.QueryAsync(c => c.Tasks.Include(t => t.Tags).Include(t => t.Subtasks).Include(t => t.Reminders).OrderBy(t => t.CreatedUtc).ThenBy(t => t.Id));
 
     private static async Task<TaskItem> TaskAsync(TempDatabase db, Guid id) =>
         (await AllTasksAsync(db)).Single(t => t.Id == id);
@@ -165,6 +165,26 @@ public class RecurrenceServiceTests
 
     private static DateTime Utc(int day, int hour, int minute = 0) => new(2026, 10, day, hour, minute, 0, DateTimeKind.Utc);
 
+    private static List<DateTime> Moments(TaskItem task) =>
+        [.. task.Reminders.Select(r => r.AtUtc!.Value).Order()];
+
+    [Fact]
+    public async Task Each_Reminder_of_the_next_Occurrence_keeps_its_offset_from_the_Due()
+    {
+        using var db = await StartAsync();
+        // Due 20 Oct 14:00 local (17:00 UTC); Reminders the day before at 18:00 local and on the day at 09:00 local.
+        var task = await AddAsync(db, "a", Day(20), Recurrence.Daily(), new TimeOnly(14, 0));
+        var reminders = db.Get<IReminderService>();
+        await reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Utc(19, 21)), Ct);
+        await reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Utc(20, 12)), Ct);
+
+        await CompleteAsync(db, task.Id);
+
+        var old = await TaskAsync(db, task.Id);
+        Assert.Equal([Utc(19, 21), Utc(20, 12)], Moments(old));
+        Assert.Equal([Utc(20, 21), Utc(21, 12)], Moments(await TaskAsync(db, old.NextOccurrenceId!.Value)));
+    }
+
     [Fact]
     public async Task The_next_Occurrence_keeps_the_planned_Reminder_offset_never_the_Snooze()
     {
@@ -172,7 +192,7 @@ public class RecurrenceServiceTests
         // Due 20 Oct 14:00 local (17:00 UTC); Reminder an hour before, at 13:00 local (16:00 UTC).
         var task = await AddAsync(db, "a", Day(20), Recurrence.Daily(), new TimeOnly(14, 0));
         var reminders = db.Get<IReminderService>();
-        await reminders.SetReminderAsync(task.Id, Utc(20, 16), Ct);
+        await reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Utc(20, 16)), Ct);
         db.Clock.SetUtcNow(new DateTimeOffset(Utc(20, 16, 1)));
         Assert.True(await reminders.TryMarkFiredAsync(task.Id, Utc(20, 16), Ct));
         await reminders.SnoozeAsync(task.Id, ReminderCalculator.LongSnooze, Ct);
@@ -181,9 +201,9 @@ public class RecurrenceServiceTests
 
         var old = await TaskAsync(db, task.Id);
         var next = await TaskAsync(db, old.NextOccurrenceId!.Value);
-        Assert.Equal(Utc(20, 16), old.ReminderUtc);
+        Assert.Equal([Utc(20, 16)], Moments(old));
         Assert.Null(old.SnoozedUntilUtc);
-        Assert.Equal(Utc(21, 16), next.ReminderUtc);
+        Assert.Equal([Utc(21, 16)], Moments(next));
         Assert.Null(next.SnoozedUntilUtc);
         Assert.Equal(Utc(20, 16, 1), next.NotifiedThroughUtc);
     }
@@ -196,13 +216,13 @@ public class RecurrenceServiceTests
         // (due 21 Oct) carries a Reminder at 21 Oct 16:00 UTC, already past.
         var task = await AddAsync(db, "a", Day(20), Recurrence.Daily(), new TimeOnly(14, 0));
         var reminders = db.Get<IReminderService>();
-        await reminders.SetReminderAsync(task.Id, Utc(20, 16), Ct);
+        await reminders.AddReminderAsync(task.Id, ReminderValue.Fixed(Utc(20, 16)), Ct);
         db.Clock.SetUtcNow(new DateTimeOffset(Utc(23, 10)));
 
         await CompleteAsync(db, task.Id);
 
         var next = await TaskAsync(db, (await TaskAsync(db, task.Id)).NextOccurrenceId!.Value);
-        Assert.True(next.ReminderUtc < Utc(23, 10));
+        Assert.True(Assert.Single(next.Reminders).AtUtc < Utc(23, 10));
         Assert.Empty(await reminders.ListDueAsync(Ct));
     }
 
@@ -220,13 +240,13 @@ public class RecurrenceServiceTests
                     TimeZoneInfo.TransitionTime.CreateFloatingDateRule(new DateTime(1, 1, 1, 3, 0, 0), 10, 5, DayOfWeek.Sunday)),
             ]));
         var task = await AddAsync(db, "a", Day(24), Recurrence.Daily());
-        await db.Get<IReminderService>().SetReminderAsync(task.Id, Utc(24, 7), Ct); // 09:00 local, daylight saving
+        await db.Get<IReminderService>().AddReminderAsync(task.Id, ReminderValue.Fixed(Utc(24, 7)), Ct); // 09:00 local, daylight saving
 
         await CompleteAsync(db, task.Id);
 
         var next = await TaskAsync(db, (await TaskAsync(db, task.Id)).NextOccurrenceId!.Value);
         Assert.Equal(Day(25), next.DueDate);
-        Assert.Equal(Utc(25, 8), next.ReminderUtc); // still 09:00 local, now standard time
+        Assert.Equal([Utc(25, 8)], Moments(next)); // still 09:00 local, now standard time
     }
 
     [Fact]
@@ -238,7 +258,7 @@ public class RecurrenceServiceTests
         await CompleteAsync(db, task.Id);
 
         var next = await TaskAsync(db, (await TaskAsync(db, task.Id)).NextOccurrenceId!.Value);
-        Assert.Null(next.ReminderUtc);
+        Assert.Empty(next.Reminders);
     }
 
     [Fact]
@@ -246,11 +266,11 @@ public class RecurrenceServiceTests
     {
         using var db = await StartAsync();
         var task = await AddAsync(db, "a", Day(20), Recurrence.Daily());
-        await db.Get<IReminderService>().SetReminderAsync(task.Id, Utc(19, 21), Ct); // 18:00 local the day before
+        await db.Get<IReminderService>().AddReminderAsync(task.Id, ReminderValue.Fixed(Utc(19, 21)), Ct); // 18:00 local the day before
 
         var skipped = await db.Get<IRecurrenceService>().SkipOccurrenceAsync(task.Id, Ct);
 
-        Assert.Equal(Utc(20, 21), (await TaskAsync(db, skipped.ProducedOccurrenceId!.Value)).ReminderUtc);
+        Assert.Equal([Utc(20, 21)], Moments(await TaskAsync(db, skipped.ProducedOccurrenceId!.Value)));
     }
 
     [Fact]

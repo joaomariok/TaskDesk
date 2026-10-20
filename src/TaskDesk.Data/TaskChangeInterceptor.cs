@@ -7,8 +7,8 @@ using TaskDesk.Core.Tasks;
 namespace TaskDesk.Data;
 
 /// <summary>
-/// Raises <see cref="TasksChanged"/> after every successful save that added, edited or removed a Task,
-/// whichever service made it. Bulk updates (ExecuteUpdate) bypass it.
+/// Raises <see cref="TasksChanged"/> after every successful save that added, edited or removed a Task or one of
+/// its Reminders, whichever service made it. Bulk updates (ExecuteUpdate) bypass it.
 /// </summary>
 internal sealed class TaskChangeInterceptor : SaveChangesInterceptor, ITaskChangeNotifier
 {
@@ -56,8 +56,9 @@ internal sealed class TaskChangeInterceptor : SaveChangesInterceptor, ITaskChang
 
     private void Note(DbContext? context)
     {
-        if (context is not null && context.ChangeTracker.Entries<TaskItem>()
-                .Any(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+        if (context is not null && context.ChangeTracker.Entries()
+                .Any(e => e.Entity is TaskItem or Reminder
+                    && e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
             _changing.AddOrUpdate(context, Marker);
         }

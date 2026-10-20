@@ -160,11 +160,24 @@ public sealed class DetailSaveQueueTests
 
     private sealed class LoggedReminderService(FakeReminderService inner, SaveLog log) : IReminderService
     {
-        public async Task<TaskItem> SetReminderAsync(
-            Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default)
+        public async Task<TaskItem> AddReminderAsync(
+            Guid taskId, ReminderValue reminder, CancellationToken cancellationToken = default)
         {
             await log.EnterAsync(Reminder);
-            return await inner.SetReminderAsync(taskId, reminderUtc, cancellationToken);
+            return await inner.AddReminderAsync(taskId, reminder, cancellationToken);
+        }
+
+        public async Task<TaskItem> UpdateReminderAsync(
+            Guid reminderId, ReminderValue reminder, CancellationToken cancellationToken = default)
+        {
+            await log.EnterAsync(Reminder);
+            return await inner.UpdateReminderAsync(reminderId, reminder, cancellationToken);
+        }
+
+        public async Task<TaskItem> RemoveReminderAsync(Guid reminderId, CancellationToken cancellationToken = default)
+        {
+            await log.EnterAsync(Reminder);
+            return await inner.RemoveReminderAsync(reminderId, cancellationToken);
         }
 
         public Task<TaskItem> SnoozeAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default)
@@ -222,7 +235,9 @@ public sealed class DetailSaveQueueTests
                 vm.DetailDueDate = new DateTime(2026, 10, second ? 22 : 21);
                 break;
             case Reminder:
-                vm.DetailReminderDate = new DateTime(2026, 10, second ? 22 : 21);
+                vm.AddReminderCommand.Execute(null);
+                vm.ReminderEditor.Date = new DateTime(2026, 10, second ? 22 : 21);
+                vm.ReminderEditor.SaveCommand.Execute(null);
                 break;
             case Recurrence:
                 vm.Repeat.Preset = second ? RepeatPreset.Weekly : RepeatPreset.Daily;

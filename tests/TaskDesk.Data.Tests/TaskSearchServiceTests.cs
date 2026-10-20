@@ -144,8 +144,8 @@ public class TaskSearchServiceTests
         using var db = await StartAsync();
         await AddAsync(db, "plain");
         var reminded = await AddAsync(db, "reminded");
-        await db.Get<TaskDesk.Core.Reminders.IReminderService>().SetReminderAsync(
-            reminded.Id, new DateTime(2026, 10, 20, 12, 0, 0, DateTimeKind.Utc), Ct);
+        await db.Get<TaskDesk.Core.Reminders.IReminderService>().AddReminderAsync(
+            reminded.Id, TaskDesk.Core.Reminders.ReminderValue.Fixed(new DateTime(2026, 10, 20, 12, 0, 0, DateTimeKind.Utc)), Ct);
 
         Assert.Equal(["reminded"], await SearchAsync(db, new(HasReminder: true)));
         Assert.Equal(["reminded"], await SearchAsync(db, new(HasReminder: true, View: SmartView.All)));

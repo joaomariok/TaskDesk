@@ -3,6 +3,7 @@ namespace TaskDesk.UiTests;
 /// <summary>The <c>AutomationProperties.AutomationId</c> values the tests use; each is set in the app XAML.</summary>
 internal static class Ids
 {
+    public const string AddReminderButton = nameof(AddReminderButton);
     public const string CompletedHeading = nameof(CompletedHeading);
     public const string CompletedTaskList = nameof(CompletedTaskList);
     public const string DetailCompletedBox = nameof(DetailCompletedBox);
@@ -23,6 +24,7 @@ internal static class Ids
     public const string PageHeading = nameof(PageHeading);
     public const string QuickAddBox = nameof(QuickAddBox);
     public const string RailListsList = nameof(RailListsList);
+    public const string ReminderDatePicker = nameof(ReminderDatePicker);
     public const string RailTagList = nameof(RailTagList);
     public const string RailTagsButton = nameof(RailTagsButton);
     public const string SidebarExpandButton = nameof(SidebarExpandButton);

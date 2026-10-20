@@ -68,7 +68,10 @@ $now = [DateTime]::UtcNow
 $fmt = 'yyyy-MM-dd HH:mm:ss.fffffff'
 $created = $now.ToString($fmt)
 $reminder = $now.AddSeconds(-5).ToString($fmt)
-sqlite3 $db "insert into Tasks (Id, ListId, Title, IsCompleted, SortOrder, CreatedUtc, UpdatedUtc, Priority, ReminderUtc) values ('$id', '$listId', 'Toast test', 0, 1000, '$created', '$created', 0, '$reminder');"
+sqlite3 $db "insert into Tasks (Id, ListId, Title, IsCompleted, SortOrder, CreatedUtc, UpdatedUtc, Priority) values ('$id', '$listId', 'Toast test', 0, 1000, '$created', '$created', 0);"
+if ($LASTEXITCODE -ne 0) { throw "sqlite3 insert failed with exit code $LASTEXITCODE." }
+$reminderId = [guid]::NewGuid().ToString().ToUpperInvariant()
+sqlite3 $db "insert into Reminders (Id, TaskId, Kind, AtUtc) values ('$reminderId', '$id', 0, '$reminder');"
 if ($LASTEXITCODE -ne 0) { throw "sqlite3 insert failed with exit code $LASTEXITCODE." }
 Write-Host "Seeded Task $id with a Reminder due at $reminder UTC"
 

@@ -42,7 +42,7 @@ internal static class TaskSearchFilter
 
             if (hasReminder)
             {
-                tasks = tasks.Where(t => t.ReminderUtc != null);
+                tasks = tasks.Where(t => t.Reminders.Any());
             }
 
             return hasDue ? tasks.Where(t => t.DueDate != null) : tasks;

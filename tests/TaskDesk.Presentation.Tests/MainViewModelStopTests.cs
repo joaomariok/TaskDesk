@@ -659,23 +659,31 @@ public sealed class MainViewModelStopTests
         s.Vm.SelectedTask = s.Vm.Tasks[0];
         await s.Vm.StopAsync();
 
-        s.Vm.DetailReminderDate = new DateTime(2026, 10, 21);
+        AddReminder(s.Vm, new DateTime(2026, 10, 21));
         await s.Vm.PendingSave;
 
-        Assert.Empty(s.Reminders.SetCalls);
+        Assert.Empty(s.Reminders.ReminderChanges);
         Assert.Null(s.Vm.ErrorMessage);
     }
 
     [Fact]
-    public async Task After_the_stop_a_detail_Reminder_date_leaves_the_Reminder_time_as_it_is()
+    public async Task After_the_stop_a_detail_Reminder_save_leaves_the_Reminder_rows_as_they_are()
     {
         var s = await StartAsync("a");
         s.Vm.SelectedTask = s.Vm.Tasks[0];
         await s.Vm.StopAsync();
 
-        s.Vm.DetailReminderDate = new DateTime(2026, 10, 21);
+        AddReminder(s.Vm, new DateTime(2026, 10, 21));
 
-        Assert.Null(s.Vm.DetailReminderTime);
+        Assert.Empty(s.Vm.DetailReminders);
+    }
+
+    // Adds a date-only Reminder through the pane's flyout.
+    private static void AddReminder(MainViewModel vm, DateTime date)
+    {
+        vm.AddReminderCommand.Execute(null);
+        vm.ReminderEditor.Date = date;
+        vm.ReminderEditor.SaveCommand.Execute(null);
     }
 
     [Fact]
@@ -688,7 +696,7 @@ public sealed class MainViewModelStopTests
 
         s.Vm.DetailDueDate = new DateTime(2026, 10, 21);
         s.Vm.Repeat.Preset = RepeatPreset.Daily;
-        s.Vm.DetailReminderDate = new DateTime(2026, 10, 21);
+        AddReminder(s.Vm, new DateTime(2026, 10, 21));
         await s.Vm.PendingSave;
 
         Assert.Equal("Could not save the changes: disk full", s.Vm.ErrorMessage);
@@ -733,16 +741,16 @@ public sealed class MainViewModelStopTests
     {
         var s = await StartAsync("a");
         s.Vm.SelectedTask = s.Vm.Tasks[0];
-        s.Reminders.HoldSets = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        s.Vm.DetailReminderDate = new DateTime(2026, 10, 21);
-        Assert.Single(s.Reminders.SetCalls);
+        s.Reminders.HoldChanges = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        AddReminder(s.Vm, new DateTime(2026, 10, 21));
+        Assert.Single(s.Reminders.ReminderChanges);
 
         var stop = s.Vm.StopAsync();
         Assert.False(stop.IsCompleted);
 
-        s.Reminders.HoldSets.SetResult();
+        s.Reminders.HoldChanges.SetResult();
         await stop;
-        Assert.NotNull(s.Reminders.Tasks.Single().ReminderUtc);
+        Assert.Single(s.Reminders.Tasks.Single().Reminders);
     }
 
     [Fact]

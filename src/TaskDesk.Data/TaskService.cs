@@ -211,7 +211,13 @@ internal sealed class TaskService(
             CompletedUtc = snapshot.CompletedUtc,
             DueDate = snapshot.DueDate,
             DueTime = snapshot.DueTime,
-            ReminderUtc = snapshot.ReminderUtc,
+            Reminders = [.. snapshot.Reminders.Select(r => new Reminder
+            {
+                Id = r.Id,
+                TaskId = snapshot.Id,
+                Kind = r.Kind,
+                AtUtc = r.AtUtc,
+            })],
             SnoozedUntilUtc = snapshot.SnoozedUntilUtc,
             NotifiedThroughUtc = snapshot.NotifiedThroughUtc,
             Recurrence = snapshot.Recurrence is { } recurrence ? recurrence with { } : null,

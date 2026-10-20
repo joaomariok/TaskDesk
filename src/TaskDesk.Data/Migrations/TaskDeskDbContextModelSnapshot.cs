@@ -17,6 +17,27 @@ namespace TaskDesk.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
+            modelBuilder.Entity("TaskDesk.Core.Reminders.Reminder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("AtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId");
+
+                    b.ToTable("Reminders", (string)null);
+                });
+
             modelBuilder.Entity("TaskDesk.Core.Tags.Tag", b =>
                 {
                     b.Property<Guid>("Id")
@@ -123,9 +144,6 @@ namespace TaskDesk.Data.Migrations
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime?>("ReminderUtc")
-                        .HasColumnType("TEXT");
-
                     b.Property<Guid?>("SeriesId")
                         .HasColumnType("TEXT");
 
@@ -146,8 +164,6 @@ namespace TaskDesk.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DueDate");
-
-                    b.HasIndex("ReminderUtc");
 
                     b.HasIndex("SeriesId");
 
@@ -187,6 +203,15 @@ namespace TaskDesk.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Lists", (string)null);
+                });
+
+            modelBuilder.Entity("TaskDesk.Core.Reminders.Reminder", b =>
+                {
+                    b.HasOne("TaskDesk.Core.Tasks.TaskItem", null)
+                        .WithMany("Reminders")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TaskDesk.Core.Tags.TaskTag", b =>
@@ -267,6 +292,8 @@ namespace TaskDesk.Data.Migrations
 
             modelBuilder.Entity("TaskDesk.Core.Tasks.TaskItem", b =>
                 {
+                    b.Navigation("Reminders");
+
                     b.Navigation("Subtasks");
                 });
 #pragma warning restore 612, 618

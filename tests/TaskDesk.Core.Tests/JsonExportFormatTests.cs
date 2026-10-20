@@ -14,11 +14,11 @@ public sealed class JsonExportFormatTests
     {
         // Changing either breaks every export already on disk and the Import that reads them.
         Assert.Equal("taskdesk-export", JsonExportFormat.FormatName);
-        Assert.Equal(1, JsonExportFormat.SchemaVersion);
+        Assert.Equal(2, JsonExportFormat.SchemaVersion);
 
         using var json = Parse(new ExportData([], [], []));
         Assert.Equal("taskdesk-export", json.RootElement.GetProperty("format").GetString());
-        Assert.Equal(1, json.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(2, json.RootElement.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("1.0.0", json.RootElement.GetProperty("appVersion").GetString());
         Assert.Equal("2026-10-16T20:00:00Z", json.RootElement.GetProperty("exportedUtc").GetString());
     }
@@ -135,7 +135,19 @@ public sealed class JsonExportFormatTests
             Priority = Priority.Low,
             DueDate = new DateOnly(2026, 2, 28),
             DueTime = new TimeOnly(8, 45),
-            ReminderUtc = new DateTime(2026, 2, 28, 7, 0, 0, 123, DateTimeKind.Utc),
+            Reminders =
+            [
+                new TaskDesk.Core.Reminders.Reminder
+                {
+                    Id = Guid.NewGuid(),
+                    AtUtc = new DateTime(2026, 2, 28, 7, 0, 0, 123, DateTimeKind.Utc),
+                },
+                new TaskDesk.Core.Reminders.Reminder
+                {
+                    Id = Guid.NewGuid(),
+                    AtUtc = new DateTime(2026, 2, 27, 7, 0, 0, DateTimeKind.Utc),
+                },
+            ],
             SnoozedUntilUtc = new DateTime(2026, 2, 28, 7, 30, 0, DateTimeKind.Utc),
             SeriesId = Guid.NewGuid(),
             NextOccurrenceId = Guid.NewGuid(),
@@ -153,10 +165,46 @@ public sealed class JsonExportFormatTests
 
         Assert.Equal(Encoding.UTF8.GetString(first), Encoding.UTF8.GetString(second));
         var read = Assert.Single(document.Tasks);
-        Assert.Equal(task.ReminderUtc, read.ReminderUtc);
+        Assert.Equal(
+            [new DateTime(2026, 2, 27, 7, 0, 0, DateTimeKind.Utc), new DateTime(2026, 2, 28, 7, 0, 0, 123, DateTimeKind.Utc)],
+            read.Reminders.Select(r => r.AtUtc!.Value));
         Assert.Equal(task.SortOrder, read.SortOrder);
         Assert.Equal(new TimeOnly(8, 45), read.DueTime);
         Assert.Equal(RecurrenceAnchor.CompletionDate, read.Recurrence!.Anchor);
+    }
+
+    [Fact]
+    public void Each_Task_carries_its_Reminders_as_kind_and_atUtc_in_the_order_they_fire_and_no_reminderUtc()
+    {
+        var task = new TaskItem
+        {
+            Id = Guid.NewGuid(),
+            Title = "a",
+            Reminders =
+            [
+                new TaskDesk.Core.Reminders.Reminder
+                {
+                    Id = Guid.NewGuid(),
+                    AtUtc = new DateTime(2026, 10, 21, 9, 0, 0, DateTimeKind.Utc),
+                },
+                new TaskDesk.Core.Reminders.Reminder
+                {
+                    Id = Guid.NewGuid(),
+                    AtUtc = new DateTime(2026, 10, 20, 9, 0, 0, DateTimeKind.Utc),
+                },
+            ],
+        };
+
+        using var json = Parse(OneTask(task));
+
+        var exported = FirstTask(json);
+        Assert.False(exported.TryGetProperty("reminderUtc", out _));
+        Assert.Equal(
+            ["""{"kind":"Fixed","atUtc":"2026-10-20T09:00:00Z"}""", """{"kind":"Fixed","atUtc":"2026-10-21T09:00:00Z"}"""],
+            exported.GetProperty("reminders").EnumerateArray()
+                .Select(r => JsonSerializer.Serialize(r)));
+        using var none = Parse(OneTask(new TaskItem { Id = Guid.NewGuid(), Title = "b" }));
+        Assert.Equal(0, FirstTask(none).GetProperty("reminders").GetArrayLength());
     }
 
     private static ExportData OneTask(TaskItem task) => new([], [], [task]);

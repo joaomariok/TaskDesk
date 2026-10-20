@@ -16,10 +16,12 @@ public class ReminderViewModelTests
 
     private static DateTime Utc(int day, int hour, int minute = 0) => new(2026, 10, day, hour, minute, 0, DateTimeKind.Utc);
 
-    // Stores the Reminder on the FakeTaskService's Tasks with the Core re-arm rule.
+    // Stores the Reminders on the FakeTaskService's Tasks with the Core rules.
     private sealed class FakeTaskReminders(FakeTaskService tasks, TimeProvider clock) : IReminderService
     {
-        public List<(Guid TaskId, DateTime? ReminderUtc)> SetCalls { get; } = [];
+        public List<(Guid TaskId, DateTime? AtUtc)> AddCalls { get; } = [];
+        public List<(Guid ReminderId, DateTime? AtUtc)> UpdateCalls { get; } = [];
+        public List<Guid> RemoveCalls { get; } = [];
         public List<(Guid TaskId, TimeSpan Duration)> SnoozeCalls { get; } = [];
 
         public Task<TaskItem> SnoozeAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default)
@@ -39,13 +41,39 @@ public class ReminderViewModelTests
             return Task.FromResult(task);
         }
 
-        public Task<TaskItem> SetReminderAsync(Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default)
+        public Task<TaskItem> AddReminderAsync(
+            Guid taskId, ReminderValue reminder, CancellationToken cancellationToken = default)
         {
-            SetCalls.Add((taskId, reminderUtc));
-            var task = FakeTaskService.With(tasks.All.Single(t => t.Id == taskId), t => ReminderCalculator.SetPlanned(t, reminderUtc, clock.GetUtcNow()));
+            AddCalls.Add((taskId, reminder.AtUtc));
+            var current = tasks.All.SingleOrDefault(t => t.Id == taskId)
+                ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
+            var task = FakeTaskService.With(current, t => ReminderCalculator.AddReminder(t, reminder, clock.GetUtcNow()));
             tasks.Put(task);
             return Task.FromResult(task);
         }
+
+        public Task<TaskItem> UpdateReminderAsync(
+            Guid reminderId, ReminderValue reminder, CancellationToken cancellationToken = default)
+        {
+            UpdateCalls.Add((reminderId, reminder.AtUtc));
+            var task = FakeTaskService.With(
+                Owner(reminderId), t => ReminderCalculator.UpdateReminder(t, reminderId, reminder, clock.GetUtcNow()));
+            tasks.Put(task);
+            return Task.FromResult(task);
+        }
+
+        public Task<TaskItem> RemoveReminderAsync(Guid reminderId, CancellationToken cancellationToken = default)
+        {
+            RemoveCalls.Add(reminderId);
+            var task = FakeTaskService.With(
+                Owner(reminderId), t => ReminderCalculator.RemoveReminder(t, reminderId, clock.GetUtcNow()));
+            tasks.Put(task);
+            return Task.FromResult(task);
+        }
+
+        private TaskItem Owner(Guid reminderId) =>
+            tasks.All.SingleOrDefault(t => t.Reminders.Any(r => r.Id == reminderId))
+            ?? throw new KeyNotFoundException($"Reminder {reminderId} does not exist.");
 
         public Task<IReadOnlyList<DueReminder>> ListDueAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
@@ -89,7 +117,7 @@ public class ReminderViewModelTests
         {
             Queries.Add(query);
             return Task.FromResult<IReadOnlyList<TaskItem>>(
-                [.. tasks.All.Where(t => !query.HasReminder || t.ReminderUtc != null)]);
+                [.. tasks.All.Where(t => !query.HasReminder || t.Reminders.Count > 0)]);
         }
     }
 
@@ -128,31 +156,119 @@ public class ReminderViewModelTests
         return new Setup(tasks, reminders, search, vm, clock);
     }
 
-    // ---- Detail pane ----
-
-    [Fact]
-    public async Task Selecting_a_Task_shows_its_Reminder_as_local_date_and_time()
+    // Adds Reminders to the first Task, reloads, opens it in the pane and forgets the calls the arrangement made.
+    private static async Task SelectWithRemindersAsync(Setup s, params DateTime[] reminders)
     {
-        var s = await StartAsync("a");
-        await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(21, 1, 15), Ct);
+        foreach (var at in reminders)
+        {
+            await s.Reminders.AddReminderAsync(s.Tasks.All[0].Id, ReminderValue.Fixed(at), Ct);
+        }
+
+        s.Reminders.AddCalls.Clear();
         await s.Vm.LoadAsync(Ct);
-
         s.Vm.SelectedTask = s.Vm.Tasks[0];
+    }
 
-        Assert.Equal(new DateTime(2026, 10, 20), s.Vm.DetailReminderDate);
-        Assert.Equal(new TimeSpan(22, 15, 0), s.Vm.DetailReminderTime);
+    private static ReminderEditorViewModel Edit(Setup s, int row)
+    {
+        s.Vm.DetailReminders[row].EditCommand.Execute(null);
+        return s.Vm.ReminderEditor;
+    }
+
+    private static ReminderEditorViewModel Add(Setup s)
+    {
+        s.Vm.AddReminderCommand.Execute(null);
+        return s.Vm.ReminderEditor;
+    }
+
+    private static async Task SaveAsync(Setup s)
+    {
+        s.Vm.ReminderEditor.SaveCommand.Execute(null);
+        await s.Vm.PendingSave;
+    }
+
+    // ---- Detail pane: the Reminder rows ----
+
+    [Fact]
+    public async Task Selecting_a_Task_lists_its_Reminders_as_local_date_and_time_the_first_one_first()
+    {
+        var s = await StartAsync("a");
+
+        await SelectWithRemindersAsync(s, Utc(21, 1, 15), Utc(20, 17));
+
+        Assert.Equal(["Today 14:00", "Today 22:15"], s.Vm.DetailReminders.Select(r => r.Text));
+        Assert.Equal([Utc(20, 17), Utc(21, 1, 15)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
+        var editor = Edit(s, 1);
+        Assert.Equal(new DateTime(2026, 10, 20), editor.Date);
+        Assert.Equal(new TimeSpan(22, 15, 0), editor.Time);
     }
 
     [Fact]
-    public async Task A_Task_without_a_Reminder_shows_empty_fields()
+    public async Task A_Task_without_a_Reminder_shows_no_rows_and_Add_opens_an_empty_editor()
     {
         var s = await StartAsync("a");
 
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        Assert.Null(s.Vm.DetailReminderDate);
-        Assert.Null(s.Vm.DetailReminderTime);
+        Assert.Empty(s.Vm.DetailReminders);
+        var editor = Add(s);
+        Assert.True(editor.IsOpen);
+        Assert.False(editor.IsEditing);
+        Assert.Null(editor.Date);
+        Assert.Null(editor.Time);
     }
+
+    [Fact]
+    public async Task A_past_Reminder_stays_listed_and_is_shown_and_announced_as_past()
+    {
+        var s = await StartAsync("a");
+
+        await SelectWithRemindersAsync(s, Utc(20, 12), Utc(20, 14));
+
+        var past = s.Vm.DetailReminders[0];
+        var ahead = s.Vm.DetailReminders[1];
+        Assert.True(past.IsPast);
+        Assert.False(ahead.IsPast);
+        Assert.Equal("Reminder Today 09:00, past", past.AccessibleName);
+        Assert.Equal("Reminder Today 11:00", ahead.AccessibleName);
+        Assert.Equal("Remove reminder Today 09:00", past.RemoveName);
+    }
+
+    [Fact]
+    public async Task Moving_to_another_Task_shows_its_Reminders()
+    {
+        var s = await StartAsync("a", "b");
+        await SelectWithRemindersAsync(s, Utc(20, 14));
+        Assert.Single(s.Vm.DetailReminders);
+
+        s.Vm.SelectedTask = s.Vm.Tasks[1];
+
+        Assert.Empty(s.Vm.DetailReminders);
+    }
+
+    [Fact]
+    public async Task There_is_no_limit_on_the_number_of_Reminders()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+
+        for (var day = 21; day <= 31; day++)
+        {
+            foreach (var hour in new[] { 8, 12, 18 })
+            {
+                var editor = Add(s);
+                editor.Date = new DateTime(2026, 10, day);
+                editor.Time = new TimeSpan(hour, 0, 0);
+                await SaveAsync(s);
+            }
+        }
+
+        Assert.Equal(33, s.Vm.DetailReminders.Count);
+        Assert.Equal(33, s.Tasks.All[0].Reminders.Count);
+        Assert.Null(s.Vm.ErrorMessage);
+    }
+
+    // ---- Detail pane: the flyout editor ----
 
     [Fact]
     public async Task A_date_only_Reminder_is_saved_at_09_00_local_and_shows_that_time_without_a_Due_date()
@@ -160,11 +276,13 @@ public class ReminderViewModelTests
         var s = await StartAsync("a");
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        s.Vm.DetailReminderDate = new DateTime(2026, 10, 22);
-        await s.Vm.PendingSave;
+        var editor = Add(s);
+        editor.Date = new DateTime(2026, 10, 22);
+        await SaveAsync(s);
 
-        Assert.Equal([(s.Tasks.All[0].Id, (DateTime?)Utc(22, 12))], s.Reminders.SetCalls);
-        Assert.Equal(new TimeSpan(9, 0, 0), s.Vm.DetailReminderTime);
+        Assert.Equal([(s.Tasks.All[0].Id, (DateTime?)Utc(22, 12))], s.Reminders.AddCalls);
+        Assert.EndsWith(" 09:00", Assert.Single(s.Vm.DetailReminders).Text);
+        Assert.False(editor.IsOpen);
         Assert.Null(s.Tasks.All[0].DueDate);
         Assert.Null(s.Vm.ErrorMessage);
     }
@@ -192,20 +310,24 @@ public class ReminderViewModelTests
         await vm.LoadAsync(Ct);
 
         vm.SelectedTask = vm.Tasks[0];
-        vm.DetailReminderDate = new DateTime(2026, 10, 22);
+        vm.AddReminderCommand.Execute(null);
+        vm.ReminderEditor.Date = new DateTime(2026, 10, 22);
+        vm.ReminderEditor.SaveCommand.Execute(null);
         await vm.PendingSave;
 
-        Assert.Equal(Utc(22, 10, 30), reminders.SetCalls[^1].ReminderUtc);
-        Assert.Equal(new TimeSpan(7, 30, 0), vm.DetailReminderTime);
+        Assert.Equal(Utc(22, 10, 30), reminders.AddCalls[^1].AtUtc);
+        Assert.EndsWith(" 07:30", Assert.Single(vm.DetailReminders).Text);
 
         // Changed in Settings while the app runs: the next date-only Reminder uses it, no restart needed.
         settings.Current = settings.Current with { DefaultReminderTime = new TimeOnly(18, 15) };
         vm.SelectedTask = vm.Tasks[1];
-        vm.DetailReminderDate = new DateTime(2026, 10, 23);
+        vm.AddReminderCommand.Execute(null);
+        vm.ReminderEditor.Date = new DateTime(2026, 10, 23);
+        vm.ReminderEditor.SaveCommand.Execute(null);
         await vm.PendingSave;
 
-        Assert.Equal(Utc(23, 21, 15), reminders.SetCalls[^1].ReminderUtc);
-        Assert.Equal(new TimeSpan(18, 15, 0), vm.DetailReminderTime);
+        Assert.Equal(Utc(23, 21, 15), reminders.AddCalls[^1].AtUtc);
+        Assert.EndsWith(" 18:15", Assert.Single(vm.DetailReminders).Text);
     }
 
     [Fact]
@@ -214,12 +336,13 @@ public class ReminderViewModelTests
         var s = await StartAsync("a");
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        s.Vm.DetailReminderDate = new DateTime(2026, 10, 22);
-        s.Vm.DetailReminderTime = new TimeSpan(14, 30, 0);
-        await s.Vm.PendingSave;
+        var editor = Add(s);
+        editor.Date = new DateTime(2026, 10, 22);
+        editor.Time = new TimeSpan(14, 30, 0);
+        await SaveAsync(s);
 
-        Assert.Equal(Utc(22, 17, 30), s.Reminders.SetCalls[^1].ReminderUtc);
-        Assert.Equal(Utc(22, 17, 30), s.Tasks.All[0].ReminderUtc);
+        Assert.Equal(Utc(22, 17, 30), s.Reminders.AddCalls[^1].AtUtc);
+        Assert.Equal(Utc(22, 17, 30), Assert.Single(s.Tasks.All[0].Reminders).AtUtc);
     }
 
     [Fact]
@@ -228,11 +351,13 @@ public class ReminderViewModelTests
         var s = await StartAsync("a");
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        s.Vm.DetailReminderTime = new TimeSpan(14, 30, 0);
-        await s.Vm.PendingSave;
+        var editor = Add(s);
+        editor.Time = new TimeSpan(14, 30, 0);
+        await SaveAsync(s);
 
-        Assert.Empty(s.Reminders.SetCalls);
+        Assert.Empty(s.Reminders.AddCalls);
         Assert.NotNull(s.Vm.ErrorMessage);
+        Assert.True(editor.IsOpen);
     }
 
     [Fact]
@@ -241,8 +366,8 @@ public class ReminderViewModelTests
         var s = await StartAsync("a");
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        s.Vm.DetailReminderTime = new TimeSpan(14, 30, 0);
-        await s.Vm.PendingSave;
+        Add(s).Time = new TimeSpan(14, 30, 0);
+        await SaveAsync(s);
 
         Assert.Equal("A Reminder time needs a Reminder date.", s.Vm.ReminderError);
         Assert.Null(s.Vm.DueError);
@@ -250,20 +375,115 @@ public class ReminderViewModelTests
     }
 
     [Fact]
+    public async Task Saving_without_a_date_is_reported_under_Reminders_and_not_saved()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+
+        Add(s);
+        await SaveAsync(s);
+
+        Assert.Empty(s.Reminders.AddCalls);
+        Assert.Equal("A Reminder needs a date.", s.Vm.ReminderError);
+    }
+
+    [Fact]
+    public async Task A_duplicate_Reminder_is_refused_with_an_error_under_Reminders()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(22, 17, 30));
+
+        var editor = Add(s);
+        editor.Date = new DateTime(2026, 10, 22);
+        editor.Time = new TimeSpan(14, 30, 0);
+        await SaveAsync(s);
+
+        Assert.Equal("The Task already has this Reminder.", s.Vm.ReminderError);
+        Assert.Null(s.Vm.GeneralError);
+        Assert.Single(s.Vm.DetailReminders);
+        Assert.Single(s.Tasks.All[0].Reminders);
+    }
+
+    [Fact]
+    public async Task A_later_save_clears_the_Reminder_error()
+    {
+        var s = await StartAsync("a");
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        Add(s);
+        await SaveAsync(s);
+        Assert.NotNull(s.Vm.ReminderError);
+
+        s.Vm.ReminderEditor.Date = new DateTime(2026, 10, 22);
+        await SaveAsync(s);
+
+        Assert.Null(s.Vm.ReminderError);
+        Assert.Null(s.Vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task Cancel_closes_the_editor_without_saving()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(22, 17, 30));
+
+        var editor = Edit(s, 0);
+        editor.Time = new TimeSpan(8, 0, 0);
+        editor.CancelCommand.Execute(null);
+        await s.Vm.PendingSave;
+
+        Assert.False(editor.IsOpen);
+        Assert.Empty(s.Reminders.UpdateCalls);
+        Assert.Equal(Utc(22, 17, 30), Assert.Single(s.Tasks.All[0].Reminders).AtUtc);
+
+        // Opening it again shows the Reminder as saved, not the cancelled edit.
+        Assert.Equal(new TimeSpan(14, 30, 0), Edit(s, 0).Time);
+    }
+
+    [Fact]
+    public async Task A_click_on_a_row_opens_the_editor_on_that_Reminder_and_Save_changes_it()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(22, 17, 30), Utc(23, 12));
+        var id = s.Vm.DetailReminders[1].Id;
+
+        var editor = Edit(s, 1);
+        Assert.True(editor.IsEditing);
+        editor.Date = new DateTime(2026, 10, 21);
+        await SaveAsync(s);
+
+        Assert.Equal([(id, (DateTime?)Utc(21, 12))], s.Reminders.UpdateCalls);
+        Assert.Empty(s.Reminders.AddCalls);
+        Assert.Equal([Utc(21, 12), Utc(22, 17, 30)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
+    }
+
+    [Fact]
+    public async Task Add_after_an_edit_opens_an_empty_editor()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(22, 17, 30));
+        Edit(s, 0).CancelCommand.Execute(null);
+
+        var editor = Add(s);
+
+        Assert.False(editor.IsEditing);
+        Assert.Null(editor.Date);
+        Assert.Null(editor.Time);
+    }
+
+    [Fact]
     public async Task Clearing_the_Reminder_time_falls_back_to_the_default_Reminder_time()
     {
         var s = await StartAsync("a");
-        await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(22, 17, 30), Ct);
-        await s.Vm.LoadAsync(Ct);
-        s.Vm.SelectedTask = s.Vm.Tasks[0];
-        Assert.True(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+        await SelectWithRemindersAsync(s, Utc(22, 17, 30));
+        var editor = Edit(s, 0);
+        Assert.True(editor.ClearTimeCommand.CanExecute(null));
 
-        s.Vm.ClearDetailReminderTimeCommand.Execute(null);
-        await s.Vm.PendingSave;
+        editor.ClearTimeCommand.Execute(null);
+        Assert.Equal(new DateTime(2026, 10, 22), editor.Date);
+        await SaveAsync(s);
 
-        Assert.Equal(Utc(22, 12), s.Reminders.SetCalls[^1].ReminderUtc);
-        Assert.Equal(new TimeSpan(9, 0, 0), s.Vm.DetailReminderTime);
-        Assert.Equal(new DateTime(2026, 10, 22), s.Vm.DetailReminderDate);
+        Assert.Equal(Utc(22, 12), s.Reminders.UpdateCalls[^1].AtUtc);
+        Assert.EndsWith(" 09:00", Assert.Single(s.Vm.DetailReminders).Text);
     }
 
     [Fact]
@@ -271,42 +491,39 @@ public class ReminderViewModelTests
     {
         var s = await StartAsync("a");
         s.Vm.SelectedTask = s.Vm.Tasks[0];
-        Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+        var editor = Add(s);
+        Assert.False(editor.ClearTimeCommand.CanExecute(null));
 
-        // A date-only Reminder shows the default time already, so clearing it would change nothing.
-        s.Vm.DetailReminderDate = new DateTime(2026, 10, 22);
-        await s.Vm.PendingSave;
-        Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+        // A date-only Reminder fires at the default time already, so clearing would change nothing.
+        editor.Date = new DateTime(2026, 10, 22);
+        Assert.False(editor.ClearTimeCommand.CanExecute(null));
 
-        s.Vm.DetailReminderDate = null;
-        await s.Vm.PendingSave;
-        Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+        editor.Date = null;
+        Assert.False(editor.ClearTimeCommand.CanExecute(null));
     }
 
     [Fact]
     public async Task The_clear_Reminder_time_command_is_off_for_a_saved_Reminder_at_the_default_time()
     {
         var s = await StartAsync("a");
-        await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(22, 12), Ct); // 09:00 local, the default
-        await s.Vm.LoadAsync(Ct);
-        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        await SelectWithRemindersAsync(s, Utc(22, 12)); // 09:00 local, the default
 
-        Assert.Equal(new TimeSpan(9, 0, 0), s.Vm.DetailReminderTime);
-        Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+        var editor = Edit(s, 0);
+
+        Assert.Equal(new TimeSpan(9, 0, 0), editor.Time);
+        Assert.False(editor.ClearTimeCommand.CanExecute(null));
     }
 
     [Fact]
     public async Task The_clear_Reminder_time_command_turns_off_once_the_time_falls_back_to_the_default()
     {
         var s = await StartAsync("a");
-        await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(22, 17, 30), Ct);
-        await s.Vm.LoadAsync(Ct);
-        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        await SelectWithRemindersAsync(s, Utc(22, 17, 30));
+        var editor = Edit(s, 0);
 
-        s.Vm.ClearDetailReminderTimeCommand.Execute(null);
-        await s.Vm.PendingSave;
+        editor.ClearTimeCommand.Execute(null);
 
-        Assert.False(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+        Assert.False(editor.ClearTimeCommand.CanExecute(null));
     }
 
     [Fact]
@@ -314,48 +531,71 @@ public class ReminderViewModelTests
     {
         var s = await StartAsync("a");
         s.Vm.SelectedTask = s.Vm.Tasks[0];
-        s.Vm.DetailReminderDate = new DateTime(2026, 10, 22);
-        await s.Vm.PendingSave;
+        var editor = Add(s);
+        editor.Date = new DateTime(2026, 10, 22);
         var changed = 0;
-        s.Vm.ClearDetailReminderTimeCommand.CanExecuteChanged += (_, _) => changed++;
+        editor.ClearTimeCommand.CanExecuteChanged += (_, _) => changed++;
 
-        s.Vm.DetailReminderTime = new TimeSpan(14, 0, 0);
-        await s.Vm.PendingSave;
+        editor.Time = new TimeSpan(14, 0, 0);
 
-        Assert.True(s.Vm.ClearDetailReminderTimeCommand.CanExecute(null));
+        Assert.True(editor.ClearTimeCommand.CanExecute(null));
         Assert.True(changed > 0, "The clear command did not report its change.");
     }
 
     [Fact]
-    public async Task Clearing_the_Reminder_date_clears_the_time_and_the_Reminder()
+    public async Task The_editor_time_applies_once_a_date_is_set()
     {
         var s = await StartAsync("a");
-        await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(22, 17, 30), Ct);
-        await s.Vm.LoadAsync(Ct);
         s.Vm.SelectedTask = s.Vm.Tasks[0];
+        var editor = Add(s);
+        Assert.False(editor.HasDate);
 
-        s.Vm.DetailReminderDate = null;
+        editor.Date = new DateTime(2026, 10, 22);
+
+        Assert.True(editor.HasDate);
+    }
+
+    [Fact]
+    public async Task Clearing_the_editor_date_clears_its_time()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(22, 17, 30));
+        var editor = Edit(s, 0);
+
+        editor.Date = null;
+
+        Assert.Null(editor.Time);
+    }
+
+    [Fact]
+    public async Task The_remove_button_removes_that_Reminder()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(22, 17, 30), Utc(23, 12));
+        var first = s.Vm.DetailReminders[0].Id;
+
+        await s.Vm.DetailReminders[0].RemoveCommand.ExecuteAsync(null);
         await s.Vm.PendingSave;
 
-        Assert.Null(s.Vm.DetailReminderTime);
-        Assert.Null(s.Reminders.SetCalls[^1].ReminderUtc);
-        Assert.Null(s.Tasks.All[0].ReminderUtc);
+        Assert.Equal([first], s.Reminders.RemoveCalls);
+        Assert.Equal([Utc(23, 12)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
+        Assert.Equal([(DateTime?)Utc(23, 12)], s.Tasks.All[0].Reminders.Select(r => r.AtUtc));
     }
 
     [Fact]
     public async Task Editing_a_fired_Reminder_in_the_pane_re_arms_it()
     {
         var s = await StartAsync("a");
-        await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(20, 12), Ct);
+        await s.Reminders.AddReminderAsync(s.Tasks.All[0].Id, ReminderValue.Fixed(Utc(20, 12)), Ct);
         s.Tasks.Put(FakeTaskService.With(s.Tasks.All[0], t => t.NotifiedThroughUtc = Utc(20, 12)));
         await s.Vm.LoadAsync(Ct);
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        s.Vm.DetailReminderTime = new TimeSpan(15, 0, 0);
-        await s.Vm.PendingSave;
+        Edit(s, 0).Time = new TimeSpan(15, 0, 0);
+        await SaveAsync(s);
 
         Assert.Equal(Utc(20, 18), ReminderCalculator.DueInstant(s.Tasks.All[0], new DateTimeOffset(Utc(20, 18))));
-        Assert.Equal(Utc(20, 18), s.Tasks.All[0].ReminderUtc);
+        Assert.Equal(Utc(20, 18), Assert.Single(s.Tasks.All[0].Reminders).AtUtc);
     }
 
     // ---- Filter chip ----
@@ -364,7 +604,7 @@ public class ReminderViewModelTests
     public async Task The_has_reminder_chip_filters_the_view_and_clear_all_resets_it()
     {
         var s = await StartAsync("plain", "reminded");
-        await s.Reminders.SetReminderAsync(s.Tasks.All[1].Id, Utc(22, 12), Ct);
+        await s.Reminders.AddReminderAsync(s.Tasks.All[1].Id, ReminderValue.Fixed(Utc(22, 12)), Ct);
 
         await s.Vm.ToggleHasReminderFilterCommand.ExecuteAsync(null);
 
@@ -477,14 +717,14 @@ public class ReminderViewModelTests
     {
         var s = await StartAsync("a");
         var id = s.Tasks.All[0].Id;
-        await s.Reminders.SetReminderAsync(id, Utc(20, 12), Ct);
+        await s.Reminders.AddReminderAsync(id, ReminderValue.Fixed(Utc(20, 12)), Ct);
         var window = new FakeWindow();
 
         await new ReminderActivationHandler(s.Vm, window).HandleAsync(new NotificationActivation(id, action), Ct);
 
         Assert.Equal([(id, TimeSpan.FromMinutes(minutes))], s.Reminders.SnoozeCalls);
         Assert.Equal(Utc(20, 13).AddMinutes(minutes), s.Tasks.All[0].SnoozedUntilUtc);
-        Assert.Equal(Utc(20, 12), s.Tasks.All[0].ReminderUtc);
+        Assert.Equal(Utc(20, 12), Assert.Single(s.Tasks.All[0].Reminders).AtUtc);
         Assert.Equal(0, window.FocusCount);
         Assert.Null(s.Vm.ErrorMessage);
     }
@@ -537,7 +777,7 @@ public class ReminderViewModelTests
     {
         var s = await StartAsync("a");
         var id = s.Tasks.All[0].Id;
-        await s.Reminders.SetReminderAsync(id, Utc(20, 12), Ct);
+        await s.Reminders.AddReminderAsync(id, ReminderValue.Fixed(Utc(20, 12)), Ct);
         await s.Reminders.SnoozeAsync(id, ReminderCalculator.LongSnooze, Ct); // until 14:00 UTC, 11:00 local
         s.Tasks.Put(FakeTaskService.With(s.Tasks.All[0], t => t.NotifiedThroughUtc = Utc(20, 13)));
         await s.Vm.LoadAsync(Ct);
@@ -551,7 +791,7 @@ public class ReminderViewModelTests
         Assert.False(s.Vm.HasDetailSnooze);
         Assert.Null(s.Tasks.All[0].SnoozedUntilUtc);
         Assert.Null(s.Tasks.All[0].NotifiedThroughUtc);
-        Assert.Equal(Utc(20, 12), s.Tasks.All[0].ReminderUtc);
+        Assert.Equal(Utc(20, 12), Assert.Single(s.Tasks.All[0].Reminders).AtUtc);
     }
 
     [Fact]
@@ -559,12 +799,13 @@ public class ReminderViewModelTests
     {
         var s = await StartAsync("a");
         var id = s.Tasks.All[0].Id;
-        await s.Reminders.SetReminderAsync(id, Utc(20, 12), Ct);
+        await s.Reminders.AddReminderAsync(id, ReminderValue.Fixed(Utc(20, 12)), Ct);
         await s.Reminders.SnoozeAsync(id, ReminderCalculator.ShortSnooze, Ct);
         await s.Vm.LoadAsync(Ct);
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        s.Vm.DetailReminderTime = new TimeSpan(15, 0, 0);
+        Edit(s, 0).Time = new TimeSpan(15, 0, 0);
+        s.Vm.ReminderEditor.SaveCommand.Execute(null);
         await s.Vm.PendingSave;
 
         Assert.Null(s.Tasks.All[0].SnoozedUntilUtc);
@@ -575,7 +816,7 @@ public class ReminderViewModelTests
     public async Task A_Task_without_a_Snooze_shows_none()
     {
         var s = await StartAsync("a");
-        await s.Reminders.SetReminderAsync(s.Tasks.All[0].Id, Utc(20, 12), Ct);
+        await s.Reminders.AddReminderAsync(s.Tasks.All[0].Id, ReminderValue.Fixed(Utc(20, 12)), Ct);
         await s.Vm.LoadAsync(Ct);
 
         s.Vm.SelectedTask = s.Vm.Tasks[0];
@@ -589,7 +830,7 @@ public class ReminderViewModelTests
     {
         var s = await StartAsync("a");
         var id = s.Tasks.All[0].Id;
-        await s.Reminders.SetReminderAsync(id, Utc(20, 12), Ct);
+        await s.Reminders.AddReminderAsync(id, ReminderValue.Fixed(Utc(20, 12)), Ct);
         await s.Vm.LoadAsync(Ct);
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 

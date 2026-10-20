@@ -2,16 +2,33 @@ using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Core.Reminders;
 
-/// <summary>Use cases for the Reminder of a Task and for finding the Reminders that are due.</summary>
+/// <summary>Use cases for the Reminders of a Task and for finding the Tasks due to notify.</summary>
 public interface IReminderService
 {
     /// <summary>
-    /// Sets or clears the planned Reminder of a Task. A change clears the Snooze and counts moments already
-    /// past as notified, so a Reminder moved later re-arms and one set in the past never fires (see
-    /// <see cref="ReminderCalculator.SetPlanned"/>). Returns the Task with its Tags and Subtasks loaded.
+    /// Adds a Reminder to a Task. The change clears the Snooze and counts moments already past as notified, so a
+    /// Reminder set in the past never fires (see <see cref="ReminderCalculator.AddReminder"/>). Returns the Task
+    /// with its details loaded, including its Reminders.
     /// </summary>
     /// <exception cref="KeyNotFoundException">No Task has this id.</exception>
-    Task<TaskItem> SetReminderAsync(Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default);
+    /// <exception cref="ArgumentException">The Task already has this Reminder.</exception>
+    Task<TaskItem> AddReminderAsync(Guid taskId, ReminderValue reminder, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Changes a Reminder, under the rules of <see cref="AddReminderAsync"/>: a Reminder moved later re-arms (see
+    /// <see cref="ReminderCalculator.UpdateReminder"/>). Returns its Task with its details loaded.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No Reminder has this id.</exception>
+    /// <exception cref="ArgumentException">Another Reminder of the Task has this value.</exception>
+    Task<TaskItem> UpdateReminderAsync(
+        Guid reminderId, ReminderValue reminder, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes a Reminder, under the rules of <see cref="AddReminderAsync"/>. Returns its Task with its details
+    /// loaded.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No Reminder has this id.</exception>
+    Task<TaskItem> RemoveReminderAsync(Guid reminderId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Snoozes a Task until now + <paramref name="duration"/>: it notifies once when the Snooze ends; the planned

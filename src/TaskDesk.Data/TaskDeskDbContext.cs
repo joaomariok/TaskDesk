@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
@@ -11,6 +12,7 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<Subtask> Subtasks => Set<Subtask>();
     public DbSet<TaskTag> TaskTags => Set<TaskTag>();
+    public DbSet<Reminder> Reminders => Set<Reminder>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -42,7 +44,6 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
             task.HasIndex(t => new { t.ListId, t.IsCompleted, t.SortOrder });
             task.HasIndex(t => t.DueDate);
             task.HasIndex(t => t.SeriesId);
-            task.HasIndex(t => t.ReminderUtc);
             task.OwnsOne(t => t.Recurrence, recurrence =>
             {
                 recurrence.Property(r => r.Frequency).HasColumnName("RecurrenceFrequency");
@@ -71,6 +72,17 @@ public sealed class TaskDeskDbContext(DbContextOptions<TaskDeskDbContext> option
             subtask.HasOne<TaskItem>().WithMany(t => t.Subtasks).HasForeignKey(s => s.TaskId)
                 .OnDelete(DeleteBehavior.Cascade);
             subtask.HasIndex(s => new { s.TaskId, s.SortOrder });
+        });
+
+        modelBuilder.Entity<Reminder>(reminder =>
+        {
+            reminder.ToTable("Reminders");
+            reminder.HasKey(r => r.Id);
+            reminder.Property(r => r.Id).ValueGeneratedNever();
+            reminder.Ignore(r => r.Value);
+            reminder.HasOne<TaskItem>().WithMany(t => t.Reminders).HasForeignKey(r => r.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+            reminder.HasIndex(r => r.TaskId);
         });
 
         modelBuilder.Entity<Tag>(tag =>

@@ -8,7 +8,10 @@ namespace TaskDesk.Presentation.Tests;
 internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>? tasks = null) : IReminderService
 {
     public List<TaskItem> Tasks { get; } = tasks ?? [];
-    public List<(Guid TaskId, DateTime? ReminderUtc)> SetCalls { get; } = [];
+
+    /// <summary>Every Reminder change (add, update, remove): the Task it changed and the Reminder's new instant.</summary>
+    public List<(Guid TaskId, DateTime? AtUtc)> ReminderChanges { get; } = [];
+
     public int ListCalls { get; private set; }
 
     /// <summary>When set, the next ListDueAsync throws it.</summary>
@@ -16,25 +19,50 @@ internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>
 
     public TaskItem Add(string title, DateTime? reminderUtc)
     {
-        var task = new TaskItem { Id = Guid.CreateVersion7(), Title = title, ReminderUtc = reminderUtc };
+        var task = new TaskItem { Id = Guid.CreateVersion7(), Title = title };
+        if (reminderUtc is { } at)
+        {
+            task.Reminders.Add(new Reminder { Id = Guid.CreateVersion7(), TaskId = task.Id, AtUtc = at });
+        }
+
         Tasks.Add(task);
         return task;
     }
 
-    /// <summary>When set, each SetReminderAsync waits for it before it stores anything.</summary>
-    public TaskCompletionSource? HoldSets { get; set; }
+    /// <summary>When set, each Reminder change waits for it before it stores anything.</summary>
+    public TaskCompletionSource? HoldChanges { get; set; }
 
-    public async Task<TaskItem> SetReminderAsync(
-        Guid taskId, DateTime? reminderUtc, CancellationToken cancellationToken = default)
+    public Task<TaskItem> AddReminderAsync(
+        Guid taskId, ReminderValue reminder, CancellationToken cancellationToken = default) =>
+        ChangeAsync(
+            Tasks.SingleOrDefault(t => t.Id == taskId)
+                ?? throw new KeyNotFoundException($"Task {taskId} does not exist."),
+            reminder.AtUtc,
+            task => ReminderCalculator.AddReminder(task, reminder, clock.GetUtcNow()));
+
+    public Task<TaskItem> UpdateReminderAsync(
+        Guid reminderId, ReminderValue reminder, CancellationToken cancellationToken = default) =>
+        ChangeAsync(
+            Owner(reminderId), reminder.AtUtc,
+            task => ReminderCalculator.UpdateReminder(task, reminderId, reminder, clock.GetUtcNow()));
+
+    public Task<TaskItem> RemoveReminderAsync(Guid reminderId, CancellationToken cancellationToken = default) =>
+        ChangeAsync(
+            Owner(reminderId), null, task => ReminderCalculator.RemoveReminder(task, reminderId, clock.GetUtcNow()));
+
+    private TaskItem Owner(Guid reminderId) =>
+        Tasks.SingleOrDefault(t => t.Reminders.Any(r => r.Id == reminderId))
+        ?? throw new KeyNotFoundException($"Reminder {reminderId} does not exist.");
+
+    private async Task<TaskItem> ChangeAsync(TaskItem task, DateTime? atUtc, Action<TaskItem> change)
     {
-        SetCalls.Add((taskId, reminderUtc));
-        if (HoldSets is { } hold)
+        ReminderChanges.Add((task.Id, atUtc));
+        if (HoldChanges is { } hold)
         {
             await hold.Task;
         }
 
-        var task = Tasks.Single(t => t.Id == taskId);
-        ReminderCalculator.SetPlanned(task, reminderUtc, clock.GetUtcNow());
+        change(task);
         return task;
     }
 
