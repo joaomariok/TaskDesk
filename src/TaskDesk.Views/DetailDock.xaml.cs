@@ -112,6 +112,14 @@ public sealed partial class DetailDock : UserControl
         {
             ShowPane();
         }
+
+        // Filter and search hide under an overlaid pane; keyboard focus on either would be lost, so the
+        // pane's title takes it.
+        if (e.PropertyName == nameof(MainViewModel.HasHeadingTools) && !ViewModel.HasHeadingTools
+            && ViewModel.IsDetailPaneVisible && Page.HeadingToolsHaveFocus())
+        {
+            Pane.FocusTitle();
+        }
     }
 
     // A hidden pane takes no room; shown again, it has the width it had. Docked, it sits in its own column

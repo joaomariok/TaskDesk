@@ -760,6 +760,40 @@ public sealed class DetailPaneTests
     }
 
     [UITestMethod]
+    public async Task Narrowing_the_window_with_search_focused_moves_focus_to_the_pane_title()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Book dentist");
+        var (window, viewModel) = await OpenAsync(db, width: 1200);
+        try
+        {
+            await SelectAsync(window, "Book dentist");
+            await UiWait.UntilAsync(() => window.Details.Pane.ActualWidth > 0,
+                () => "Selecting the Task did not show the docked pane.", Ct);
+            var filter = VisualTree.Find<ToggleButton>(window.View, "FilterButton");
+            var search = VisualTree.Find<TextBox>(window.View, "SearchBox");
+            var title = Box(window.Details.Pane, "DetailTitleBox");
+            search.Text = "den";
+            window.Content.UpdateLayout();
+            Assert.IsTrue(search.Focus(FocusState.Keyboard), "Search did not take focus while docked.");
+
+            await ResizeWindowAsync(window, 1100);
+            window.Content.UpdateLayout();
+
+            Assert.IsFalse(viewModel.IsDetailDocked);
+            Assert.AreEqual(Visibility.Collapsed, filter.Visibility, "Narrowing left Filter in view.");
+            Assert.AreEqual(Visibility.Collapsed, search.Visibility, "Narrowing left search in view.");
+            await UiWait.UntilAsync(() => ReferenceEquals(FocusManager.GetFocusedElement(window.Content.XamlRoot), title),
+                () => $"Focus is on {FocusManager.GetFocusedElement(window.Content.XamlRoot)}, not the title.", Ct);
+            Assert.AreEqual("den", search.Text, "Moving focus changed the search text.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
     public async Task A_docked_pane_leaves_Filter_and_search_in_view()
     {
         using var db = await DatabaseAsync();

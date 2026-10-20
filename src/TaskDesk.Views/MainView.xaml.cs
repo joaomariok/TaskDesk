@@ -59,6 +59,12 @@ public sealed partial class MainView : UserControl
         QuickAddBox.Focus(FocusState.Programmatic);
     }
 
+    /// <summary>True while keyboard focus is on the Filter button or the search box.</summary>
+    public bool HeadingToolsHaveFocus() =>
+        XamlRoot is { } root
+        && FocusManager.GetFocusedElement(root) is { } focused
+        && (ReferenceEquals(focused, FilterButton) || ReferenceEquals(focused, SearchBox));
+
     /// <summary>
     /// Focuses the search box with its text selected (Ctrl+F). An overlaid detail pane hides the search box, so it
     /// is closed first.
