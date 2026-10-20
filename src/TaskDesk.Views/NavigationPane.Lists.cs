@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using TaskDesk.Core.Shell;
 using TaskDesk.Core.Tags;
 using TaskDesk.Presentation;
 using Windows.ApplicationModel.DataTransfer;
@@ -82,18 +83,8 @@ public sealed partial class NavigationPane
     /// The gap a drop at <paramref name="position"/> (relative to the Lists list) lands in: over a row's top half
     /// the gap before it, over its bottom half the gap after it, and past the rows the last gap.
     /// </summary>
-    public int GapAt(Windows.Foundation.Point position)
-    {
-        for (var i = 0; i < ListsList.Items.Count; i++)
-        {
-            if (RowBounds(i) is { } row && position.Y < row.Top + row.Height / 2)
-            {
-                return i;
-            }
-        }
-
-        return ListsList.Items.Count;
-    }
+    public int GapAt(Windows.Foundation.Point position) =>
+        ReorderGeometry.GapAt(RowMeasure.Spans(ListsList), position.Y);
 
     /// <summary>
     /// The drag left the spot at <paramref name="position"/> (relative to the Lists list). Moving between rows
@@ -101,7 +92,7 @@ public sealed partial class NavigationPane
     /// </summary>
     public void LeaveListDrag(Windows.Foundation.Point position)
     {
-        if (position.X < 0 || position.Y < 0 || position.X >= ListsList.ActualWidth || position.Y >= ListsList.ActualHeight)
+        if (ReorderGeometry.HasLeft(position.X, position.Y, ListsList.ActualWidth, ListsList.ActualHeight))
         {
             HideInsertionLine();
         }
@@ -114,28 +105,13 @@ public sealed partial class NavigationPane
         HideInsertionLine();
     }
 
-    // The top and height of row i in the Lists list, or null while it has no container.
-    private (double Top, double Height)? RowBounds(int index)
-    {
-        if (ListsList.ContainerFromIndex(index) is not FrameworkElement container)
-        {
-            return null;
-        }
-
-        var top = container.TransformToVisual(ListsList).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
-        return (top, container.ActualHeight);
-    }
-
     /// <summary>
     /// Shows the insertion line on the gap <paramref name="gap"/> while a List is dragged: at the top of the row
     /// after it, or at the bottom of the last row.
     /// </summary>
     public void ShowListDropGap(int gap)
     {
-        var count = ListsList.Items.Count;
-        var y = gap < count ? RowBounds(gap)?.Top
-            : count > 0 && RowBounds(count - 1) is { } last ? last.Top + last.Height
-            : null;
+        var y = ReorderGeometry.LineOffset(RowMeasure.Spans(ListsList), gap);
         if (y is not { } top)
         {
             HideInsertionLine();

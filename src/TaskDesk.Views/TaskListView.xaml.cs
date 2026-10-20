@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using TaskDesk.Core.Shell;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
 using Windows.System;
@@ -220,21 +221,8 @@ public sealed partial class TaskListView : UserControl
     /// </summary>
     public TaskRowViewModel? RowAt(Windows.Foundation.Point position)
     {
-        for (var i = 0; i < ViewModel.Tasks.Count; i++)
-        {
-            if (OpenTaskList.ContainerFromIndex(i) is not FrameworkElement container)
-            {
-                continue;
-            }
-
-            var top = container.TransformToVisual(OpenTaskList).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
-            if (position.Y >= top && position.Y < top + container.ActualHeight)
-            {
-                return ViewModel.Tasks[i];
-            }
-        }
-
-        return null;
+        var index = ReorderGeometry.RowAt(RowMeasure.Spans(OpenTaskList), position.Y);
+        return index is { } i ? ViewModel.Tasks[i] : null;
     }
 
     /// <summary>
