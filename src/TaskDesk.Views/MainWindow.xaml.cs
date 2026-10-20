@@ -33,17 +33,8 @@ public sealed partial class MainWindow : Window
         // The page with the detail pane beside it or over it.
         Details = new DetailDock(View);
         // The sidebar's NavigationView hosts the page as its content. Deleting a Tag asks on this window.
+        // The sidebar keeps the page and its Lists in step itself (SidebarViewModel).
         Navigation = new NavigationPane(viewModel, new Dialogs.DialogService(() => this), lists) { PageContent = Details };
-        if (lists is not null)
-        {
-#pragma warning disable VSTHRD101 // Event handlers; a failed reload reaches the app's UnhandledException log
-            // Open-Task counts change when Tasks are added, completed, un-completed, deleted or restored.
-            viewModel.OpenTaskCountsChanged += async (_, _) => await lists.LoadAsync();
-            // A renamed, recoloured or deleted List: reload so the heading and the rows show its new name and
-            // colour, and a page on a deleted List falls back to the Default List.
-            lists.ListEdited += async (_, _) => await viewModel.LoadAsync();
-#pragma warning restore VSTHRD101
-        }
 
         Content = Navigation;
         // The window's width decides the rail and whether the detail pane docks.

@@ -53,7 +53,8 @@ public abstract record SidebarEntry
 
 /// <summary>
 /// The left navigation: the Lists with their commands, and the entry it shows as selected, which follows the main
-/// view model's page (the only page state).
+/// view model's page (the only page state). It keeps the page and the Lists in step: it reloads the Lists when the
+/// open-Task counts change and the page after a List edit, and <see cref="RefreshAsync"/> reloads both.
 /// </summary>
 public sealed partial class SidebarViewModel : ObservableObject
 {
@@ -78,6 +79,11 @@ public sealed partial class SidebarViewModel : ObservableObject
                 OnPropertyChanged(nameof(SelectedTag));
             }
         };
+#pragma warning disable VSTHRD101 // Event handler; a failed reload reaches the app's UnhandledException log
+        // Open-Task counts change when Tasks are added, completed, un-completed, deleted or restored. After the stop
+        // the load does nothing.
+        main.OpenTaskCountsChanged += async (_, _) => await LoadAsync();
+#pragma warning restore VSTHRD101
     }
 
     /// <summary>
@@ -126,8 +132,7 @@ public sealed partial class SidebarViewModel : ObservableObject
     private string? _errorMessage;
 
     /// <summary>
-    /// Raised after a List was renamed, recoloured or deleted, so the views that show its name or colour (the page
-    /// heading, the rows' stripes and captions) reload, and a page on a deleted List falls back to the Default List.
+    /// Raised after a List was renamed, recoloured or deleted, just before the sidebar reloads the page itself.
     /// </summary>
     public event EventHandler? ListEdited;
 
@@ -144,6 +149,21 @@ public sealed partial class SidebarViewModel : ObservableObject
     /// <summary>Loads the Lists with their open-Task counts; does nothing once stopped.</summary>
     public Task LoadAsync(CancellationToken cancellationToken = default)
         => _lifetime.RunAsync(ReloadAsync, cancellationToken);
+
+    /// <summary>
+    /// Reloads the page, then the Lists, after a change neither view model made (a Task added from quick add, an
+    /// import) or at start-up. Does nothing once stopped.
+    /// </summary>
+    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        if (_lifetime.IsStopped)
+        {
+            return;
+        }
+
+        await _main.LoadAsync(cancellationToken);
+        await LoadAsync(cancellationToken);
+    }
 
     private async Task ReloadAsync(CancellationToken cancellationToken)
     {
@@ -187,7 +207,7 @@ public sealed partial class SidebarViewModel : ObservableObject
             {
                 await _listService.RenameListAsync(item.Id, name, token);
                 await ReloadAsync(token);
-                ListEdited?.Invoke(this, EventArgs.Empty);
+                await ListEditedAsync(token);
             }, cancellationToken);
         });
 
@@ -199,7 +219,7 @@ public sealed partial class SidebarViewModel : ObservableObject
         {
             await _listService.SetListColorAsync(item.Id, string.IsNullOrEmpty(colorHex) ? null : colorHex, token);
             await ReloadAsync(token);
-            ListEdited?.Invoke(this, EventArgs.Empty);
+            await ListEditedAsync(token);
         }, cancellationToken));
 
     [RelayCommand]
@@ -216,9 +236,17 @@ public sealed partial class SidebarViewModel : ObservableObject
             {
                 await _listService.DeleteListAsync(item.Id, token);
                 await ReloadAsync(token);
-                ListEdited?.Invoke(this, EventArgs.Empty);
+                await ListEditedAsync(token);
             }, cancellationToken);
         });
+
+    // A renamed, recoloured or deleted List: reload the page so its heading and rows show the new name and colour,
+    // and a page on a deleted List falls back to the Default List.
+    private Task ListEditedAsync(CancellationToken cancellationToken)
+    {
+        ListEdited?.Invoke(this, EventArgs.Empty);
+        return _main.LoadAsync(cancellationToken);
+    }
 
     /// <summary>The List with this id, or the Default List when there is none (or the id is null).</summary>
     public ListItemViewModel? ListOrDefault(Guid? listId) =>

@@ -187,8 +187,7 @@ public partial class App : Application
                 layout.Save(window);
             }
         };
-        await window.ViewModel.LoadAsync();
-        await window.Lists!.LoadAsync();
+        await window.Lists!.RefreshAsync();
 
         var shell = _host.Services.GetRequiredService<ShellController>();
         var host = _host;
@@ -349,12 +348,8 @@ public partial class App : Application
             var main = _host!.Services.GetRequiredService<MainWindow>();
             var viewModel = _host.Services.GetRequiredService<QuickAddViewModel>();
 #pragma warning disable VSTHRD101 // Action event; a failed reload reaches the UnhandledException log
-            // MainViewModel.LoadAsync does not raise OpenTaskCountsChanged, so the Lists' counts reload here.
-            viewModel.TaskCreated += async () =>
-            {
-                await main.ViewModel.LoadAsync();
-                await main.Lists!.LoadAsync();
-            };
+            // The card's Task was created outside the main view model: reload the page and the Lists' counts.
+            viewModel.TaskCreated += async () => await main.Lists!.RefreshAsync();
 #pragma warning restore VSTHRD101
             await viewModel.LoadAsync();
 
@@ -393,14 +388,7 @@ public partial class App : Application
             settings.BeforeImport = main.ViewModel.PrepareForImportAsync;
 #pragma warning disable VSTHRD101 // Action event; a failed reload reaches the UnhandledException log
             // The import changed Lists, Tags and Tasks underneath the main window: reload both panes.
-            settings.Imported += async () =>
-            {
-                await main.ViewModel.LoadAsync();
-                if (main.Lists is not null)
-                {
-                    await main.Lists.LoadAsync();
-                }
-            };
+            settings.Imported += async () => await main.Lists!.RefreshAsync();
 #pragma warning restore VSTHRD101
 
             var window = new SettingsWindow(settings);
