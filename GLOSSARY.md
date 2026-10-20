@@ -7,7 +7,7 @@ A local-only, single-user to-do app for Windows. This glossary fixes the words u
 ### Organizing
 
 **Task**:
-One thing the owner intends to do, with a title, optional notes, and optional Due, Reminder, Priority, Tags and Subtasks.
+One thing the owner intends to do, with a title, optional notes, and optional Due, Reminders, Priority, Tags and Subtasks.
 _Avoid_: To-do, item, TaskItem (code name only)
 
 **List**:
@@ -49,11 +49,19 @@ The state of an incomplete Task whose Due has passed: a timed Due once its time 
 _Avoid_: Late, past due
 
 **Reminder**:
-The planned instant at which the owner is notified about a Task, independent of Due; it never places a Task in a Smart View.
+One planned moment at which the owner is notified about a Task, set either as a fixed date and time or as an amount of time before Due; a Task can have several, and none of them places it in a Smart View.
 _Avoid_: Alarm, notification, alert
 
+**Due notification**:
+The one notification a Task gives at its Due (a date-only Due at the default Reminder time that day); it is on unless the owner switches it off for that Task.
+_Avoid_: Due alert, Due reminder
+
+**Nag**:
+A repeated notification of an incomplete Task, every period the owner picks, from one period after its Due until it is completed; off until a period is picked.
+_Avoid_: Repeat, follow-up, Overdue reminder
+
 **Snooze**:
-A temporary postponement of a fired Reminder that leaves the planned Reminder unchanged.
+A temporary silencing of all of a Task's notifications until a chosen moment, when it notifies once; it leaves the Task's Reminders, Due notification and Nag unchanged.
 _Avoid_: Delay, reschedule
 
 ### Recurrence
