@@ -67,7 +67,13 @@ public sealed partial class MainViewModel
     private TimeSpan? _detailDueTime;
 
     /// <summary>Completes when every save started so far has finished.</summary>
-    public Task PendingSave => _pendingSave;
+    public Task PendingSave => Saves.WaitForAllAsync();
+
+    private DetailSaveQueue? _saves;
+
+    // Every detail save goes through this queue (see DetailSaveQueue).
+    private DetailSaveQueue Saves =>
+        _saves ??= new DetailSaveQueue(_lifetime, _clock, SaveDebounce, message => ErrorMessage = message);
 
     /// <summary>
     /// Opens the pane on a Task (a click or Enter on its row): selects it and shows it, whether the pane is
@@ -106,7 +112,7 @@ public sealed partial class MainViewModel
         }
     }
 
-    partial void OnDetailTaskChanging(TaskRowViewModel? value) => FlushPendingEdit();
+    partial void OnDetailTaskChanging(TaskRowViewModel? value) => Saves.Flush();
 
     partial void OnDetailTaskChanged(TaskRowViewModel? value)
     {
@@ -171,44 +177,32 @@ public sealed partial class MainViewModel
             return;
         }
 
-        _ = EnqueueSave(previous =>
-        {
-            ErrorMessage = null;
-            return SaveDueAsync(previous, row, date, time);
-        });
+        _ = Saves.Enqueue(() => StoreDueAsync(row, date, time), accepted: () => ErrorMessage = null);
     }
 
-    private async Task SaveDueAsync(Task previous, TaskRowViewModel row, DateOnly? date, TimeOnly? time)
+    private async Task<bool> StoreDueAsync(TaskRowViewModel row, DateOnly? date, TimeOnly? time)
     {
-        await previous; // saves of one Task never overlap
-        try
+        var updated = await Due.SetDueAsync(row.Id, date, time);
+        row.Apply(updated);
+        if (row == DetailTask && updated.Recurrence is null)
         {
-            var updated = await Due.SetDueAsync(row.Id, date, time);
-            row.Apply(updated);
-            if (row == DetailTask && updated.Recurrence is null)
-            {
-                Repeat.Load(null, updated.DueDate); // the Repeat defaults follow the new Due date
-            }
-
-            if (InOverdueGroup(row) != OverdueTasks.Contains(row))
-            {
-                Place(row);
-            }
-
-            ScheduleDueRefresh();
-            OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty); // the Smart View counts depend on Due
-            ErrorMessage = null;
+            Repeat.Load(null, updated.DueDate); // the Repeat defaults follow the new Due date
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+
+        if (InOverdueGroup(row) != OverdueTasks.Contains(row))
         {
-            ErrorMessage = "Could not save the changes: " + ex.Message;
+            Place(row);
         }
+
+        ScheduleDueRefresh();
+        OpenTaskCountsChanged?.Invoke(this, EventArgs.Empty); // the Smart View counts depend on Due
+        return true;
     }
 
     [RelayCommand]
     private void CloseDetailPane()
     {
-        FlushPendingEdit();
+        Saves.Flush();
         IsDetailPaneOpen = false;
     }
 
@@ -220,8 +214,8 @@ public sealed partial class MainViewModel
     /// <summary>Saves any debounced edit now and waits for all saves; call before the app exits.</summary>
     public Task FlushPendingSaveAsync()
     {
-        FlushPendingEdit();
-        return _pendingSave;
+        Saves.Flush();
+        return Saves.WaitForAllAsync();
     }
 
     /// <summary>
@@ -230,135 +224,33 @@ public sealed partial class MainViewModel
     /// </summary>
     public async Task PrepareForImportAsync()
     {
-        FlushPendingEdit();
-        await _pendingSave;
+        await FlushPendingSaveAsync();
         SelectedTask = null;
         DetailTask = null;
         IsDetailPaneOpen = false;
-        await _pendingSave;
-    }
-
-    private void FlushPendingEdit()
-    {
-        if (_debounce is not null && DetailTask is { } row)
-        {
-            ScheduleSave(row, immediate: true);
-        }
+        await Saves.WaitForAllAsync();
     }
 
     private void ScheduleSave(bool immediate)
     {
-        if (!_loadingDetail && DetailTask is { } row)
+        if (_loadingDetail || DetailTask is not { } row)
         {
-            ScheduleSave(row, immediate);
+            return;
         }
-    }
-
-    /// <summary>
-    /// Every detail save joins the chain of saves here. <paramref name="save"/> gets the end of the chain so far and
-    /// must await it before it stores anything, so saves of one Task never overlap; it runs only when the save joins,
-    /// so it is also where an edit changes what the pane shows. The chain moves on once both the saves ahead and
-    /// this one have ended, however they ended: a failure stays with the link, which this returns. Once the view
-    /// model has stopped, nothing joins and this returns null: the stop has saved the pending edit already, and a
-    /// save started after it would run against a host being stopped.
-    /// </summary>
-    private Task? EnqueueSave(Func<Task, Task> save)
-    {
-        if (_lifetime.IsStopped)
-        {
-            return null;
-        }
-
-        var previous = _pendingSave;
-        var link = save(previous);
-        _pendingSave = ChainEndAsync(previous, link);
-        return link;
-    }
-
-    private static async Task ChainEndAsync(Task previous, Task link)
-    {
-        try
-        {
-            await Task.WhenAll(previous, link);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // The caller that queued the link reports it; later saves still run.
-        }
-    }
-
-    private void ScheduleSave(TaskRowViewModel row, bool immediate)
-    {
-        _debounce?.Cancel();
-        _debounce = null;
 
         // Capture now: the fields describe `row` only until the selection changes.
         var (title, notes, priority) = (DetailTitle, DetailNotes, DetailPriority);
-        _ = EnqueueSave(previous =>
-        {
-            var token = CancellationToken.None;
-            if (!immediate)
-            {
-                _debounce = new CancellationTokenSource();
-                token = _debounce.Token;
-            }
-
-            return SaveDetailAsync(previous, row, title, notes, priority, immediate, token);
-        });
+        Saves.ScheduleEdit(row.Id, () => StoreDetailAsync(row, title, notes, priority), immediate);
     }
 
-    private async Task SaveDetailAsync(
-        Task previous, TaskRowViewModel row, string title, string notes, Priority priority,
-        bool immediate, CancellationToken token)
+    private async Task<bool> StoreDetailAsync(TaskRowViewModel row, string title, string notes, Priority priority)
     {
-        if (!immediate)
-        {
-            // Start the delay before awaiting anything, so the timer exists as soon as the edit is made. It runs
-            // through the lifetime: a stop ends it quietly, and once stopped it is never armed.
-            var waited = false;
-            try
-            {
-                await _lifetime.RunAsync(
-                    async cancellationToken =>
-                    {
-                        await Task.Delay(SaveDebounce, _clock, cancellationToken);
-                        waited = true;
-                    },
-                    token);
-            }
-            catch (OperationCanceledException)
-            {
-                // superseded by a later edit, a flush or a delete
-            }
-
-            if (!waited)
-            {
-                return; // superseded, or the view model stopped: store nothing
-            }
-
-            // A later edit may have armed its own debounce already; clear only this save's.
-            if (_debounce is { } own && own.Token == token)
-            {
-                _debounce = null;
-            }
-        }
-
-        await previous; // saves of one Task never overlap
-
         if (!TaskTitle.IsValid(title) || !TaskNotes.IsValid(notes))
         {
-            return; // keep the last valid saved state
+            return false; // keep the last valid saved state
         }
 
-        try
-        {
-            var updated = await taskService.UpdateTaskAsync(row.Id, title, notes, priority);
-            row.Apply(updated);
-            ErrorMessage = null;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            ErrorMessage = "Could not save the changes: " + ex.Message;
-        }
+        row.Apply(await taskService.UpdateTaskAsync(row.Id, title, notes, priority));
+        return true;
     }
 }

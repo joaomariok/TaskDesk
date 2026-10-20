@@ -34,25 +34,12 @@ public sealed partial class MainViewModel
             return;
         }
 
-        _ = EnqueueSave(previous =>
-        {
-            ErrorMessage = null;
-            return SaveRecurrenceAsync(previous, row, recurrence);
-        });
+        _ = Saves.Enqueue(() => StoreRecurrenceAsync(row, recurrence), accepted: () => ErrorMessage = null);
     }
 
-    private async Task SaveRecurrenceAsync(Task previous, TaskRowViewModel row, Recurrence? recurrence)
+    private async Task<bool> StoreRecurrenceAsync(TaskRowViewModel row, Recurrence? recurrence)
     {
-        await previous; // saves of one Task never overlap
-        try
-        {
-            var updated = await Recurrences.SetRecurrenceAsync(row.Id, recurrence);
-            row.Apply(updated);
-            ErrorMessage = null;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            ErrorMessage = "Could not save the changes: " + ex.Message;
-        }
+        row.Apply(await Recurrences.SetRecurrenceAsync(row.Id, recurrence));
+        return true;
     }
 }

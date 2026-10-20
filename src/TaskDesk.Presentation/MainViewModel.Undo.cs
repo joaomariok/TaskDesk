@@ -31,11 +31,7 @@ public sealed partial class MainViewModel
         await _lifetime.RunAsync(async token =>
         {
             // Drop the pending edit only if it is this Task's: another Task's edit still saves.
-            if (DetailTask == row)
-            {
-                _debounce?.Cancel();
-                _debounce = null;
-            }
+            Saves.DropPendingEdit(row.Id);
 
             if (choice == OccurrenceDeleteChoice.DeleteThisOccurrence)
             {

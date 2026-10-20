@@ -192,33 +192,26 @@ public sealed partial class MainViewModel
             return;
         }
 
-        _ = EnqueueSave(previous =>
-        {
-            if (firesAt is { } shown)
+        _ = Saves.Enqueue(
+            () => StoreReminderAsync(row, reminderUtc),
+            accepted: () =>
             {
-                // Show the time a date-only Reminder fires at.
-                _loadingDetail = true;
-                DetailReminderTime = shown.ToTimeSpan();
-                _loadingDetail = false;
-            }
+                if (firesAt is { } shown)
+                {
+                    // Show the time a date-only Reminder fires at.
+                    _loadingDetail = true;
+                    DetailReminderTime = shown.ToTimeSpan();
+                    _loadingDetail = false;
+                }
 
-            ErrorMessage = null;
-            return SaveReminderAsync(previous, row, reminderUtc);
-        });
+                ErrorMessage = null;
+            });
     }
 
-    private async Task SaveReminderAsync(Task previous, TaskRowViewModel row, DateTime? reminderUtc)
+    private async Task<bool> StoreReminderAsync(TaskRowViewModel row, DateTime? reminderUtc)
     {
-        await previous; // saves of one Task never overlap
-        try
-        {
-            ApplyReminderChange(row, await Reminders.SetReminderAsync(row.Id, reminderUtc));
-            ErrorMessage = null;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            ErrorMessage = "Could not save the changes: " + ex.Message;
-        }
+        ApplyReminderChange(row, await Reminders.SetReminderAsync(row.Id, reminderUtc));
+        return true;
     }
 
     private TimeOnly DefaultReminderTime() =>

@@ -118,29 +118,15 @@ public sealed partial class MainViewModel
     }
 
     /// <summary>
-    /// Joins a delete or move of <paramref name="subtask"/> to the chain of saves (<see cref="EnqueueSave"/>), so it
-    /// runs after the saves already pending, a later save waits for it, and the stop waits for it. On its turn it
-    /// does nothing when a change queued ahead of it deleted the Subtask. The change runs through the lifetime: once
-    /// the view model has stopped it starts nothing, also when it was queued before the stop. The returned task
-    /// completes with the change. Before the stop it carries the change's failure to the command; once stopped, a
-    /// change whose database has gone ends quietly, as all the lifetime's work does. The chain carries on past a
-    /// failure either way.
+    /// Queues a delete or move of <paramref name="subtask"/> (<see cref="DetailSaveQueue.EnqueueSubtaskChange"/>): it
+    /// runs after the saves already queued, a later save waits for it, and the stop waits for it. On its turn it does
+    /// nothing when a change queued ahead of it deleted the Subtask. The returned task completes with the change and
+    /// carries its failure to the command.
     /// </summary>
     private Task EnqueueSubtaskChange(TaskRowViewModel row, SubtaskRowViewModel subtask, Func<Task> change)
-        => EnqueueSave(previous => RunSubtaskChangeAsync(previous, row, subtask, change)) ?? Task.CompletedTask;
-
-    private async Task RunSubtaskChangeAsync(
-        Task previous, TaskRowViewModel row, SubtaskRowViewModel subtask, Func<Task> change)
-    {
-        await previous; // saves of one Task never overlap
-        if (!row.Subtasks.Exists(s => s.Id == subtask.Id))
-        {
-            return; // a change queued ahead of this one deleted it already
-        }
-
-        // The change keeps the command's token, not the stop's: a change in flight at the stop lands, as a save does.
-        await _lifetime.RunAsync(_ => change());
-    }
+        => Saves.EnqueueSubtaskChange(() => row.Subtasks.Exists(s => s.Id == subtask.Id)
+            ? change()
+            : Task.CompletedTask); // a change queued ahead of this one deleted it already
 
     private void RebuildSubtaskItems()
     {
@@ -164,8 +150,8 @@ public sealed partial class MainViewModel
             return;
         }
 
-        var saving = EnqueueSave(previous => SaveSubtaskAsync(
-            previous, row, subtask, edit, subtask.Title, subtask.IsCompleted));
+        var (title, isCompleted) = (subtask.Title, subtask.IsCompleted);
+        var saving = Saves.Enqueue(() => StoreSubtaskAsync(row, subtask, edit, title, isCompleted));
         if (saving is null && row.Subtasks.Find(s => s.Id == subtask.Id) is { } saved)
         {
             subtask.Apply(new Subtask
@@ -179,47 +165,38 @@ public sealed partial class MainViewModel
         }
     }
 
-    private async Task SaveSubtaskAsync(
-        Task previous, TaskRowViewModel row, SubtaskRowViewModel subtask, SubtaskEdit edit,
-        string title, bool isCompleted)
+    private async Task<bool> StoreSubtaskAsync(
+        TaskRowViewModel row, SubtaskRowViewModel subtask, SubtaskEdit edit, string title, bool isCompleted)
     {
-        await previous;
         var known = row.Subtasks.FindIndex(s => s.Id == subtask.Id);
         if (known < 0)
         {
-            return;
+            return false; // a change queued ahead of this one deleted it
         }
 
-        try
+        Subtask updated;
+        if (edit == SubtaskEdit.Title)
         {
-            Subtask updated;
-            if (edit == SubtaskEdit.Title)
+            if (!TaskTitle.IsValid(title))
             {
-                if (!TaskTitle.IsValid(title))
-                {
-                    subtask.Apply(row.Subtasks[known]); // keep the last valid saved title
-                    return;
-                }
-
-                updated = await taskService.RenameSubtaskAsync(subtask.Id, title);
-            }
-            else
-            {
-                updated = await taskService.SetSubtaskCompletedAsync(subtask.Id, isCompleted);
+                subtask.Apply(row.Subtasks[known]); // keep the last valid saved title
+                return false;
             }
 
-            row.Subtasks[known] = updated;
-            row.RefreshSubtaskProgress();
-            if (subtask.Title == title && subtask.IsCompleted == isCompleted)
-            {
-                subtask.Apply(updated);
-            }
-
-            ErrorMessage = null;
+            updated = await taskService.RenameSubtaskAsync(subtask.Id, title);
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        else
         {
-            ErrorMessage = "Could not save the changes: " + ex.Message;
+            updated = await taskService.SetSubtaskCompletedAsync(subtask.Id, isCompleted);
         }
+
+        row.Subtasks[known] = updated;
+        row.RefreshSubtaskProgress();
+        if (subtask.Title == title && subtask.IsCompleted == isCompleted)
+        {
+            subtask.Apply(updated);
+        }
+
+        return true;
     }
 }

@@ -82,9 +82,7 @@ public sealed partial class MainViewModel(
     private readonly List<TaskRowViewModel> _all = [];
     private UndoEntry? _lastUndo;
     private CancellationTokenSource? _barTimer;
-    private CancellationTokenSource? _debounce;
     private bool _loadingDetail;
-    private Task _pendingSave = Task.CompletedTask;
 
     /// <summary>
     /// Raised when a Task was added, completed, un-completed, deleted or restored, so the open-Task
@@ -218,7 +216,7 @@ public sealed partial class MainViewModel(
     {
         SelectedTask = null;
         DetailTask = null; // flushes a pending detail edit of the old row
-        await _pendingSave;
+        await Saves.WaitForAllAsync();
 
         var tags = await tagService.ListTagsAsync(cancellationToken);
         var lists = listService is null ? [] : await listService.GetListsAsync(cancellationToken);
