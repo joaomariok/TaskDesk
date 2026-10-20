@@ -457,4 +457,35 @@ public class TaskDetailsViewModelTests
         Assert.Null(vm.SelectedTask);
         Assert.Null(vm.ErrorMessage);
     }
+
+    [Fact]
+    public async Task Deleting_another_Task_keeps_the_pending_edit_until_the_delay_ends()
+    {
+        var (service, vm, clock) = await StartAsync("a", "b");
+        var (a, b) = (vm.Tasks[0], vm.Tasks[1]);
+        vm.SelectedTask = a;
+        vm.DetailTitle = "edited";
+
+        await vm.DeleteCommand.ExecuteAsync(b);
+        clock.Advance(MainViewModel.SaveDebounce);
+        await vm.PendingSave;
+
+        Assert.Equal([(a.Id, "edited", (string?)"", Priority.None)], service.Updates);
+        Assert.Equal([b.Id], service.Deleted);
+    }
+
+    [Fact]
+    public async Task Deleting_another_Task_keeps_the_pending_edit_for_the_stop_flush()
+    {
+        var (service, vm, _) = await StartAsync("a", "b");
+        var (a, b) = (vm.Tasks[0], vm.Tasks[1]);
+        vm.SelectedTask = a;
+        vm.DetailTitle = "edited";
+
+        await vm.DeleteCommand.ExecuteAsync(b);
+        await vm.StopAsync();
+
+        Assert.Equal("edited", Assert.Single(service.Updates).Title);
+        Assert.Equal(a.Id, service.Updates[0].TaskId);
+    }
 }

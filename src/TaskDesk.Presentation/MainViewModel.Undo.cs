@@ -30,8 +30,13 @@ public sealed partial class MainViewModel
         // The dialog stays outside the lifetime, so a stop never waits on the owner.
         await _lifetime.RunAsync(async token =>
         {
-            _debounce?.Cancel();
-            _debounce = null;
+            // Drop the pending edit only if it is this Task's: another Task's edit still saves.
+            if (DetailTask == row)
+            {
+                _debounce?.Cancel();
+                _debounce = null;
+            }
+
             if (choice == OccurrenceDeleteChoice.DeleteThisOccurrence)
             {
                 var skipped = await Recurrences.SkipOccurrenceAsync(row.Id, token);
