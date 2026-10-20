@@ -13,16 +13,11 @@ using Windows.System;
 namespace TaskDesk.Views;
 
 /// <summary>
-/// The main window's content: the list header (page heading, its command bar with Filter and the List's
-/// settings, Filter bar, search,
+/// The main window's content: the list header (page heading with Filter and search beside it, Filter bar,
 /// quick add, empty state) over the Task list area of the page the view model shows.
 /// </summary>
 public sealed partial class MainView : UserControl
 {
-    // The heading's "⋯" overflow keeps the id and name of the List menu button it replaced.
-    private const string ListMenuId = "ListMenuButton";
-    private const string ListMenuName = "List settings";
-
     private static readonly string[] PriorityChoices = ["Any priority", "Low or higher", "Medium or higher", "High"];
 
     private bool _syncingPriorityFilter;
@@ -49,9 +44,6 @@ public sealed partial class MainView : UserControl
     public TaskListView TaskList { get; }
 
     public MainViewModel ViewModel { get; }
-
-    /// <summary>The Lists the List menu renames and colours; the menu does nothing until the shell sets it.</summary>
-    public SidebarViewModel? Lists { get; set; }
 
     /// <summary>Gives quick add keyboard focus, as the window does at start-up and on Ctrl+N.</summary>
     public void FocusQuickAdd()
@@ -166,64 +158,6 @@ public sealed partial class MainView : UserControl
             _syncingPriorityFilter = true;
             PriorityFilterBox.SelectedIndex = (int)(ViewModel.MinPriorityFilter ?? Priority.None);
             _syncingPriorityFilter = false;
-        }
-    }
-
-    // ---- The heading's command bar: Filter, and the "⋯" overflow with the shown List's settings ----
-
-    /// <summary>The overflow holds only List commands, so it shows on a List's page only.</summary>
-    public static CommandBarOverflowButtonVisibility ListOverflow(bool isListPage) =>
-        isListPage ? CommandBarOverflowButtonVisibility.Visible : CommandBarOverflowButtonVisibility.Collapsed;
-
-    // The overflow button is a template part with no property of its own: name it here, so a screen reader and
-    // the UI suite find "List settings" as before. CommandBar names it "More options" when its template applies
-    // and again each time it opens or closes, so the name is put back whenever CommandBar changes it.
-    private void OnHeadingCommandsLoaded(object sender, RoutedEventArgs e)
-    {
-        if (VisualTreeWalk.Descendants((DependencyObject)sender).OfType<Button>().FirstOrDefault(b => b.Name == "MoreButton")
-                is not { } more
-            || AutomationProperties.GetAutomationId(more) == ListMenuId)
-        {
-            return;
-        }
-
-        AutomationProperties.SetAutomationId(more, ListMenuId);
-        NameListMenu(more);
-        more.RegisterPropertyChangedCallback(AutomationProperties.NameProperty, (d, _) => NameListMenu((Button)d));
-        more.RegisterPropertyChangedCallback(ToolTipService.ToolTipProperty, (d, _) => NameListMenu((Button)d));
-    }
-
-    private static void NameListMenu(Button more)
-    {
-        if (AutomationProperties.GetName(more) != ListMenuName)
-        {
-            AutomationProperties.SetName(more, ListMenuName);
-        }
-
-        if (ToolTipService.GetToolTip(more) as string != ListMenuName)
-        {
-            ToolTipService.SetToolTip(more, ListMenuName);
-        }
-    }
-
-    private ListItemViewModel? ShownList => Lists?.ListOrDefault(ViewModel.CurrentListId);
-
-    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
-    private async void OnListRenameClick(object sender, RoutedEventArgs e)
-    {
-        if (Lists is { } lists && ShownList is { } list)
-        {
-            await lists.RenameCommand.ExecuteAsync(list);
-        }
-    }
-
-    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
-    private async void OnListColourClick(object sender, RoutedEventArgs e)
-    {
-        // None's empty Tag arrives as null, not "", so read it as a nullable string.
-        if (Lists is { } lists && ShownList is { } list && sender is MenuFlyoutItem item)
-        {
-            await lists.SetColorAsync(list, item.Tag as string);
         }
     }
 }

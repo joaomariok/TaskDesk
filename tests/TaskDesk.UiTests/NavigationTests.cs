@@ -92,29 +92,6 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
-    public void Enter_on_List_settings_opens_Rename_and_Colour_and_a_Smart_View_hides_it()
-    {
-        AutomationElement? Command(string name) => _app.Window.FindFirstDescendant(cf => cf.ByName(name));
-        AppSession.WaitUntil(() => _app.Find(Ids.PageHeading).Name == "Inbox",
-            () => $"The page heading was '{_app.Find(Ids.PageHeading).Name}'.");
-        Assert.Equal("List settings", _app.Find(Ids.ListMenuButton).Name);
-
-        _app.Focus(Ids.ListMenuButton);
-        AppSession.Press(VirtualKeyShort.RETURN);
-        AppSession.Eventually(() => Command("Rename"), "Enter on List settings did not show Rename.");
-        AppSession.Eventually(() => Command("Colour"), "Enter on List settings did not show Colour.");
-        AppSession.Press(VirtualKeyShort.ESCAPE);
-        AppSession.WaitUntil(() => Command("Rename") is null, () => "Esc did not close the List settings.");
-
-        AppSession.Ctrl(VirtualKeyShort.KEY_1);
-        AppSession.WaitUntil(() => _app.Find(Ids.PageHeading).Name == "Today",
-            () => $"The page heading was '{_app.Find(Ids.PageHeading).Name}'.");
-        AppSession.WaitUntil(
-            () => _app.Window.FindFirstDescendant(cf => cf.ByAutomationId(Ids.ListMenuButton)) is null,
-            () => "A Smart View shows List settings.");
-    }
-
-    [Fact]
     public void Clicking_Filter_while_a_Filter_is_on_keeps_the_row_and_the_button_pressed()
     {
         AutomationElement? PriorityFilter() =>

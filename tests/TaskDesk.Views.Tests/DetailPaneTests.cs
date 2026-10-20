@@ -719,40 +719,6 @@ public sealed class DetailPaneTests
         }
     }
 
-    // The heading's commands sit right after the heading, so the overlaid pane, on the list's right side, leaves
-    // Filter and the List settings overflow in view.
-    [UITestMethod]
-    public async Task The_pane_overlaid_at_1100_px_leaves_Filter_and_List_settings_in_view()
-    {
-        using var db = await DatabaseAsync();
-        await AddAsync(db, "Book dentist");
-        var (window, _) = await OpenAsync(db, width: 1000);
-        try
-        {
-            await ResizeWindowAsync(window, 1100);
-            await SelectAsync(window, "Book dentist");
-            var pane = window.Details.Pane;
-            Assert.IsTrue(window.View.TaskList.TryShortcut(VirtualKey.Enter, VirtualKeyModifiers.None));
-            await UiWait.UntilAsync(() => pane.ActualWidth > 0, () => "Enter did not open the pane.", Ct);
-            var bar = VisualTree.Find<CommandBar>(window.View, "HeadingCommands");
-            var more = VisualTree.Descendants(bar).OfType<Button>()
-                .Single(b => AutomationProperties.GetAutomationId(b) == "ListMenuButton");
-            await UiWait.UntilAsync(() => more.ActualWidth > 0, () => "The List settings overflow does not show.", Ct);
-            window.Content.UpdateLayout();
-
-            var paneLeft = Left(pane, window);
-            var filter = VisualTree.Find<FrameworkElement>(window.View, "FilterButton");
-            Assert.IsLessThanOrEqualTo(paneLeft, Right(filter, window),
-                $"Filter ends at {Right(filter, window)}, under the pane that starts at {paneLeft}.");
-            Assert.IsLessThanOrEqualTo(paneLeft, Right(more, window),
-                $"List settings ends at {Right(more, window)}, under the pane that starts at {paneLeft}.");
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
-
     [UITestMethod]
     public async Task An_overlaid_pane_stays_on_its_Task_while_the_selection_moves()
     {

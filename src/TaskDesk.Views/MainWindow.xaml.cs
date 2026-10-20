@@ -29,7 +29,6 @@ public sealed partial class MainWindow : Window
         SetDefaultSize();
         View = new MainView(viewModel);
         Lists = lists;
-        View.Lists = lists;
         // The page with the detail pane beside it or over it.
         Details = new DetailDock(View);
         // The sidebar's NavigationView hosts the page as its content. Deleting a Tag asks on this window.

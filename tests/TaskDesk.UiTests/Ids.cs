@@ -12,7 +12,6 @@ internal static class Ids
     public const string DetailTitleBox = nameof(DetailTitleBox);
     public const string FilterBar = nameof(FilterBar);
     public const string FilterButton = nameof(FilterButton);
-    public const string ListMenuButton = nameof(ListMenuButton);
     public const string ListsList = nameof(ListsList);
     public const string NavigationPane = nameof(NavigationPane);
     public const string NewListBox = nameof(NewListBox);

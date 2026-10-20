@@ -20,9 +20,8 @@ using Windows.System;
 namespace TaskDesk.Views.Tests;
 
 /// <summary>
-/// The header of the list area over a real database: the page heading and its command bar (Filter and the
-/// List settings overflow), the Filter button and
-/// Filter bar, search (Ctrl+F, Esc), quick add (Enter, Ctrl+N), the empty state and "Load more completed".
+/// The header of the list area over a real database: the page heading with Filter and search beside it, the
+/// Filter button and Filter bar, search (Ctrl+F, Esc), quick add (Enter, Ctrl+N), the empty state and "Load more completed".
 /// </summary>
 [TestClass]
 public sealed class ListHeaderTests
@@ -60,81 +59,6 @@ public sealed class ListHeaderTests
     }
 
     [UITestMethod]
-    public async Task The_heading_overflow_shows_on_a_List_page_and_renames_and_colours_the_List()
-    {
-        using var db = await DatabaseAsync();
-        var home = await db.Get<ITagService>().CreateTagAsync("home", Ct);
-        var (window, viewModel) = await OpenAsync(db);
-        var dialogs = new RenamingDialogs("Home");
-        var lists = new SidebarViewModel(viewModel, db.Get<IListService>(), dialogs);
-        try
-        {
-            await lists.LoadAsync(Ct);
-            window.View.Lists = lists;
-            await viewModel.LoadAsync(Ct);
-            var bar = VisualTree.Find<CommandBar>(window.View, "HeadingCommands");
-            Assert.AreEqual(CommandBarDefaultLabelPosition.Right, bar.DefaultLabelPosition);
-            var more = await WaitForAsync(
-                () => VisualTree.Descendants(bar).OfType<Button>()
-                    .FirstOrDefault(b => AutomationProperties.GetAutomationId(b) == "ListMenuButton"),
-                "The command bar has no overflow button with the id ListMenuButton.");
-            Assert.AreEqual("List settings", FrameworkElementAutomationPeer.CreatePeerForElement(more).GetName());
-            await UiWait.UntilAsync(() => more.Visibility == Visibility.Visible,
-                () => "A List page has no List settings overflow.", Ct);
-
-            ((IInvokeProvider)FrameworkElementAutomationPeer.CreatePeerForElement(more)).Invoke();
-            await UiWait.UntilAsync(() => bar.IsOpen, () => "List settings did not open the overflow.", Ct);
-            bar.IsOpen = false;
-            await UiWait.UntilAsync(() => !bar.IsOpen, () => "The overflow did not close.", Ct);
-            Assert.AreEqual("List settings", FrameworkElementAutomationPeer.CreatePeerForElement(more).GetName(),
-                "Opening the overflow renamed it.");
-            Assert.IsTrue(more.IsTabStop, "Tab does not reach List settings.");
-
-            var commands = bar.SecondaryCommands.Cast<AppBarButton>().ToList();
-            CollectionAssert.AreEqual(new[] { "Rename", "Colour" }, commands.Select(c => c.Label).ToList());
-            var colours = ((MenuFlyout)commands[1].Flyout).Items.Cast<MenuFlyoutItem>().ToList();
-            CollectionAssert.AreEqual(
-                new[] { "None", "Red", "Orange", "Yellow", "Green", "Blue", "Purple" },
-                colours.Select(i => i.Text).ToList());
-
-            ((IInvokeProvider)FrameworkElementAutomationPeer.CreatePeerForElement(commands[0])).Invoke();
-            await UiWait.UntilAsync(() => lists.Lists.Single(l => l.IsDefault).Name == "Home",
-                () => "Rename did not rename the shown List.", Ct);
-
-            Invoke(colours.Single(i => i.Text == "Green"));
-            await UiWait.UntilAsync(() => lists.Lists.Single(l => l.IsDefault).ColorHex == "#107C10",
-                () => "Colour did not colour the shown List.", Ct);
-
-            Invoke(colours.Single(i => i.Text == "None"));
-            await UiWait.UntilAsync(() => lists.Lists.Single(l => l.IsDefault).ColorHex is null,
-                () => "None did not remove the shown List's colour.", Ct);
-
-            var work = await db.Get<IListService>().CreateListAsync("Work", Ct);
-            await lists.LoadAsync(Ct);
-            await viewModel.ShowListAsync(work.Id, Ct);
-            Invoke(colours.Single(i => i.Text == "Green"));
-            await UiWait.UntilAsync(() => lists.Lists.Single(l => l.Name == "Work").ColorHex == "#107C10",
-                () => "Colour did not colour Work, the shown List.", Ct);
-            Assert.IsNull(lists.Lists.Single(l => l.IsDefault).ColorHex, "Colour also changed the Default List.");
-
-            await viewModel.ShowSmartViewAsync(SmartView.Today, Ct);
-            await UiWait.UntilAsync(() => more.Visibility == Visibility.Collapsed,
-                () => "A Smart View shows the List settings overflow.", Ct);
-
-            await viewModel.ShowListAsync(work.Id, Ct);
-            await UiWait.UntilAsync(() => more.Visibility == Visibility.Visible,
-                () => "Going back to a List page did not show the List settings overflow.", Ct);
-            await viewModel.ShowAsync(new TaskListPage.TagPage(home), Ct);
-            await UiWait.UntilAsync(() => more.Visibility == Visibility.Collapsed,
-                () => "A Tag's page shows the List settings overflow.", Ct);
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
-
-    [UITestMethod]
     public async Task The_Filter_button_shows_and_hides_the_Filter_bar_and_stays_pressed_while_a_Filter_is_on()
     {
         using var db = await DatabaseAsync();
@@ -142,15 +66,16 @@ public sealed class ListHeaderTests
         try
         {
             await viewModel.LoadAsync(Ct);
-            var filter = VisualTree.Find<AppBarToggleButton>(window.View, "FilterButton");
+            var filter = VisualTree.Find<ToggleButton>(window.View, "FilterButton");
             var bar = VisualTree.Find<FrameworkElement>(window.View, "FilterBar");
             Assert.AreEqual("Filter", AutomationProperties.GetName(filter));
-            Assert.AreEqual("Filter", filter.Label);
-            Assert.IsInstanceOfType<FontIcon>(filter.Icon);
+            Assert.AreEqual("Filter", VisualTree.Find<TextBlock>(filter, "FilterLabel").Text);
+            Assert.AreEqual("\uE71C", VisualTree.Find<FontIcon>(filter, "FilterIcon").Glyph);
             Assert.IsTrue(filter.IsTabStop, "Tab does not reach Filter.");
-            CollectionAssert.Contains(
-                VisualTree.Find<CommandBar>(window.View, "HeadingCommands").PrimaryCommands.ToList(), filter,
-                "Filter is not a command of the heading's command bar.");
+            var search = VisualTree.Find<TextBox>(window.View, "SearchBox");
+            Assert.AreSame(VisualTreeHelper.GetParent(search), VisualTreeHelper.GetParent(filter),
+                "Filter is not in the heading row with search.");
+            Assert.AreEqual(Grid.GetColumn(search) - 1, Grid.GetColumn(filter), "Filter is not directly left of search.");
             Assert.AreEqual("FilterBar", AutomationProperties.GetAutomationId(bar));
             Assert.AreEqual("Filters", AutomationProperties.GetName(bar));
             Assert.AreEqual(Visibility.Collapsed, bar.Visibility);
@@ -178,10 +103,10 @@ public sealed class ListHeaderTests
         }
     }
 
-    // At the narrowest window (800 px with its frame) the heading row is as tall as Fluent's command bar at its
-    // default size: the bar sits right after the heading, and the search box, as tall as quick add, is centred in the row.
+    // At the narrowest window (800 px with its frame) the heading row reads: the name on the left, then Filter directly
+    // left of search at the row's right end. The row is as tall as Filter and search, which are as tall as quick add.
     [UITestMethod]
-    public async Task The_heading_row_fits_its_command_bar_with_its_commands_right_after_the_heading_and_search_centred()
+    public async Task The_heading_row_has_the_name_then_Filter_directly_left_of_search_at_its_right_end()
     {
         using var db = await DatabaseAsync();
         var (window, viewModel) = await OpenAsync(db);
@@ -195,47 +120,45 @@ public sealed class ListHeaderTests
                     && window.AppWindow.Size.Width == (int)Math.Round(800 * scale),
                 () => $"The window is {window.AppWindow.Size.Width} px wide.", Ct);
             await viewModel.LoadAsync(Ct);
-            var bar = VisualTree.Find<CommandBar>(window.View, "HeadingCommands");
-            var more = await WaitForAsync(
-                () => VisualTree.Descendants(bar).OfType<Button>()
-                    .FirstOrDefault(b => AutomationProperties.GetAutomationId(b) == "ListMenuButton" && b.ActualWidth > 0),
-                "The List settings overflow does not show on the Default List's page.");
-            window.View.UpdateLayout();
             var heading = VisualTree.Find<TextBlock>(window.View, "PageHeading");
-            var filter = VisualTree.Find<AppBarToggleButton>(window.View, "FilterButton");
+            var filter = VisualTree.Find<ToggleButton>(window.View, "FilterButton");
             var search = VisualTree.Find<TextBox>(window.View, "SearchBox");
             var quickAdd = VisualTree.Find<TextBox>(window.View, "QuickAddBox");
             var row = (FrameworkElement)VisualTreeHelper.GetParent(search);
+            await UiWait.UntilAsync(() => filter.ActualWidth > 0 && search.ActualWidth > 0,
+                () => "The heading row is not laid out.", Ct);
+            window.View.UpdateLayout();
             Rect Bounds(FrameworkElement e) =>
                 e.TransformToVisual(window.View).TransformBounds(new Rect(0, 0, e.ActualWidth, e.ActualHeight));
+            double CentreY(FrameworkElement e) => Bounds(e).Top + Bounds(e).Height / 2;
 
-            Assert.AreEqual(bar.ActualHeight, row.ActualHeight, 0.5,
-                $"The heading row is {row.ActualHeight} px tall, its command bar {bar.ActualHeight} px.");
-            Assert.IsLessThanOrEqualTo(bar.ActualHeight + 0.5, filter.ActualHeight, $"Filter is {filter.ActualHeight} px tall.");
-            Assert.IsLessThanOrEqualTo(bar.ActualHeight + 0.5, more.ActualHeight, $"List settings is {more.ActualHeight} px tall.");
-
-            var label = VisualTree.Descendants(filter).OfType<TextBlock>().Single(t => t.Name == "TextLabel");
-            var icon = VisualTree.Descendants(filter).OfType<FrameworkElement>().Single(e => e.Name == "ContentViewbox");
-            Assert.IsGreaterThanOrEqualTo(Bounds(icon).Right - 0.5, Bounds(label).Left, "Filter's label is not right of its icon.");
-            Assert.IsGreaterThanOrEqualTo(Bounds(filter).Top - 0.5, Bounds(label).Top, "Filter's label is cut at the top.");
-            Assert.IsLessThanOrEqualTo(Bounds(filter).Bottom + 0.5, Bounds(label).Bottom, "Filter's label is cut at the bottom.");
-
-            Assert.AreEqual(quickAdd.ActualHeight, search.ActualHeight, 0.5, "Search is not as tall as quick add.");
-            var rowBounds = Bounds(row);
+            var headingBounds = Bounds(heading);
+            var filterBounds = Bounds(filter);
             var searchBounds = Bounds(search);
-            Assert.AreEqual(rowBounds.Top + rowBounds.Height / 2, searchBounds.Top + searchBounds.Height / 2, 0.5,
-                "Search is not centred in the heading row.");
-
-            var headingRight = Bounds(heading).Right;
-            var barBounds = Bounds(bar);
-            Assert.IsGreaterThanOrEqualTo(headingRight - 0.5, barBounds.Left, "The command bar starts over the heading.");
-            Assert.IsLessThanOrEqualTo(headingRight + 12, barBounds.Left,
-                $"The command bar starts at {barBounds.Left}, not right after the heading ending at {headingRight}.");
-            Assert.IsLessThanOrEqualTo(searchBounds.Left + 0.5, Bounds(more).Right, "List settings runs into search.");
-            Assert.IsLessThanOrEqualTo(searchBounds.Left + 0.5, Bounds(filter).Right, "Filter runs into search.");
-            Assert.IsLessThanOrEqualTo(window.View.ActualWidth + 0.5, searchBounds.Right, "Search runs past the page.");
             Assert.AreEqual(viewModel.PageHeading, heading.Text);
             Assert.IsFalse(heading.IsTextTrimmed, "The heading is trimmed in the narrowest window.");
+            Assert.IsLessThanOrEqualTo(filterBounds.Left + 0.5, headingBounds.Right, "The heading runs into Filter.");
+            Assert.AreEqual(searchBounds.Left - 8, filterBounds.Right, 0.5, "Filter is not 8 px left of search.");
+            Assert.AreEqual(280, search.ActualWidth, 0.5, "Search is not 280 px wide in an 800 px window.");
+            Assert.IsLessThanOrEqualTo(window.View.ActualWidth + 0.5, searchBounds.Right, "Search runs past the page.");
+
+            Assert.AreEqual(search.ActualHeight, filter.ActualHeight, 0.5,
+                $"Filter is {filter.ActualHeight} px tall, search {search.ActualHeight} px.");
+            Assert.AreEqual(quickAdd.ActualHeight, search.ActualHeight, 0.5, "Search is not as tall as quick add.");
+            Assert.AreEqual(search.ActualHeight, row.ActualHeight, 0.5,
+                $"The heading row is {row.ActualHeight} px tall, search {search.ActualHeight} px.");
+            var rowCentre = Bounds(row).Top + Bounds(row).Height / 2;
+            foreach (var (name, element) in new (string, FrameworkElement)[] { ("heading", heading), ("Filter", filter), ("search", search) })
+            {
+                Assert.AreEqual(rowCentre, CentreY(element), 0.5, $"The {name} is not centred in the heading row.");
+            }
+
+            var label = VisualTree.Find<TextBlock>(filter, "FilterLabel");
+            var icon = VisualTree.Find<FontIcon>(filter, "FilterIcon");
+            Assert.IsGreaterThanOrEqualTo(Bounds(icon).Right - 0.5, Bounds(label).Left, "Filter's label is not right of its icon.");
+            Assert.IsGreaterThanOrEqualTo(filterBounds.Top - 0.5, Bounds(label).Top, "Filter's label is cut at the top.");
+            Assert.IsLessThanOrEqualTo(filterBounds.Bottom + 0.5, Bounds(label).Bottom, "Filter's label is cut at the bottom.");
+            Assert.IsLessThanOrEqualTo(filterBounds.Right + 0.5, Bounds(label).Right, "Filter's label is cut at the right.");
         }
         finally
         {
@@ -253,7 +176,7 @@ public sealed class ListHeaderTests
         try
         {
             await viewModel.LoadAsync(Ct);
-            Toggle(VisualTree.Find<AppBarToggleButton>(window.View, "FilterButton"));
+            Toggle(VisualTree.Find<ToggleButton>(window.View, "FilterButton"));
             var hasDue = FindByName<ToggleButton>(window.View, "Has due filter");
             Toggle(hasDue);
             await UiWait.UntilAsync(() => hasDue.IsChecked == true, () => "Has due did not turn on.", Ct);
@@ -282,7 +205,7 @@ public sealed class ListHeaderTests
     }
 
     // A List name too long for the row stays on one line and ends with an ellipsis, so the row keeps its height and
-    // the command bar stays in view before the search box.
+    // Filter stays in view before the search box.
     [UITestMethod]
     public async Task A_long_List_name_ends_the_heading_with_an_ellipsis_on_one_line()
     {
@@ -296,17 +219,17 @@ public sealed class ListHeaderTests
             var heading = VisualTree.Find<TextBlock>(window.View, "PageHeading");
             await UiWait.UntilAsync(() => heading.Text == list.Name, () => $"The heading read '{heading.Text}'.", Ct);
             window.View.UpdateLayout();
-            var bar = VisualTree.Find<CommandBar>(window.View, "HeadingCommands");
+            var filter = VisualTree.Find<ToggleButton>(window.View, "FilterButton");
             var search = VisualTree.Find<TextBox>(window.View, "SearchBox");
             var row = (FrameworkElement)VisualTreeHelper.GetParent(search);
             Rect Bounds(FrameworkElement e) =>
                 e.TransformToVisual(window.View).TransformBounds(new Rect(0, 0, e.ActualWidth, e.ActualHeight));
 
             Assert.IsTrue(heading.IsTextTrimmed, "The long heading does not end with an ellipsis.");
-            Assert.AreEqual(bar.ActualHeight, row.ActualHeight, 0.5,
-                $"The heading row is {row.ActualHeight} px tall, its command bar {bar.ActualHeight} px.");
-            Assert.IsLessThanOrEqualTo(Bounds(search).Left + 0.5, Bounds(bar).Right, "The command bar runs into search.");
-            Assert.IsGreaterThan(0, bar.ActualWidth, "The command bar is pushed out of view.");
+            Assert.AreEqual(Math.Max(filter.ActualHeight, search.ActualHeight), row.ActualHeight, 0.5,
+                $"The heading row is {row.ActualHeight} px tall, Filter {filter.ActualHeight} px, search {search.ActualHeight} px.");
+            Assert.IsLessThanOrEqualTo(Bounds(search).Left + 0.5, Bounds(filter).Right, "Filter runs into search.");
+            Assert.IsGreaterThan(0, filter.ActualWidth, "Filter is pushed out of view.");
         }
         finally
         {
@@ -1046,9 +969,6 @@ public sealed class ListHeaderTests
     private static void Toggle(ToggleButton button) =>
         ((ToggleButtonAutomationPeer)FrameworkElementAutomationPeer.CreatePeerForElement(button)).Toggle();
 
-    private static void Invoke(MenuFlyoutItem item) =>
-        ((IInvokeProvider)FrameworkElementAutomationPeer.CreatePeerForElement(item)).Invoke();
-
     private async Task ClearFiltersAsync(MainView view)
     {
         var clear = FindByName<Button>(view, "Clear filters");
@@ -1139,14 +1059,6 @@ public sealed class ListHeaderTests
         context.Tasks.Add(task);
         await context.SaveChangesAsync();
         return task.Id;
-    }
-
-    // Answers every rename prompt with one name.
-    private sealed class RenamingDialogs(string name) : IListDialogs
-    {
-        public Task<bool> ConfirmDeleteAsync(string listName, int taskCount) => Task.FromResult(false);
-
-        public Task<string?> PromptNameAsync(string currentName) => Task.FromResult<string?>(name);
     }
 
     // Counts the page loads: every load lists the Tags first.
