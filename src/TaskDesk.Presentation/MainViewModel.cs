@@ -402,6 +402,28 @@ public sealed partial class MainViewModel(
             Tasks.Move(oldIndex, newIndex);
         }, cancellationToken);
 
+    /// <summary>
+    /// Moves the open Task <paramref name="dragged"/> into the gap <paramref name="gap"/> over the open rows (0 is
+    /// before the first, <c>Tasks.Count</c> after the last; a larger gap means the end) and persists it. Its own
+    /// gap, just above or just below it, changes nothing.
+    /// </summary>
+    public Task MoveTaskToGapAsync(TaskRowViewModel dragged, int gap, CancellationToken cancellationToken = default)
+    {
+        var from = Tasks.IndexOf(dragged);
+        if (from < 0 || gap < 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        gap = Math.Min(gap, Tasks.Count);
+        if (gap == from || gap == from + 1)
+        {
+            return Task.CompletedTask;
+        }
+
+        return MoveTaskAsync(from, gap > from ? gap - 1 : gap, cancellationToken);
+    }
+
     private bool CanAddTask() => TaskTitle.IsValid(QuickAddTitle);
 
     // ---- Completion ----

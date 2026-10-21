@@ -230,6 +230,80 @@ public sealed partial class TaskListView : UserControl
         await ViewModel.MoveTaskAsync(oldIndex, newIndex);
     }
 
+    /// <summary>The spans of the open rows, indexed like <c>ViewModel.Tasks</c>; null for a row with no container.</summary>
+    private RowSpan?[] OpenSpans()
+    {
+        var all = RowMeasure.Spans(OpenTaskList);
+        var spans = new RowSpan?[ViewModel.Tasks.Count];
+        for (var i = 0; i < all.Length; i++)
+        {
+            if (OpenTaskList.Items[i] is TaskRowViewModel row && ViewModel.Tasks.IndexOf(row) is >= 0 and var at)
+            {
+                spans[at] = all[i];
+            }
+        }
+
+        return spans;
+    }
+
+    /// <summary>
+    /// The gap over the open rows a drop at <paramref name="position"/> (relative to the list) lands in: over a
+    /// row's top half the gap before it, over its bottom half the gap after it, and below the rows the last gap.
+    /// </summary>
+    public int GapAt(Windows.Foundation.Point position) => ReorderGeometry.GapAt(OpenSpans(), position.Y);
+
+    /// <summary>
+    /// Drops <paramref name="dragged"/> into the gap <paramref name="gap"/> over the open rows through the view
+    /// model's move use case, and hides the insertion line. Does nothing where reordering is off.
+    /// </summary>
+    public async Task DropIntoGapAsync(TaskRowViewModel dragged, int gap)
+    {
+        HideInsertionLine();
+        if (ViewModel.IsReorderEnabled)
+        {
+            await ViewModel.MoveTaskToGapAsync(dragged, gap);
+        }
+    }
+
+    /// <summary>
+    /// Shows the insertion line on the gap <paramref name="gap"/> while a Task is dragged: at the top of the row
+    /// after it, or under the last open row.
+    /// </summary>
+    public void ShowDropGap(int gap)
+    {
+        var y = ReorderGeometry.LineOffset(OpenSpans(), gap);
+        if (y is not { } top)
+        {
+            HideInsertionLine();
+            return;
+        }
+
+        TaskInsertionLine.Margin = new Thickness(0, Math.Max(0, top - (TaskInsertionLine.Height / 2)), 0, 0);
+        TaskInsertionLine.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// The drag left the spot at <paramref name="position"/> (relative to the list). Moving between rows leaves a
+    /// row too, so the line hides only once the position is outside the list.
+    /// </summary>
+    public void LeaveTaskDrag(Windows.Foundation.Point position)
+    {
+        if (ReorderGeometry.HasLeft(position.X, position.Y, OpenTaskList.ActualWidth, OpenTaskList.ActualHeight))
+        {
+            HideInsertionLine();
+        }
+    }
+
+    private void HideInsertionLine() => TaskInsertionLine.Visibility = Visibility.Collapsed;
+
+    private void OnDragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
+    {
+        _dragged = null;
+        HideInsertionLine();
+    }
+
+    private void OnTaskDragLeave(object sender, DragEventArgs e) => LeaveTaskDrag(e.GetPosition(OpenTaskList));
+
     private void OnDragItemsStarting(object sender, DragItemsStartingEventArgs e)
     {
         // Only an open row drags: never an Overdue or completed one.
@@ -249,6 +323,16 @@ public sealed partial class TaskListView : UserControl
         e.AcceptedOperation = _dragged is not null && ViewModel.IsReorderEnabled
             ? Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move
             : Windows.ApplicationModel.DataTransfer.DataPackageOperation.None;
+
+        if (_dragged is not null && ViewModel.IsReorderEnabled)
+        {
+            ShowDropGap(GapAt(e.GetPosition(OpenTaskList)));
+        }
+        else
+        {
+            HideInsertionLine();
+        }
+
         e.Handled = true;
     }
 
@@ -262,6 +346,7 @@ public sealed partial class TaskListView : UserControl
             return;
         }
 
-        await DropAsync(dragged, RowAt(e.GetPosition(OpenTaskList)));
+        // Below the open rows (empty space, the Completed heading, a completed row) is the last gap: the end.
+        await DropIntoGapAsync(dragged, GapAt(e.GetPosition(OpenTaskList)));
     }
 }

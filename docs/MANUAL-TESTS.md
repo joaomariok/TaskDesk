@@ -57,6 +57,7 @@ Mark each item with the date and result.
 ## Lists, Tags and Tasks
 
 - [ ] Drag a Task to reorder it in a List; the order survives restart. Reordering is off in Smart Views, Tag filters and search.
+- [ ] Drag a Task above and below a row by half: the accent insertion line shows the gap it will land in (and hides on drop or when the drag leaves the list); then drop it on its own gap (just above or below itself) and nothing changes.
 - [ ] Drag Lists in the navigation pane to reorder; rename, color and delete from the right-click menu.
 - [ ] Creating a List (new list box, Enter) and tagging a Task (new tag box, Enter). **(automated)**
 - [ ] Click a Tag in the navigation pane to filter; click again to clear.

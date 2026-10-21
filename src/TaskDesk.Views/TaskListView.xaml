@@ -86,7 +86,8 @@
                   AutomationProperties.Name="Tasks"
                   AutomationProperties.AutomationId="OpenTaskList"
                   CanDragItems="True" AllowDrop="True"
-                  DragItemsStarting="OnDragItemsStarting" DragOver="OnTaskDragOver" Drop="OnTaskDrop"
+                  DragItemsStarting="OnDragItemsStarting" DragItemsCompleted="OnDragItemsCompleted"
+                  DragOver="OnTaskDragOver" DragLeave="OnTaskDragLeave" Drop="OnTaskDrop"
                   ItemsSource="{x:Bind GroupsSource.View, Mode=OneTime}"
                   ItemContainerStyle="{StaticResource TaskRowContainer}"
                   ItemTemplate="{StaticResource TaskRowTemplate}"
@@ -103,6 +104,10 @@
                             HeaderTemplateSelector="{StaticResource GroupHeadingSelector}" />
             </ListView.GroupStyle>
         </ListView>
+        <!-- The insertion line shows where a dragged Task lands; it overlays the rows and takes no input. -->
+        <Rectangle x:Name="TaskInsertionLine" Height="2" RadiusX="1" RadiusY="1" VerticalAlignment="Top"
+                   Fill="{ThemeResource AccentFillColorDefaultBrush}" IsHitTestVisible="False"
+                   Visibility="Collapsed" />
         <InfoBar x:Name="UndoBar" Grid.Row="1" IsClosable="False"
                  AutomationProperties.Name="Task deleted"
                  IsOpen="{x:Bind ViewModel.IsUndoBarVisible, Mode=OneWay}"

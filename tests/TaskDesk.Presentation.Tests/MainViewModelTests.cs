@@ -121,6 +121,55 @@ public class MainViewModelTests
         Assert.Empty(service.Moves);
     }
 
+    [Theory]
+    [InlineData(0, 0, "a,b,c,d", false)] // a's own gap, above it
+    [InlineData(0, 1, "a,b,c,d", false)] // a's own gap, below it
+    [InlineData(0, 2, "b,a,c,d", true)] // between b and c
+    [InlineData(0, 4, "b,c,d,a", true)] // after the last row
+    [InlineData(0, 9, "b,c,d,a", true)] // past the rows means the end
+    [InlineData(2, 0, "c,a,b,d", true)] // before the first row
+    [InlineData(2, 1, "a,c,b,d", true)] // between a and b
+    [InlineData(2, 2, "a,b,c,d", false)] // c's own gap, above it
+    [InlineData(2, 3, "a,b,c,d", false)] // c's own gap, below it
+    [InlineData(2, 4, "a,b,d,c", true)] // after the last row
+    [InlineData(3, 4, "a,b,c,d", false)] // d is already last
+    [InlineData(3, 0, "d,a,b,c", true)] // last row to the front
+    [InlineData(1, -1, "a,b,c,d", false)] // no such gap
+    public async Task Moving_a_Task_into_a_gap_saves_the_order_and_its_own_gap_changes_nothing(
+        int dragged, int gap, string expected, bool moves)
+    {
+        var service = new FakeTaskService();
+        foreach (var title in new[] { "a", "b", "c", "d" })
+        {
+            await service.CreateTaskAsync(title, Ct);
+        }
+
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider());
+        await vm.LoadAsync(Ct);
+
+        await vm.MoveTaskToGapAsync(vm.Tasks[dragged], gap, Ct);
+
+        Assert.Equal(expected.Split(','), vm.Tasks.Select(t => t.Title));
+        Assert.Equal(moves ? 1 : 0, service.Moves.Count);
+        var saved = service.All.Select(t => t.Title);
+        Assert.Equal(expected.Split(','), saved);
+    }
+
+    [Fact]
+    public async Task Moving_into_a_gap_is_ignored_when_reordering_is_disabled()
+    {
+        var service = new FakeTaskService();
+        await service.CreateTaskAsync("a", Ct);
+        await service.CreateTaskAsync("b", Ct);
+        var vm = new MainViewModel(service, new FakeTagService(service), new FakeTimeProvider()) { IsReorderEnabled = false };
+        await vm.LoadAsync(Ct);
+
+        await vm.MoveTaskToGapAsync(vm.Tasks[0], 2, Ct);
+
+        Assert.Equal(["a", "b"], vm.Tasks.Select(t => t.Title));
+        Assert.Empty(service.Moves);
+    }
+
     [Fact]
     public async Task Adding_a_Tag_to_the_selected_Task_shows_it_on_the_row_and_clears_the_box()
     {

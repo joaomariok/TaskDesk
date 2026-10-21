@@ -31,6 +31,30 @@ public sealed class ReorderTests : IDisposable
         _app.WaitForRows(Ids.OpenTaskList, "Second", "Third", "First");
     }
 
+    [Theory]
+    [InlineData(true, "Second", "Third", "First")] // bottom half of "Third": after it
+    [InlineData(false, "Second", "First", "Third")] // top half of "Third": before it
+    public void Dropping_on_a_rows_half_lands_above_or_below_it_and_the_order_survives_a_restart(
+        bool bottomHalf, params string[] expected)
+    {
+        string[] titles = ["First", "Second", "Third"];
+        for (var i = 0; i < titles.Length; i++)
+        {
+            _app.TypeInto(Ids.QuickAddBox, titles[i], pressEnter: true);
+            _app.WaitForRows(Ids.OpenTaskList, titles[..(i + 1)]);
+        }
+
+        var target = Row("Third").BoundingRectangle;
+        var y = bottomHalf ? target.Bottom - (target.Height / 4) : target.Top + (target.Height / 4);
+        AppSession.DragSlowly(Centre(Row("First")), new Point(target.Left + (target.Width / 2), y));
+
+        _app.WaitForRows(Ids.OpenTaskList, expected);
+
+        _app.Restart();
+
+        _app.WaitForRows(Ids.OpenTaskList, expected);
+    }
+
     private AutomationElement Row(string title) =>
         AppSession.Eventually(
             () => _app.FindRow(Ids.OpenTaskList, title),
