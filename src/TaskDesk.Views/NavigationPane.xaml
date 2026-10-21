@@ -33,14 +33,14 @@
             <Setter Property="Padding" Value="12,0,12,0" />
         </Style>
         <!-- The rail's List row: hovered or selected, it fills a compact Smart View item's highlight
-             (NavigationViewItemOnLeftMinHeight tall, 2 px apart), with the List's square where the Smart Views' icons
-             sit. The row spans the rail: the ListViewItemPresenter already draws its background 4 px in from each side,
-             as NavigationViewItemButtonMargin does for the Smart Views. -->
+             (NavigationViewItemOnLeftMinHeight tall, 4 px apart), with the List's square where the Smart Views' icons
+             sit. The row is a whole Smart View item, 48 x 40: the ListViewItemPresenter already draws its background
+             4 px in from the sides and 2 px from the top and bottom, as NavigationViewItemButtonMargin insets the
+             Smart Views' highlight. -->
         <Style x:Key="RailListItem" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
             <Setter Property="MinWidth" Value="0" />
-            <Setter Property="MinHeight" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
-            <Setter Property="Height" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
-            <Setter Property="Margin" Value="0,2" />
+            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="Height" Value="40" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Padding" Value="0" />
@@ -53,12 +53,11 @@
             <Setter Property="Margin" Value="0,-6,0,0" />
             <Setter Property="CornerRadius" Value="{ThemeResource OverlayCornerRadius}" />
         </Style>
-        <!-- A Tag in the rail's flyout: a Smart View row's height, 2 px apart; its background is 4 px in from the
-             flyout's sides, as NavigationViewItemButtonMargin puts a child item's. -->
+        <!-- A Tag in the rail's flyout: a whole Smart View item, 40 px tall, as the rail's List rows; its background
+             is a highlight's size and place, as NavigationViewItemButtonMargin puts a child item's. -->
         <Style x:Key="RailTagItem" TargetType="ListViewItem" BasedOn="{StaticResource SidebarListItem}">
-            <Setter Property="MinHeight" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
-            <Setter Property="Height" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
-            <Setter Property="Margin" Value="0,2" />
+            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="Height" Value="40" />
         </Style>
         <Style x:Key="SidebarSectionHeader" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongText}">
             <Setter Property="Margin" Value="16,12,0,4" />

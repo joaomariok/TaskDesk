@@ -708,11 +708,13 @@ public sealed class SidebarListsAndTagsTests
             foreach (var row in rows)
             {
                 // The row's hover and selection background is what must match the Smart View's highlight: the
-                // ListViewItemPresenter draws it inset from the row's sides, so the row is that much wider.
+                // ListViewItemPresenter draws it inset from the row's edges, so the row is that much larger.
                 var name = AutomationProperties.GetName(row);
-                Assert.AreEqual(LeftOf(highlight, root), LeftOf(row, root) + ListViewItemBackgroundInset, 1, $"{name}: background left");
-                Assert.AreEqual(highlight.ActualWidth, row.ActualWidth - 2 * ListViewItemBackgroundInset, 1, $"{name}: background width");
-                Assert.AreEqual(highlight.ActualHeight, row.ActualHeight, 1, $"{name}: background height");
+                Assert.AreEqual(LeftOf(highlight, root), LeftOf(row, root) + ListViewItemBackgroundInset.Left, 1, $"{name}: background left");
+                Assert.AreEqual(highlight.ActualWidth, row.ActualWidth - ListViewItemBackgroundInset.Left - ListViewItemBackgroundInset.Right, 1,
+                    $"{name}: background width");
+                Assert.AreEqual(highlight.ActualHeight, row.ActualHeight - ListViewItemBackgroundInset.Top - ListViewItemBackgroundInset.Bottom, 1,
+                    $"{name}: background height");
 
                 // The List's square: the icon's size, centred where the icon is centred in its row.
                 var square = VisibleRectangle(row);
@@ -720,9 +722,15 @@ public sealed class SidebarListsAndTagsTests
                 Assert.AreEqual(icon.ActualHeight, square.ActualHeight, 0.5, $"{name}: square height");
                 Assert.AreEqual(LeftOf(icon, root) + icon.ActualWidth / 2, LeftOf(square, root) + square.ActualWidth / 2, 0.5,
                     $"{name}: square's horizontal centre");
-                Assert.AreEqual(TopOf(icon, highlight) + icon.ActualHeight / 2, TopOf(square, row) + square.ActualHeight / 2, 0.5,
-                    $"{name}: square's vertical centre in its row");
+                Assert.AreEqual(TopOf(icon, highlight) + icon.ActualHeight / 2,
+                    TopOf(square, row) - ListViewItemBackgroundInset.Top + square.ActualHeight / 2, 0.5,
+                    $"{name}: square's vertical centre in its background");
             }
+
+            // The backgrounds follow each other as the Smart Views' highlights do.
+            var highlightMargin = (Thickness)Application.Current.Resources["NavigationViewItemButtonMargin"];
+            Assert.AreEqual(highlight.ActualHeight + highlightMargin.Top + highlightMargin.Bottom, TopOf(rows[1], root) - TopOf(rows[0], root), 1,
+                "Row pitch");
         }
         finally
         {
@@ -804,7 +812,8 @@ public sealed class SidebarListsAndTagsTests
                 Assert.AreEqual(Application.Current.Resources["NavigationViewItemChildrenMenuFlyoutPadding"], presenter.Padding);
                 Assert.AreEqual(Application.Current.Resources["OverlayCornerRadius"], presenter.CornerRadius);
                 var rows = Rows();
-                Assert.AreEqual(highlight.ActualHeight, rows[0].ActualHeight, 1, "Row height");
+                Assert.AreEqual(highlight.ActualHeight, rows[0].ActualHeight - ListViewItemBackgroundInset.Top - ListViewItemBackgroundInset.Bottom, 1,
+                    "Row background height");
                 Assert.AreEqual(highlight.ActualHeight + highlightMargin.Top + highlightMargin.Bottom,
                     TopOf(rows[1], root) - TopOf(rows[0], root), 1, "Row pitch");
                 Assert.AreEqual(presenter.ActualWidth - 2 * presenter.BorderThickness.Left, rows[0].ActualWidth, 1,
@@ -838,9 +847,9 @@ public sealed class SidebarListsAndTagsTests
     // NavigationView's ChildrenFlyout (WinUI 1.8) opens 4 px above its item: a literal top margin in its template.
     private const double ChildrenFlyoutRise = 4;
 
-    // The ListViewItemPresenter (WinUI 1.8) draws a row's hover and selection background 4 px in from each side of
-    // the row, and full height. Measured in the running app: a 40 px rail row hovers 32 px wide.
-    private const double ListViewItemBackgroundInset = 4;
+    // The ListViewItemPresenter (WinUI 1.8) draws a row's hover and selection background 4 px in from its sides and
+    // 2 px in from its top and bottom. Measured in the running app: a 40 x 36 rail row hovered 32 x 32.
+    private static readonly Thickness ListViewItemBackgroundInset = new(4, 2, 4, 2);
 
     private static ListItemViewModel NewList(string name, int openTasks, string? colour) =>
         new(new ListSummary(new TaskList { Id = Guid.NewGuid(), Name = name, ColorHex = colour }, openTasks));
