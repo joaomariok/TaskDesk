@@ -26,6 +26,7 @@ public sealed record ExportTag(Guid Id, string Name, string? ColorHex);
 /// Never written.
 /// </param>
 /// <param name="NotifyAtDue">"Notify at Due"; a file without it (older files) means on.</param>
+/// <param name="NagPeriod">The Nag period, by name; written only when the Task Nags, and a file without it means off.</param>
 public sealed record ExportTask(
     Guid Id,
     Guid ListId,
@@ -47,7 +48,8 @@ public sealed record ExportTask(
     DateTime CreatedUtc,
     DateTime UpdatedUtc,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ReminderUtc = null,
-    bool NotifyAtDue = true);
+    bool NotifyAtDue = true,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NagPeriod? NagPeriod = null);
 
 /// <summary>
 /// A Reminder of a Task: its kind and, for a Fixed Reminder, its instant, or for a before-Due Reminder, its amount

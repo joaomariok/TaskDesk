@@ -82,6 +82,10 @@ public class ReminderViewModelTests
             Guid taskId, bool notifyAtDue, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<TaskItem> SetNagPeriodAsync(
+            Guid taskId, NagPeriod? period, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<bool> TryMarkFiredAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

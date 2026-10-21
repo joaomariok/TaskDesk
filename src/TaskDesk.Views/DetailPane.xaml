@@ -237,6 +237,15 @@
                               AutomationProperties.AutomationId="NotifyAtDueBox"
                               Visibility="{x:Bind ViewModel.HasDetailDue, Mode=OneWay}"
                               IsChecked="{x:Bind ViewModel.DetailNotifyAtDue, Mode=TwoWay}" />
+                    <!-- Nag: only once the Task has a Due; it saves at once. -->
+                    <StackPanel x:Name="NagSection" Visibility="{x:Bind ViewModel.HasDetailDue, Mode=OneWay}">
+                        <TextBlock Text="Nag" Style="{StaticResource FieldLabel}" />
+                        <ComboBox x:Name="NagBox" Margin="{StaticResource FieldMargin}" MinWidth="160"
+                                  AutomationProperties.Name="Nag"
+                                  AutomationProperties.AutomationId="NagBox"
+                                  ItemsSource="{x:Bind local:DetailPane.NagNames, Mode=OneTime}"
+                                  SelectedIndex="{x:Bind local:DetailPane.NagIndex(ViewModel.DetailNagPeriod), BindBack=SetNagIndex, Mode=TwoWay, FallbackValue=0}" />
+                    </StackPanel>
                     <TextBlock x:Name="DueErrorText" Style="{StaticResource FieldErrorText}"
                                Text="{x:Bind ViewModel.DueError, Mode=OneWay}"
                                Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.DueError), Mode=OneWay, FallbackValue=Collapsed}" />

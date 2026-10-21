@@ -82,6 +82,7 @@ public static class JsonImportFormat
         DueDate = task.DueDate,
         DueTime = task.DueTime,
         NotifyAtDue = task.NotifyAtDue,
+        NagPeriod = task.NagPeriod,
         Reminders =
         [
             .. task.Reminders.Select(r => new Reminder
@@ -281,6 +282,8 @@ public static class JsonImportFormat
 
         Require(task.Reminders!.Distinct().Count() == task.Reminders!.Count,
             $"Task {task.Id} has the same Reminder twice.");
+        Require(task.NagPeriod is not { } nag || Enum.IsDefined(nag), $"Task {task.Id} has an unknown Nag period.");
+        Require(task.NagPeriod is null || task.DueDate is not null, $"Task {task.Id} has a Nag but no Due date.");
         if (task.Recurrence is null)
         {
             return;

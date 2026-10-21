@@ -142,6 +142,50 @@ public sealed class JsonImportFormatTests
     }
 
     [Fact]
+    public void A_Nag_is_read_back()
+    {
+        var read = JsonImportFormat.Read(
+            JsonExportFormat.Serialize(WithTask(t => t with { NagPeriod = NagPeriod.FifteenMinutes })));
+
+        Assert.Equal(NagPeriod.FifteenMinutes, read.Tasks[0].NagPeriod);
+        Assert.Equal(NagPeriod.FifteenMinutes, JsonImportFormat.ToTask(read.Tasks[0], InboxId).NagPeriod);
+    }
+
+    [Fact]
+    public void A_Task_without_nagPeriod_has_no_Nag()
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse(JsonExportFormat.Serialize(Valid))!;
+        Assert.False(json["tasks"]![0]!.AsObject().ContainsKey("nagPeriod"));
+
+        var read = JsonImportFormat.Read(Encoding.UTF8.GetBytes(json.ToJsonString()));
+
+        Assert.Null(JsonImportFormat.ToTask(read.Tasks[0], InboxId).NagPeriod);
+    }
+
+    [Fact]
+    public void A_Nag_without_a_Due_date_is_rejected()
+    {
+        var error = Reject(WithTask(t => t with
+        {
+            DueDate = null,
+            DueTime = null,
+            Recurrence = null,
+            NagPeriod = NagPeriod.OneDay,
+        }));
+
+        Assert.Contains("Nag", error.Message);
+    }
+
+    [Fact]
+    public void An_unknown_nagPeriod_is_rejected()
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse(JsonExportFormat.Serialize(Valid))!;
+        json["tasks"]![0]!["nagPeriod"] = "Weekly";
+
+        Reject(json.ToJsonString());
+    }
+
+    [Fact]
     public void A_structurally_broken_export_is_rejected_as_malformed()
     {
         var error = Reject("""{ "format": "taskdesk-export", "schemaVersion": 1, "lists": "oops", "tags": [], "tasks": [] }""");

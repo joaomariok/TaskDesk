@@ -478,6 +478,51 @@ public sealed class DetailPaneSectionsTests
         }
     }
 
+    [UITestMethod]
+    public async Task Nag_shows_only_with_a_Due_saves_at_once_and_shows_Off_when_the_Due_is_cleared()
+    {
+        using var db = await DatabaseAsync();
+        var id = await AddAsync(db, "Pay rent");
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Pay rent");
+            var section = VisualTree.Find<StackPanel>(pane, "NagSection");
+            var box = VisualTree.Find<ComboBox>(pane, "NagBox");
+            Assert.AreEqual(Visibility.Collapsed, section.Visibility, "Nag shows without a Due.");
+            Assert.AreEqual("Nag", AutomationProperties.GetName(box));
+            Assert.IsTrue(
+                VisualTree.Descendants(section).OfType<TextBlock>().Any(t => t.Text == "Nag"), "Nag has no visible label.");
+            CollectionAssert.AreEqual(
+                new[] { "Off", "Every 15 min", "Every 30 min", "Every hour", "Every 3 hours", "Every day" },
+                box.Items.Cast<string>().ToArray());
+
+            var dueDate = Named<CalendarDatePicker>(pane, "Due date");
+            dueDate.Date = new DateTimeOffset(new DateTime(2026, 10, 19, 0, 0, 0, DateTimeKind.Local));
+            await UiWait.UntilAsync(() => section.Visibility == Visibility.Visible && box.ActualHeight > 0,
+                () => "Nag did not show once the Task had a Due.", Ct);
+            Assert.AreEqual("Off", box.SelectedItem as string, "A new Task Nags.");
+
+            box.SelectedIndex = 3; // Every hour
+            await UiWait.UntilAsync(() => viewModel.DetailNagPeriod == NagPeriod.OneHour,
+                () => "Picking Every hour did not reach the view model.", Ct);
+            await viewModel.PendingSave; // saved at once: nothing debounced to flush
+            Assert.AreEqual(NagPeriod.OneHour, (await db.QueryAsync(c => c.Tasks.Where(t => t.Id == id))).Single().NagPeriod,
+                "Picking a Nag did not save.");
+
+            dueDate.Date = null;
+            await UiWait.UntilAsync(() => viewModel.DetailNagPeriod is null && section.Visibility == Visibility.Collapsed,
+                () => "Clearing the Due did not turn the Nag off.", Ct);
+            await viewModel.PendingSave;
+            Assert.AreEqual("Off", box.SelectedItem as string, "The pane does not show Off.");
+            Assert.IsNull((await db.QueryAsync(c => c.Tasks.Where(t => t.Id == id))).Single().NagPeriod);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     // The realized row buttons of the Reminders list, which open the flyout on their Reminder.
     private static List<Button> ReminderRows(DetailPane pane)
     {

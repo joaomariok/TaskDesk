@@ -44,6 +44,7 @@ internal static class OccurrenceProducer
             DueDate = nextDue,
             DueTime = current.DueTime,
             NotifyAtDue = current.NotifyAtDue,
+            NagPeriod = current.NagPeriod,
             Recurrence = recurrence with { }, // an owned value is never shared between two Tasks
             // The Snooze is never carried: it starts cleared and moments already past count as notified
             // (SPEC 5.1 step 3).

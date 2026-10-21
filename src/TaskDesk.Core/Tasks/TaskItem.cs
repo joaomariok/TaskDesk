@@ -24,6 +24,12 @@ public sealed class TaskItem
     public bool NotifyAtDue { get; set; } = true;
 
     /// <summary>
+    /// The Nag period: after its Due, the Task notifies again every period until it is completed. Null (off) for
+    /// every new Task; it needs a Due, and clearing the Due turns it off.
+    /// </summary>
+    public TaskDesk.Core.Reminders.NagPeriod? NagPeriod { get; set; }
+
+    /// <summary>
     /// The end of the Task's Snooze (UTC): nothing notifies before it, and the Task notifies once when it ends.
     /// Stays recorded after it ends.
     /// </summary>

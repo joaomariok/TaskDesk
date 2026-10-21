@@ -59,6 +59,14 @@ internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>
         return Task.FromResult(task);
     }
 
+    public Task<TaskItem> SetNagPeriodAsync(Guid taskId, NagPeriod? period, CancellationToken cancellationToken = default)
+    {
+        var task = Tasks.SingleOrDefault(t => t.Id == taskId)
+            ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
+        ReminderCalculator.SetNagPeriod(task, period, clock.GetUtcNow());
+        return Task.FromResult(task);
+    }
+
     private TaskItem Owner(Guid reminderId) =>
         Tasks.SingleOrDefault(t => t.Reminders.Any(r => r.Id == reminderId))
         ?? throw new KeyNotFoundException($"Reminder {reminderId} does not exist.");

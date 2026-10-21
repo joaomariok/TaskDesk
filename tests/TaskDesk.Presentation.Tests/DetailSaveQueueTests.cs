@@ -184,6 +184,10 @@ public sealed class DetailSaveQueueTests
             Guid taskId, bool notifyAtDue, CancellationToken cancellationToken = default)
             => inner.SetNotifyAtDueAsync(taskId, notifyAtDue, cancellationToken);
 
+        public Task<TaskItem> SetNagPeriodAsync(
+            Guid taskId, NagPeriod? period, CancellationToken cancellationToken = default)
+            => inner.SetNagPeriodAsync(taskId, period, cancellationToken);
+
         public Task<TaskItem> SnoozeAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default)
             => inner.SnoozeAsync(taskId, duration, cancellationToken);
 

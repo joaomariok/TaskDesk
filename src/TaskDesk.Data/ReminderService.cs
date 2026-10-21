@@ -55,6 +55,12 @@ internal sealed class ReminderService(
             taskId, t => ReminderCalculator.SetNotifyAtDue(t, notifyAtDue, clock.GetUtcNow()),
             "Notify at Due changed", cancellationToken);
 
+    public Task<TaskItem> SetNagPeriodAsync(
+        Guid taskId, NagPeriod? period, CancellationToken cancellationToken = default) =>
+        ChangeAsync(
+            taskId, t => ReminderCalculator.SetNagPeriod(t, period, clock.GetUtcNow()), "Nag changed",
+            cancellationToken);
+
     private static Task<TaskItem> FindOwnerAsync(
         TaskDeskDbContext context, Guid reminderId, CancellationToken cancellationToken) =>
         FindAsync(
@@ -104,13 +110,14 @@ internal sealed class ReminderService(
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         // The SQL narrows to the candidates (SPEC 7.4); the due rule itself is the Core function, in memory. A
         // before-Due Reminder's moment depends on the Due and the local rules, so every one is a candidate. A Due
-        // moment is never before local midnight of its date, so only a Due up to today can be due.
+        // moment, and every Nag moment after it, is never before local midnight of the Due date, so only a Due up
+        // to today can be due.
         var today = DueCalculator.LocalToday(now, rules.Zone);
         var candidates = await context.Tasks
             .AsNoTracking()
             .WithDetails()
             .Where(t => !t.IsCompleted && (t.SnoozedUntilUtc == null || t.SnoozedUntilUtc <= nowUtc)
-                && ((t.NotifyAtDue && t.DueDate != null && t.DueDate <= today)
+                && (((t.NotifyAtDue || t.NagPeriod != null) && t.DueDate != null && t.DueDate <= today)
                     || t.Reminders.Any(r => r.Kind == ReminderKind.BeforeDue
                         || (r.AtUtc <= nowUtc && (t.NotifiedThroughUtc == null || r.AtUtc > t.NotifiedThroughUtc)))
                     || (t.SnoozedUntilUtc <= nowUtc
@@ -126,10 +133,18 @@ internal sealed class ReminderService(
         var listNames = await context.Lists
             .Where(l => listIds.Contains(l.Id))
             .ToDictionaryAsync(l => l.Id, l => l.Name, cancellationToken);
-        return [.. due.Select(t => new DueReminder(
-            t.Id, t.Title, t.DueDate, t.DueTime, listNames.GetValueOrDefault(t.ListId, ""),
-            ReminderCalculator.DueInstant(t, now, rules)!.Value,
-            DueCalculator.IsOverdue(t.DueDate, t.DueTime, t.IsCompleted, now, rules.Zone)))];
+        return [.. due.Select(t => Entry(t, listNames.GetValueOrDefault(t.ListId, ""), now, rules))];
+    }
+
+    // A due Task's entry. "Overdue" is decided at the moment that fired (its due instant, read in local time), not
+    // when it is listed: an on-time Due notification and one shown late at wake read plain, and a Reminder, Snooze
+    // end or Nag after the Due reads "Overdue · ".
+    private static DueReminder Entry(TaskItem task, string listName, DateTimeOffset now, MomentRules rules)
+    {
+        var dueAt = ReminderCalculator.DueInstant(task, now, rules)!.Value;
+        var overdue = DueCalculator.IsOverdue(
+            task.DueDate, task.DueTime, task.IsCompleted, new DateTimeOffset(dueAt, TimeSpan.Zero), rules.Zone);
+        return new DueReminder(task.Id, task.Title, task.DueDate, task.DueTime, listName, dueAt, overdue);
     }
 
     public async Task<bool> TryMarkFiredAsync(

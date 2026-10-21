@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Presentation;
@@ -82,6 +83,13 @@ public sealed partial class MainViewModel
     [ObservableProperty]
     private bool _detailNotifyAtDue;
 
+    /// <summary>
+    /// The Nag period of the shown Task, or null for Off. The pane shows the choice only while the Task has a Due; a
+    /// change saves at once, and clearing the Due shows Off.
+    /// </summary>
+    [ObservableProperty]
+    private NagPeriod? _detailNagPeriod;
+
     /// <summary>Completes when every save started so far has finished.</summary>
     public Task PendingSave => Saves.WaitForAllAsync();
 
@@ -139,6 +147,7 @@ public sealed partial class MainViewModel
         DetailDueDate = value?.Item.DueDate?.ToDateTime(TimeOnly.MinValue);
         DetailDueTime = value?.Item.DueTime?.ToTimeSpan();
         DetailNotifyAtDue = value?.Item.NotifyAtDue ?? true;
+        DetailNagPeriod = value?.Item.NagPeriod;
         LoadReminderDetail(value?.Item);
         _loadingDetail = false;
         Repeat.Load(value?.Item.Recurrence, value?.Item.DueDate);
@@ -187,6 +196,22 @@ public sealed partial class MainViewModel
             accepted: () => ErrorMessage = null);
     }
 
+    partial void OnDetailNagPeriodChanged(NagPeriod? value)
+    {
+        if (_loadingDetail || DetailTask is not { } row)
+        {
+            return;
+        }
+
+        _ = Saves.Enqueue(
+            async () =>
+            {
+                ApplyReminderChange(row, await Reminders.SetNagPeriodAsync(row.Id, value));
+                return true;
+            },
+            accepted: () => ErrorMessage = null);
+    }
+
     /// <summary>Clears the Due time (the pane's "Clear Due time" button): the Due becomes date-only.</summary>
     [RelayCommand(CanExecute = nameof(CanClearDetailDueTime))]
     private void ClearDetailDueTime() => DetailDueTime = null;
@@ -225,6 +250,9 @@ public sealed partial class MainViewModel
         if (row == DetailTask)
         {
             LoadReminderRows(updated); // before-Due Reminders moved with the Due, or went with it
+            _loadingDetail = true;
+            DetailNagPeriod = updated.NagPeriod; // clearing the Due turned the Nag off
+            _loadingDetail = false;
         }
 
         if (InOverdueGroup(row) != OverdueTasks.Contains(row))

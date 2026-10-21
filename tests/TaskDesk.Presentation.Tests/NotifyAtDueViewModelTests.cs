@@ -24,6 +24,10 @@ public class NotifyAtDueViewModelTests
             return Change(taskId, t => ReminderCalculator.SetNotifyAtDue(t, notifyAtDue, clock.GetUtcNow()));
         }
 
+        public Task<TaskItem> SetNagPeriodAsync(
+            Guid taskId, NagPeriod? period, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<TaskItem> SetDueAsync(
             Guid taskId, DateOnly? dueDate, TimeOnly? dueTime, CancellationToken cancellationToken = default) =>
             Change(taskId, t => ReminderCalculator.ChangeDue(t, dueDate, dueTime, clock.GetUtcNow()));

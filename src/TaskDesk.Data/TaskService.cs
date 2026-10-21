@@ -212,6 +212,7 @@ internal sealed class TaskService(
             DueDate = snapshot.DueDate,
             DueTime = snapshot.DueTime,
             NotifyAtDue = snapshot.NotifyAtDue,
+            NagPeriod = snapshot.NagPeriod,
             Reminders = [.. snapshot.Reminders.Select(r => new Reminder
             {
                 Id = r.Id,

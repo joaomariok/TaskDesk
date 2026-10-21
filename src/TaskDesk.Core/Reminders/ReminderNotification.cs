@@ -2,7 +2,10 @@ namespace TaskDesk.Core.Reminders;
 
 /// <summary>A due Reminder with what its notification shows.</summary>
 /// <param name="DueAtUtc">The instant the Reminder fired at: its Snooze when set, otherwise the planned Reminder.</param>
-/// <param name="IsOverdue">Whether the Task was Overdue when it was listed (<see cref="TaskDesk.Core.Tasks.DueCalculator.IsOverdue"/>).</param>
+/// <param name="IsOverdue">
+/// Whether the Task was already Overdue at the moment that fired, its due instant read in local time
+/// (<see cref="TaskDesk.Core.Tasks.DueCalculator.IsOverdue"/>), not when it was listed.
+/// </param>
 public sealed record DueReminder(
     Guid TaskId, string Title, DateOnly? DueDate, TimeOnly? DueTime, string ListName, DateTime DueAtUtc,
     bool IsOverdue = false);

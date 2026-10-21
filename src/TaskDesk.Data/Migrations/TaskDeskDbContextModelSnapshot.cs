@@ -137,6 +137,9 @@ namespace TaskDesk.Data.Migrations
                     b.Property<Guid>("ListId")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("NagPeriod")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("NextOccurrenceId")
                         .HasColumnType("TEXT");
 

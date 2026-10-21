@@ -44,6 +44,14 @@ public interface IReminderService
     Task<TaskItem> SetNotifyAtDueAsync(Guid taskId, bool notifyAtDue, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Sets the Nag period of a Task, or turns the Nag off with null. The change counts moments already past as
+    /// notified (see <see cref="ReminderCalculator.SetNagPeriod"/>). Returns the Task with its details loaded.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No Task has this id.</exception>
+    /// <exception cref="ArgumentException">A Nag on a Task without a Due.</exception>
+    Task<TaskItem> SetNagPeriodAsync(Guid taskId, NagPeriod? period, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Snoozes a Task until now + <paramref name="duration"/>: it notifies once when the Snooze ends; the planned
     /// Reminder is left unchanged (see <see cref="ReminderCalculator.Snooze"/>). A completed Task is left as it
     /// is. Returns the Task with its Tags and Subtasks loaded.

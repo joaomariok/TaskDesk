@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using TaskDesk.Core.Export;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Core.Tests;
@@ -251,6 +252,28 @@ public sealed class JsonExportFormatTests
 
         Assert.True(FirstTask(on).GetProperty("notifyAtDue").GetBoolean());
         Assert.False(FirstTask(off).GetProperty("notifyAtDue").GetBoolean());
+    }
+
+    [Fact]
+    public void A_nagging_Task_carries_its_nagPeriod_by_name()
+    {
+        using var json = Parse(OneTask(new TaskItem
+        {
+            Id = Guid.NewGuid(),
+            Title = "a",
+            DueDate = new DateOnly(2026, 10, 20),
+            NagPeriod = NagPeriod.ThreeHours,
+        }));
+
+        Assert.Equal("ThreeHours", FirstTask(json).GetProperty("nagPeriod").GetString());
+    }
+
+    [Fact]
+    public void A_Task_without_a_Nag_writes_no_nagPeriod()
+    {
+        using var json = Parse(OneTask(new TaskItem { Id = Guid.NewGuid(), Title = "a" }));
+
+        Assert.False(FirstTask(json).TryGetProperty("nagPeriod", out _));
     }
 
     private static ExportData OneTask(TaskItem task) => new([], [], [task]);

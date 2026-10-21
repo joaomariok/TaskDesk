@@ -28,14 +28,15 @@ public static class ReminderCalculator
 
     /// <summary>
     /// The due rule (SPEC 7.4, ADR 0006). A Task is due to notify at <paramref name="now"/> when it is open,
-    /// not snoozed past <paramref name="now"/>, and one of its moments (a Reminder, the Due notification, the end
-    /// of the Snooze) lies after "notified through" and at or before <paramref name="now"/>. Returns the latest such
+    /// not snoozed past <paramref name="now"/>, and one of its moments (a Reminder, the Due notification, a Nag, the
+    /// end of the Snooze) lies after "notified through" and at or before <paramref name="now"/>. Returns the latest such
     /// moment, its due instant, or null when the Task is not due.
     /// </summary>
     /// <param name="rules">The local rules the Due is read in; <see cref="MomentRules.Utc"/> when null.</param>
     public static DateTime? DueInstant(TaskItem task, DateTimeOffset now, MomentRules? rules = null)
     {
-        return LatestDue(task, now.UtcDateTime, Moments(task, rules ?? MomentRules.Utc, includeDue: true));
+        var nowUtc = now.UtcDateTime;
+        return LatestDue(task, nowUtc, Moments(task, rules ?? MomentRules.Utc, includeDue: true, nowUtc));
     }
 
     // The latest of the moments that makes the Task due at nowUtc, or null.
@@ -63,12 +64,18 @@ public static class ReminderCalculator
     public static bool IsDue(TaskItem task, DateTimeOffset now, MomentRules? rules = null) =>
         DueInstant(task, now, rules) is not null;
 
-    // The moments a Task notifies at: its Reminders, its Due notification (when includeDue) and its Snooze end.
-    private static IEnumerable<DateTime> Moments(TaskItem task, MomentRules rules, bool includeDue)
+    // The moments a Task notifies at: its Reminders, its Due notification (when includeDue), its latest Nag moment
+    // at or before nowUtc (the earlier ones never decide the due instant) and its Snooze end.
+    private static IEnumerable<DateTime> Moments(TaskItem task, MomentRules rules, bool includeDue, DateTime nowUtc)
     {
         if (includeDue && task.NotifyAtDue && DueMoment(task.DueDate, task.DueTime, rules) is { } due)
         {
             yield return due;
+        }
+
+        if (LatestNag(task, nowUtc, rules) is { } nag)
+        {
+            yield return nag;
         }
 
         foreach (var reminder in task.Reminders)
@@ -269,18 +276,25 @@ public static class ReminderCalculator
     /// Sets the Task's Due. Before-Due Reminders move with it, and like a change to a Reminder it counts moments
     /// already past at <paramref name="now"/> as notified (<see cref="MarkPastNotified"/>): moments moved into the
     /// past never fire, moments moved into the future do. Clearing the Due removes the before-Due Reminders, which
-    /// have nothing to count from; fixed Reminders stay. A Task with no moment that depends on the Due ("Notify at
-    /// Due" off and no before-Due Reminder) is left like any other field edit, so a missed fixed Reminder still
-    /// fires. "Notify at Due" keeps its value. Returns the removed Reminders.
+    /// have nothing to count from, and turns the Nag off; fixed Reminders stay. A Task with no moment that depends on
+    /// the Due ("Notify at Due" off, no before-Due Reminder and no Nag) is left like any other field edit, so a
+    /// missed fixed Reminder still fires. "Notify at Due" keeps its value. Moving the Due restarts the Nag schedule
+    /// from the new Due. Returns the removed Reminders.
     /// </summary>
     public static IReadOnlyList<Reminder> ChangeDue(
         TaskItem task, DateOnly? dueDate, TimeOnly? dueTime, DateTimeOffset now)
     {
-        var movesMoments = task.NotifyAtDue || task.Reminders.Exists(r => r.Kind == ReminderKind.BeforeDue);
+        var movesMoments = task.NotifyAtDue || task.NagPeriod is not null
+            || task.Reminders.Exists(r => r.Kind == ReminderKind.BeforeDue);
         task.DueDate = dueDate;
         task.DueTime = dueTime;
         List<Reminder> removed = dueDate is null ? task.Reminders.FindAll(r => r.Kind == ReminderKind.BeforeDue) : [];
         task.Reminders.RemoveAll(removed.Contains);
+        if (dueDate is null)
+        {
+            task.NagPeriod = null;
+        }
+
         if (movesMoments)
         {
             MarkPastNotified(task, now);
@@ -306,6 +320,68 @@ public static class ReminderCalculator
     }
 
     /// <summary>
+    /// Sets the Nag period, or turns the Nag off with null. Like a change to the Due, it counts moments already
+    /// past at <paramref name="now"/> as notified (<see cref="MarkPastNotified"/>), so a new Nag starts at its next
+    /// scheduled moment. Returns false, changing nothing, when it already has this period.
+    /// </summary>
+    /// <exception cref="ArgumentException">A Nag on a Task without a Due, or an unknown period.</exception>
+    public static bool SetNagPeriod(TaskItem task, NagPeriod? period, DateTimeOffset now)
+    {
+        if (period is { } value && (task.DueDate is null || !Enum.IsDefined(value)))
+        {
+            throw new ArgumentException(task.DueDate is null ? "A Nag needs a Due." : "Unknown Nag period.");
+        }
+
+        if (task.NagPeriod == period)
+        {
+            return false;
+        }
+
+        task.NagPeriod = period;
+        MarkPastNotified(task, now);
+        return true;
+    }
+
+    /// <summary>
+    /// The latest Nag moment at or before <paramref name="nowUtc"/>: the Due moment + k × period, for k ≥ 1. The
+    /// sub-day periods count elapsed time; the daily Nag keeps the Due moment's local time of day, with
+    /// <see cref="ToUtc"/>'s rules for local times that are skipped or repeated. Null without a Nag or a Due, or
+    /// before the first Nag.
+    /// </summary>
+    private static DateTime? LatestNag(TaskItem task, DateTime nowUtc, MomentRules rules)
+    {
+        if (task.NagPeriod is not { } period || task.DueDate is not { } date
+            || DueMoment(date, task.DueTime, rules) is not { } due || due >= nowUtc)
+        {
+            return null;
+        }
+
+        if (period == NagPeriod.OneDay)
+        {
+            var time = task.DueTime ?? rules.DefaultTime;
+            var days = DueCalculator.LocalToday(new DateTimeOffset(nowUtc), rules.Zone).DayNumber - date.DayNumber;
+            var nag = ToUtc(date.AddDays(days), time, rules.Zone);
+            if (nag > nowUtc)
+            {
+                days--;
+                nag = ToUtc(date.AddDays(days), time, rules.Zone);
+            }
+
+            return days >= 1 ? nag : null;
+        }
+
+        var step = period switch
+        {
+            NagPeriod.FifteenMinutes => TimeSpan.FromMinutes(15),
+            NagPeriod.ThirtyMinutes => TimeSpan.FromMinutes(30),
+            NagPeriod.OneHour => TimeSpan.FromHours(1),
+            _ => TimeSpan.FromHours(3),
+        };
+        var periods = (nowUtc - due).Ticks / step.Ticks;
+        return periods >= 1 ? due + (step * periods) : null;
+    }
+
+    /// <summary>
     /// The upgrade rule of the Due notification: a Due moment already past at <paramref name="now"/> counts as
     /// notified, so the upgrade doesn't fire a pile of Overdue notifications. A Task already due to notify for
     /// another moment (an armed Reminder already past, a Snooze that ended) is left alone, so it still notifies
@@ -315,7 +391,7 @@ public static class ReminderCalculator
     {
         var nowUtc = now.UtcDateTime;
         if (DueMoment(task.DueDate, task.DueTime, rules) is not { } due || due > nowUtc
-            || LatestDue(task, nowUtc, Moments(task, rules, includeDue: false)) is not null)
+            || LatestDue(task, nowUtc, Moments(task, rules, includeDue: false, nowUtc)) is not null)
         {
             return;
         }

@@ -83,6 +83,10 @@ public class ReminderBeforeDueViewModelTests
             Guid taskId, bool notifyAtDue, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<TaskItem> SetNagPeriodAsync(
+            Guid taskId, NagPeriod? period, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<TaskItem> SnoozeAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

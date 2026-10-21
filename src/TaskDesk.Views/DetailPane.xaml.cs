@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Presentation;
@@ -289,6 +290,28 @@ public sealed partial class DetailPane : UserControl
         if (index >= 0 && Enum.IsDefined((Priority)index) && ViewModel.DetailPriority != (Priority)index)
         {
             ViewModel.DetailPriority = (Priority)index;
+        }
+    }
+
+    // The Nag choices: Off, then each period in the order of NagPeriod's values.
+    private static readonly NagPeriod?[] NagChoices =
+        [null, NagPeriod.FifteenMinutes, NagPeriod.ThirtyMinutes, NagPeriod.OneHour, NagPeriod.ThreeHours, NagPeriod.OneDay];
+
+    /// <summary>The Nag choices' labels, Off first.</summary>
+    public static string[] NagNames { get; } =
+        ["Off", "Every 15 min", "Every 30 min", "Every hour", "Every 3 hours", "Every day"];
+
+    /// <summary>
+    /// The index of a Nag period among the choices; Off (0) for none. x:Bind never calls a function whose argument
+    /// is null, so the binding's <c>FallbackValue=0</c> shows Off.
+    /// </summary>
+    public static int NagIndex(NagPeriod? period) => Array.IndexOf(NagChoices, period);
+
+    public void SetNagIndex(int index)
+    {
+        if (index >= 0 && index < NagChoices.Length && ViewModel.DetailNagPeriod != NagChoices[index])
+        {
+            ViewModel.DetailNagPeriod = NagChoices[index];
         }
     }
 }
