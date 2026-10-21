@@ -18,7 +18,7 @@ namespace TaskDesk.Views.Tests;
 
 /// <summary>
 /// A Task's Subtask rows in the one Task list over a real database: the chevron, Right and Left, the Subtask row's
-/// layout and look in each group, its automation, and that it never takes the selection (yet).
+/// layout and look in each group, its automation, and that it never takes the selection.
 /// </summary>
 [TestClass]
 public sealed class SubtaskRowsTests
@@ -100,7 +100,7 @@ public sealed class SubtaskRowsTests
     }
 
     [UITestMethod]
-    public async Task A_Subtask_row_never_takes_the_selection_so_Space_still_acts_on_the_selected_Task()
+    public async Task A_Subtask_row_takes_the_selection_and_Space_acts_on_neither_its_Task_nor_an_earlier_selection()
     {
         using var db = await DatabaseAsync();
         await AddAsync(db, "trip", "pack", "go");
@@ -118,16 +118,16 @@ public sealed class SubtaskRowsTests
 
             // As a click on the row would, then as Down from the Task row would.
             list.SelectedItem = trip.SubtaskRows[0];
-            Assert.AreEqual("other", ((ITaskListRow)list.SelectedItem).Title);
+            Assert.AreSame(trip.SubtaskRows[0], list.SelectedItem);
             list.SelectedIndex = list.Items.IndexOf(trip.SubtaskRows[1]);
-            Assert.AreEqual("other", ((ITaskListRow)list.SelectedItem).Title);
-            Assert.AreEqual("other", viewModel.SelectedTask?.Title);
+            Assert.AreSame(trip.SubtaskRows[1], list.SelectedItem);
+            Assert.AreEqual("trip", viewModel.SelectedTask?.Title);
             Assert.IsFalse(viewModel.IsDetailPaneOpen);
 
-            Assert.IsTrue(window.View.TaskList.TryShortcut(VirtualKey.Space, VirtualKeyModifiers.None));
-            await UiWait.UntilAsync(() => viewModel.CompletedTasks.Any(t => t.Title == "other"),
-                () => "Space did not complete the selected Task.", Ct);
+            window.View.TaskList.TryShortcut(VirtualKey.Space, VirtualKeyModifiers.None);
+            await viewModel.CompletionMove;
             Assert.IsFalse(trip.IsCompleted);
+            Assert.IsFalse(viewModel.Tasks.Single(t => t.Title == "other").IsCompleted);
         }
         finally
         {

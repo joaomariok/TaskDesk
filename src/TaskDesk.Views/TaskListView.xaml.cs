@@ -43,7 +43,8 @@ public sealed partial class TaskListView : UserControl
     /// <summary>
     /// Runs the Task list shortcut for a key: Space completes and Delete deletes the selected Task, Enter opens it
     /// in the detail pane, Right opens and Left closes its Subtask rows, Ctrl+Z undoes the last delete or
-    /// completion. Returns false when the key is not a shortcut or there is nothing to do.
+    /// completion. On a selected Subtask row, Enter opens its Task, Left selects the Task, and Space and Delete do
+    /// nothing. Returns false when the key is not a shortcut or there is nothing to do.
     /// </summary>
     public bool TryShortcut(VirtualKey key, VirtualKeyModifiers modifiers)
     {
@@ -57,6 +58,19 @@ public sealed partial class TaskListView : UserControl
 
             ViewModel.OpenDetailPane(selected);
             DetailFocusRequested?.Invoke(this, EventArgs.Empty);
+            return true;
+        }
+
+        // Left on a Subtask row selects its Task; Right does nothing there.
+        if (modifiers == VirtualKeyModifiers.None && key is VirtualKey.Right or VirtualKey.Left
+            && ViewModel.SelectedSubtaskRow is { } subtask)
+        {
+            if (key == VirtualKey.Right)
+            {
+                return false;
+            }
+
+            FocusRow(subtask.TaskRow, keepSubtaskRow: false);
             return true;
         }
 
@@ -93,39 +107,57 @@ public sealed partial class TaskListView : UserControl
     /// <summary>Raised when Enter opened the detail pane on a row and focus should move into the pane.</summary>
     public event EventHandler? DetailFocusRequested;
 
-    /// <summary>Selects a Task's row and gives it keyboard focus (after Esc closed the detail pane).</summary>
-    public void FocusRow(TaskRowViewModel row)
+    /// <summary>
+    /// Selects a Task's row and gives it keyboard focus (after Esc closed the detail pane). While one of the Task's
+    /// Subtask rows is selected, that row keeps the selection and takes the focus.
+    /// </summary>
+    public void FocusRow(TaskRowViewModel row) => FocusRow(row, keepSubtaskRow: true);
+
+    private void FocusRow(TaskRowViewModel row, bool keepSubtaskRow)
     {
+        ITaskListRow target = keepSubtaskRow && ViewModel.SelectedSubtaskRow is { } subtask && subtask.TaskRow == row
+            ? subtask
+            : row;
         var list = OpenTaskList;
-        if (!list.Items.Contains(row))
+        if (!list.Items.Contains(target))
         {
             return;
         }
 
-        list.SelectedItem = row;
-        list.ScrollIntoView(row);
+        ViewModel.SelectedRow = target;
+        list.SelectedItem = target;
+        list.ScrollIntoView(target);
         list.UpdateLayout();
-        (list.ContainerFromItem(row) as ListViewItem)?.Focus(FocusState.Keyboard);
+        (list.ContainerFromItem(target) as ListViewItem)?.Focus(FocusState.Keyboard);
     }
 
-    // A click on a row opens the detail pane on it (arrow keys only move the selection); a click on the row's
-    // checkbox only completes the Task.
-    private void OnTaskListTapped(object sender, TappedRoutedEventArgs e)
+    // A click on a row opens the detail pane on it, a click on a Subtask row on its Task (arrow keys only move the
+    // selection); a click on the row's checkbox or chevron does neither.
+    private void OnTaskListTapped(object sender, TappedRoutedEventArgs e) =>
+        OpenRowAt(e.OriginalSource as DependencyObject);
+
+    /// <summary>
+    /// What a click on <paramref name="element"/> inside the list does: on a row, opens the detail pane on its Task
+    /// and returns true; on a row's checkbox or chevron, or outside a row, does nothing and returns false.
+    /// </summary>
+    public bool OpenRowAt(DependencyObject? element)
     {
-        for (var element = e.OriginalSource as DependencyObject; element is not null and not ListView;
-             element = VisualTreeHelper.GetParent(element))
+        for (; element is not null and not ListView; element = VisualTreeHelper.GetParent(element))
         {
             if (element is ButtonBase)
             {
-                return;
+                return false;
             }
 
-            if (element is ListViewItem { Content: TaskRowViewModel row })
+            if (element is ListViewItem { Content: ITaskListRow row })
             {
-                ViewModel.OpenDetailPane(row);
-                return;
+                ViewModel.SelectedRow = row;
+                ViewModel.OpenDetailPane(row.TaskRow);
+                return true;
             }
         }
+
+        return false;
     }
 
     // Space and Delete act on a focused row. A row's own checkbox handles Space itself.
@@ -190,19 +222,12 @@ public sealed partial class TaskListView : UserControl
 
     private void OnTaskSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Subtask rows cannot take the selection yet: a click or an arrow key that lands on one leaves the selected
-        // Task where it was, so Space, Delete, Enter and F2 still act on that Task.
-        if (e.AddedItems.Count > 0 && e.AddedItems[0] is SubtaskListRowViewModel)
+        // A Task row, or a Subtask row, which selects its Task too. A selection that only lost its row comes from the
+        // row moving between groups or hiding: the view model keeps the selection, and the list selects the row
+        // again where it shows.
+        if (e.AddedItems.Count > 0 && e.AddedItems[0] is ITaskListRow row)
         {
-            ShowSelection();
-            return;
-        }
-
-        // A selection that only lost its row comes from the row moving between groups: the view model keeps the
-        // selected Task, and the list selects the row again where it lands.
-        if (e.AddedItems.Count > 0 && e.AddedItems[0] is TaskRowViewModel row)
-        {
-            ViewModel.SelectedTask = row;
+            ViewModel.SelectedRow = row;
         }
     }
 
@@ -210,16 +235,48 @@ public sealed partial class TaskListView : UserControl
     // (in a collapsed "Completed (N)").
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.SelectedTask))
+        if (e.PropertyName == nameof(MainViewModel.SelectedRow))
         {
+            var left = _shownRow;
             ShowSelection();
+            FocusTaskAfterItsSubtaskRowWent(left);
         }
     }
 
+    // The row the list last showed as the view model's selection.
+    private ITaskListRow? _shownRow;
+
     private void ShowSelection()
     {
-        var row = ViewModel.SelectedTask;
-        OpenTaskList.SelectedItem = row is not null && OpenTaskList.Items.Contains(row) ? row : null;
+        var row = ViewModel.SelectedRow;
+        _shownRow = row;
+        var shown = row is not null && OpenTaskList.Items.Contains(row) ? row : null;
+        if (!ReferenceEquals(OpenTaskList.SelectedItem, shown))
+        {
+            OpenTaskList.SelectedItem = shown;
+        }
+    }
+
+    // A selected Subtask row that left the list (its Task closed, its Subtask deleted) handed the selection to its
+    // Task; a keyboard focus it held on a row goes to the Task's row too, not to whichever row took its place.
+    private void FocusTaskAfterItsSubtaskRowWent(ITaskListRow? left)
+    {
+        if (left is not SubtaskListRowViewModel subtask || ViewModel.SelectedRow != subtask.TaskRow
+            || OpenTaskList.Items.Contains(subtask) || XamlRoot is not { } root
+            || FocusManager.GetFocusedElement(root) is not ListViewItem focused
+            || ItemsControl.ItemsControlFromItemContainer(focused) != OpenTaskList)
+        {
+            return;
+        }
+
+        var task = subtask.TaskRow;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (ViewModel.SelectedRow == task)
+            {
+                FocusRow(task, keepSubtaskRow: false);
+            }
+        });
     }
 
     private void OnRowsChanged(IObservableVector<object> sender, IVectorChangedEventArgs e)
@@ -229,7 +286,7 @@ public sealed partial class TaskListView : UserControl
         // A row that moved between groups left the list for a moment and lost its selection; when it is inserted
         // again, select it once the list has taken the change in. Only the inserted item is looked at, so a long
         // load stays linear.
-        if (e.CollectionChange == CollectionChange.ItemInserted && ViewModel.SelectedTask is { } row
+        if (e.CollectionChange == CollectionChange.ItemInserted && ViewModel.SelectedRow is { } row
             && ReferenceEquals(sender[(int)e.Index], row) && !ReferenceEquals(OpenTaskList.SelectedItem, row))
         {
             DispatcherQueue.TryEnqueue(ShowSelection);

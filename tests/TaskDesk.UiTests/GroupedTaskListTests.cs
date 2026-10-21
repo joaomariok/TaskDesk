@@ -8,7 +8,8 @@ namespace TaskDesk.UiTests;
 
 /// <summary>
 /// The one grouped Task list with real keyboard input: the arrow keys cross from the Overdue rows into the open
-/// ones, and the "Completed (N)" heading is reached and toggled from the keyboard.
+/// ones, walk into an open Task's Subtask rows, and the "Completed (N)" heading is reached and toggled from
+/// the keyboard.
 /// </summary>
 public sealed class GroupedTaskListTests : IDisposable
 {
@@ -79,6 +80,53 @@ public sealed class GroupedTaskListTests : IDisposable
         AppSession.Press(VirtualKeyShort.DOWN);
         AppSession.WaitUntil(() => _app.FocusedName() == "Book flights" && IsSelected("Book flights"),
             () => $"Down from the heading left focus on '{_app.FocusedName()}'.");
+    }
+
+    [Fact]
+    public void Down_walks_into_a_Subtask_row_Left_selects_its_Task_and_Right_and_Left_open_and_close_it()
+    {
+        _app.TypeInto(Ids.QuickAddBox, "Plan trip", pressEnter: true);
+        _app.TypeInto(Ids.QuickAddBox, "Buy milk", pressEnter: true);
+        _app.WaitForRows(Ids.OpenTaskList, "Plan trip", "Buy milk");
+
+        // Two Subtasks, added in the detail pane; Esc closes it and gives the row back its focus.
+        _app.SelectRow(Ids.OpenTaskList, "Plan trip");
+        AppSession.Press(VirtualKeyShort.RETURN);
+        _app.TypeInto(Ids.NewSubtaskBox, "Book hotel", pressEnter: true);
+        _app.TypeInto(Ids.NewSubtaskBox, "Pack", pressEnter: true);
+        AppSession.WaitUntil(() => _app.TextBox(Ids.NewSubtaskBox).Text.Length == 0, () => "The second Subtask was not added.");
+        AppSession.Press(VirtualKeyShort.ESCAPE);
+        _app.SelectRow(Ids.OpenTaskList, "Plan trip");
+
+        AppSession.Press(VirtualKeyShort.RIGHT);
+        _app.WaitForRows(Ids.OpenTaskList, "Plan trip", "Subtask Book hotel", "Subtask Pack", "Buy milk");
+
+        // Down walks into the Subtask rows and on to the next Task; Up comes back.
+        AppSession.Press(VirtualKeyShort.DOWN);
+        AppSession.WaitUntil(() => _app.FocusedName() == "Subtask Book hotel" && IsSelected("Subtask Book hotel"),
+            () => $"Down left focus on '{_app.FocusedName()}'.");
+        AppSession.Press(VirtualKeyShort.DOWN);
+        AppSession.Press(VirtualKeyShort.DOWN);
+        AppSession.WaitUntil(() => _app.FocusedName() == "Buy milk" && IsSelected("Buy milk"),
+            () => $"Down left focus on '{_app.FocusedName()}'.");
+        AppSession.Press(VirtualKeyShort.UP);
+        AppSession.WaitUntil(() => _app.FocusedName() == "Subtask Pack" && IsSelected("Subtask Pack"),
+            () => $"Up left focus on '{_app.FocusedName()}'.");
+
+        // Delete on a Subtask row deletes nothing.
+        AppSession.Press(VirtualKeyShort.DELETE);
+        Thread.Sleep(300);
+        _app.WaitForRows(Ids.OpenTaskList, "Plan trip", "Subtask Book hotel", "Subtask Pack", "Buy milk");
+
+        // Left on a Subtask row selects its Task, which stays open; Left again closes it.
+        AppSession.Press(VirtualKeyShort.LEFT);
+        AppSession.WaitUntil(() => _app.FocusedName() == "Plan trip" && IsSelected("Plan trip"),
+            () => $"Left left focus on '{_app.FocusedName()}'.");
+        _app.WaitForRows(Ids.OpenTaskList, "Plan trip", "Subtask Book hotel", "Subtask Pack", "Buy milk");
+        AppSession.Press(VirtualKeyShort.LEFT);
+        _app.WaitForRows(Ids.OpenTaskList, "Plan trip", "Buy milk");
+        AppSession.Press(VirtualKeyShort.RIGHT);
+        _app.WaitForRows(Ids.OpenTaskList, "Plan trip", "Subtask Book hotel", "Subtask Pack", "Buy milk");
     }
 
     private static ExpandCollapseState State(AutomationElement heading) =>

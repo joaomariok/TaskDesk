@@ -12,9 +12,12 @@ public sealed partial class MainViewModel
     private Task DeleteAsync(TaskRowViewModel? row, CancellationToken cancellationToken)
         => row is null ? Task.CompletedTask : DeleteRowAsync(row, cancellationToken);
 
+    /// <summary>Deletes the selected Task (the Delete shortcut); nothing while a Subtask row is selected.</summary>
     [RelayCommand]
     private Task DeleteSelectedAsync(CancellationToken cancellationToken)
-        => SelectedTask is null ? Task.CompletedTask : DeleteRowAsync(SelectedTask, cancellationToken);
+        => SelectedTask is null || SelectedSubtaskRow is not null
+            ? Task.CompletedTask
+            : DeleteRowAsync(SelectedTask, cancellationToken);
 
     private async Task DeleteRowAsync(TaskRowViewModel row, CancellationToken cancellationToken)
     {

@@ -199,6 +199,7 @@ public sealed partial class MainViewModel(
         {
             // Remember the selection once: a load that overlaps another sees it already cleared.
             _reselectId = SelectedTask?.Id;
+            RememberSubtaskSelection();
             _reselectDetailId = DetailTask?.Id;
             _reselectPaneOpen = IsDetailPaneOpen;
         }
@@ -291,6 +292,7 @@ public sealed partial class MainViewModel(
 
         // Reselect the same Task without reopening a detail pane the owner closed.
         SelectedTask = _all.Find(r => r.Id == _reselectId);
+        ReselectSubtaskRow();
         if (!IsDetailDocked)
         {
             DetailTask = _all.Find(r => r.Id == _reselectDetailId); // overlaid: the pane keeps its own Task
@@ -434,10 +436,12 @@ public sealed partial class MainViewModel(
     private Task ToggleCompleteAsync(TaskRowViewModel? row, CancellationToken cancellationToken)
         => row is null ? Task.CompletedTask : ToggleAsync(row, cancellationToken);
 
-    /// <summary>Toggles the selected Task (the Space shortcut).</summary>
+    /// <summary>Toggles the selected Task (the Space shortcut); nothing while a Subtask row is selected.</summary>
     [RelayCommand]
     private Task ToggleSelectedCompleteAsync(CancellationToken cancellationToken)
-        => SelectedTask is null ? Task.CompletedTask : ToggleAsync(SelectedTask, cancellationToken);
+        => SelectedTask is null || SelectedSubtaskRow is not null // a Subtask row never completes its Task
+            ? Task.CompletedTask
+            : ToggleAsync(SelectedTask, cancellationToken);
 
     private Task ToggleAsync(TaskRowViewModel row, CancellationToken cancellationToken) => _lifetime.RunAsync(async token =>
     {
