@@ -282,7 +282,8 @@ public sealed class DetailPaneSectionsTests
                 inside.Left > 1 && inside.Top > 1 && inside.Right < box.ActualWidth - 1
                     && inside.Bottom < box.ActualHeight - 1,
                 $"The row at {inside} touches the box outline ({box.ActualWidth} x {box.ActualHeight}).");
-            Assert.IsGreaterThanOrEqualTo(Bottom(box, pane), Top(add, pane), "Add reminder is not below the box.");
+            Assert.IsGreaterThanOrEqualTo(Bottom(box, pane) + 8, Top(add, pane),
+                "Add reminder is not at least 8 px below the box.");
             Assert.AreEqual(addLeft, Offset(add, pane).X, 0.5, "Add reminder moved sideways with the box.");
             Assert.AreEqual(Offset(box, pane).X, Offset(add, pane).X, 0.5, "Add reminder is not aligned with the box.");
             Assert.AreEqual(viewModel.DetailReminders[0].Description,
