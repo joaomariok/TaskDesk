@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Data.Tests;
@@ -34,6 +35,27 @@ public class SampleDataGeneratorTests
             Assert.Empty(t.Reminders);
             Assert.Null(t.SnoozedUntilUtc);
         });
+    }
+
+    [Fact]
+    public async Task Generated_data_never_notifies_across_its_Due_dates()
+    {
+        using var db = new TempDatabase();
+        var ct = TestContext.Current.CancellationToken;
+        await SampleDataGenerator.GenerateAsync(db.Paths, 300, ct);
+        var lastDue = (await db.QueryAsync(c => c.Tasks)).Max(t => t.DueDate);
+        Assert.NotNull(lastDue);
+        var reminders = db.Get<IReminderService>();
+
+        // Across every Due the generator sets, up to a day past the last one.
+        var end = lastDue.Value.AddDays(2).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        while (db.Clock.GetUtcNow().UtcDateTime < end)
+        {
+            Assert.Empty(await reminders.ListDueAsync(ct));
+            db.Clock.Advance(TimeSpan.FromHours(6));
+        }
+
+        Assert.Empty(await reminders.ListDueAsync(ct));
     }
 
     [Fact]

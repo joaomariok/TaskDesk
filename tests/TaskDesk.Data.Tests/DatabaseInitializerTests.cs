@@ -254,4 +254,66 @@ public class DatabaseInitializerTests
         Assert.Equal((dueAhead, now.AddMinutes(30)), (due.TaskId, due.DueAtUtc));
         Assert.DoesNotContain(pastDue, (await reminders.ListDueAsync(ct)).Select(d => d.TaskId));
     }
+
+    // ---- Review 1: the upgrade rule of the Due notification is durable ----
+
+    [Fact]
+    public async Task An_upgrade_interrupted_after_the_migration_counts_past_Dues_as_notified_on_the_next_start()
+    {
+        // Now is 2026-10-16 09:30 UTC; the time zone is UTC and the default Reminder time 09:00.
+        var ct = TestContext.Current.CancellationToken;
+        using var db = new TempDatabase();
+        db.Paths.EnsureDirectories();
+        var now = db.Clock.GetUtcNow().UtcDateTime;
+        Guid dueAhead;
+        await using (var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(ct))
+        {
+            var migrator = context.Database.GetService<IMigrator>();
+            await migrator.MigrateAsync("20261020235855_Ticket117_BeforeDue", ct);
+            var listId = Guid.NewGuid();
+            await context.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO Lists (Id, Name, SortOrder, IsDefault, CreatedUtc)
+                VALUES ({listId.ToString().ToUpperInvariant()}, 'Inbox', 0, 1, {Sql(now)})
+                """,
+                ct);
+            await InsertDueTaskAsync(context, listId, "past Due", "2026-10-15", null);
+            dueAhead = await InsertDueTaskAsync(context, listId, "Due ahead", "2026-10-16", "10:00:00");
+
+            // The start that applied the migrations stopped before the upgrade rule ran.
+            await migrator.MigrateAsync(cancellationToken: ct);
+        }
+
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
+
+        var reminders = db.Get<IReminderService>();
+        Assert.Empty(await reminders.ListDueAsync(ct));
+        db.Clock.Advance(TimeSpan.FromMinutes(30)); // 10:00: the Due still ahead at the upgrade notifies
+        var due = Assert.Single(await reminders.ListDueAsync(ct));
+        Assert.Equal((dueAhead, now.AddMinutes(30)), (due.TaskId, due.DueAtUtc));
+    }
+
+    [Fact]
+    public async Task A_Due_missed_while_the_app_was_closed_after_the_upgrade_still_notifies_on_the_next_start()
+    {
+        // Now is 2026-10-16 09:30 UTC; the time zone is UTC and the default Reminder time 09:00.
+        var ct = TestContext.Current.CancellationToken;
+        using var db = new TempDatabase();
+        var initializer = db.Get<IDatabaseInitializer>();
+        await initializer.InitializeAsync(ct);
+        var listId = Assert.Single(await db.QueryAsync(c => c.Lists)).Id;
+        Guid dueAhead;
+        await using (var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(ct))
+        {
+            dueAhead = await InsertDueTaskAsync(
+                context, listId, "Due ahead", "2026-10-16", "10:00:00",
+                notifiedThrough: db.Clock.GetUtcNow().UtcDateTime);
+        }
+
+        db.Clock.Advance(TimeSpan.FromHours(1)); // 10:30: the app was closed at 10:00
+        await initializer.InitializeAsync(ct);
+
+        var due = Assert.Single(await db.Get<IReminderService>().ListDueAsync(ct));
+        Assert.Equal(dueAhead, due.TaskId);
+    }
 }

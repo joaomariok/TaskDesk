@@ -24,8 +24,9 @@ internal sealed class DatabaseInitializer(
 {
     public const string DefaultListName = "Inbox";
 
-    // The migration that adds "Notify at Due"; applying it to an existing database runs its upgrade rule.
-    private const string NotifyAtDueMigration = "_Ticket118_NotifyAtDue";
+    // The database's user_version once the upgrade rule of the Due notification has run. Kept in the file header,
+    // not in a table, so it needs no migration; it is written in the same transaction as the rule's changes.
+    private const long DueUpgradeDone = 1;
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -54,7 +55,9 @@ internal sealed class DatabaseInitializer(
 
         await context.Database.MigrateAsync(cancellationToken);
         logger.LogInformation("Database migrated");
-        if (pending.Exists(m => m.EndsWith(NotifyAtDueMigration, StringComparison.Ordinal)))
+        if (await context.Database
+                .SqlQueryRaw<long>("SELECT user_version AS \"Value\" FROM pragma_user_version")
+                .SingleAsync(cancellationToken) < DueUpgradeDone)
         {
             await CountPastDuesAsNotifiedAsync(context, cancellationToken);
         }
@@ -83,11 +86,13 @@ internal sealed class DatabaseInitializer(
         }
     }
 
-    // The upgrade rule of the Due notification (ReminderCalculator.CountPastDueAsNotified), run once when the
-    // migration that turns "Notify at Due" on is applied, so the upgrade doesn't fire a pile of Overdue
-    // notifications. It runs in memory: a Due moment depends on the time zone and the default Reminder time.
+    // The upgrade rule of the Due notification (ReminderCalculator.CountPastDueAsNotified), run once after the
+    // migration that turns "Notify at Due" on, so the upgrade doesn't fire a pile of Overdue notifications. Until it
+    // completes, every start runs it again: a start stopped after the migration committed must not skip it. It runs
+    // in memory: a Due moment depends on the time zone and the default Reminder time.
     private async Task CountPastDuesAsNotifiedAsync(TaskDeskDbContext context, CancellationToken cancellationToken)
     {
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var now = clock.GetUtcNow();
         var rules = new MomentRules(clock.LocalTimeZone, settings.Load().DefaultReminderTime);
         var tasks = await context.Tasks
@@ -100,6 +105,8 @@ internal sealed class DatabaseInitializer(
         }
 
         var counted = await context.SaveChangesAsync(cancellationToken);
+        await context.Database.ExecuteSqlRawAsync($"PRAGMA user_version = {DueUpgradeDone}", cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         logger.LogInformation("Counted {Count} Dues already past as notified", counted);
     }
 }

@@ -7,8 +7,8 @@ using TaskDesk.Core.Tasks;
 namespace TaskDesk.Data;
 
 /// <summary>
-/// Fills a database with a large, varied set of Tasks for performance checks. The Tasks never have a
-/// Reminder, so running the app on the result cannot show a notification.
+/// Fills a database with a large, varied set of Tasks for performance checks. The Tasks have no Reminder and no
+/// Nag, and "Notify at Due" is off on each, so running the app on the result cannot show a notification.
 /// </summary>
 public static class SampleDataGenerator
 {
@@ -57,6 +57,7 @@ public static class SampleDataGenerator
                 IsCompleted = completed,
                 CompletedUtc = completed ? now.AddMinutes(-i) : null,
                 DueDate = i % 3 == 0 ? today.AddDays((i % 61) - 30) : null,
+                NotifyAtDue = false,
                 SortOrder = i + 1,
                 CreatedUtc = now.AddMinutes(-taskCount + i),
                 UpdatedUtc = now,
