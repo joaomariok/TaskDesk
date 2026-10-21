@@ -50,6 +50,7 @@ public sealed partial class MainViewModel
 
         SortCompleted();
         NotifyCompletedChanged();
+        OpenTasksMatchedBySubtask(_all);
     }
 
     private ITimer? _dueRefreshTimer;

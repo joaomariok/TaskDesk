@@ -139,6 +139,77 @@ public class SubtaskSearchOpenViewModelTests
         Assert.False(RowOf(vm, "trip").IsOpen);
     }
 
+    [Fact]
+    public async Task Ending_the_search_removes_the_opened_Tasks_Subtask_rows_from_the_group()
+    {
+        var vm = await StartAsync();
+        await SearchAsync(vm, "ângela");
+        Assert.Equal(["trip", "- Ângela's gift", "- pack", "ângela"], Rows(vm));
+
+        vm.SearchText = "";
+
+        Assert.False(RowOf(vm, "trip").IsOpen);
+        Assert.Equal(["trip", "ângela"], Rows(vm));
+    }
+
+    [Fact]
+    public async Task A_Task_that_stops_matching_loses_its_Subtask_rows_from_the_group()
+    {
+        var vm = await StartAsync();
+        await SearchAsync(vm, "ângela");
+
+        await SearchAsync(vm, "trip");
+
+        Assert.Equal(["trip"], Rows(vm));
+        Assert.Empty(RowOf(vm, "trip").ShownSubtaskRows);
+    }
+
+    [Fact]
+    public async Task Tasks_on_a_later_Completed_page_open_when_they_match_through_a_Subtask_title()
+    {
+        var service = new FakeTaskService();
+        var gift = await service.CreateTaskAsync("gift", Ct);
+        await service.AddSubtaskAsync(gift.Id, "Ângela", Ct);
+        gift.IsCompleted = true;
+        gift.CompletedUtc = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        for (var i = 0; i < IDueService.CompletedPageSize; i++)
+        {
+            var task = await service.CreateTaskAsync($"ângela{i:000}", Ct);
+            task.IsCompleted = true;
+            task.CompletedUtc = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc).AddMinutes(i);
+        }
+
+        var vm = new MainViewModel(
+            service, new FakeTagService(service), new FakeTimeProvider(),
+            searchService: new CompletedPagingSearchService(service));
+        vm.SearchText = "ângela";
+        await vm.ShowSmartViewAsync(SmartView.Completed, Ct);
+        Assert.True(vm.HasMoreCompleted);
+        Assert.DoesNotContain(vm.Tasks, r => r.Title == "gift");
+
+        await vm.LoadMoreCompletedCommand.ExecuteAsync(null);
+
+        var giftRow = RowOf(vm, "gift");
+        Assert.True(giftRow.IsOpen);
+        Assert.Single(giftRow.ShownSubtaskRows);
+    }
+
+    private sealed class CompletedPagingSearchService(FakeTaskService tasks) : ITaskSearchService
+    {
+        public Task<IReadOnlyList<TaskItem>> SearchAsync(
+            TaskSearchQuery query, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<TaskItem>>(
+            [
+                .. tasks.All
+                    .Where(t => t.IsCompleted
+                        && (SearchFold.Contains(t.Title, query.Text!.Trim())
+                            || t.Subtasks.Exists(s => SearchFold.Contains(s.Title, query.Text.Trim()))))
+                    .OrderByDescending(t => t.CompletedUtc)
+                    .Skip(query.Skip)
+                    .Take(IDueService.CompletedPageSize),
+            ]);
+    }
+
     // Matches the folded text in a Task's title or any Subtask's title, as the database search does.
     private sealed class FoldingSearchService(FakeTaskService tasks) : ITaskSearchService
     {

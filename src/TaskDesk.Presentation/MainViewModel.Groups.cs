@@ -148,9 +148,21 @@ public sealed partial class MainViewModel
         foreach (var id in _searchOpened.Where(id => !matched.Contains(id)).ToList())
         {
             _searchOpened.Remove(id);
-            _openTasks.Remove(id);
-            _all.Find(r => r.Id == id)?.SetOpen(false);
+            CloseOpenedBySearch(id);
         }
+    }
+
+    // SetOpen(false) is what removes the id and notifies the group; a Task no longer loaded only drops the id.
+    private void CloseOpenedBySearch(Guid id)
+    {
+        var row = _all.Find(r => r.Id == id);
+        if (row is null)
+        {
+            _openTasks.Remove(id);
+            return;
+        }
+
+        row.SetOpen(false);
     }
 
     // The search ended: every Task it opened goes back to closed, and what the owner closed during it is forgotten.
@@ -158,8 +170,7 @@ public sealed partial class MainViewModel
     {
         foreach (var id in _searchOpened.ToList())
         {
-            _openTasks.Remove(id);
-            _all.Find(r => r.Id == id)?.SetOpen(false);
+            CloseOpenedBySearch(id);
         }
 
         _searchOpened.Clear();
