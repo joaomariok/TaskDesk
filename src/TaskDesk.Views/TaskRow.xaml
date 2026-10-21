@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    One Task row, read at a glance: the List colour stripe, the Completed checkbox, the title and, on the
+    One Task row, read at a glance: the List colour stripe, the Subtasks chevron, the Completed checkbox, the title and, on the
     right, the Repeats icon, Subtask progress, Tag chips, the List caption, the Priority flag and the Due chip.
     A completed row is dimmed and struck through until it moves into "Completed (N)", except on the Completed
     Smart View. Colours come from theme resources only, so Light, Dark and high contrast follow the theme.
@@ -65,18 +65,28 @@
             <Setter Property="MaxWidth" Value="96" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
+        <!-- The chevron draws only its glyph: no background, border or padding of a button. -->
+        <ControlTemplate x:Key="ChevronTemplate" TargetType="Button">
+            <Grid Background="Transparent">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Content="{TemplateBinding Content}" />
+            </Grid>
+        </ControlTemplate>
     </UserControl.Resources>
 
     <Grid x:Name="RowRoot" ColumnSpacing="8"
           Opacity="{x:Bind local:TaskRow.RowOpacity(Row.IsCompleted, Row.KeepsFullStrength), Mode=OneWay, FallbackValue=1}">
+        <!-- A Subtask row (SubtaskRow.xaml) repeats the first three widths, so its checkbox sits under this title. -->
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
+            <!-- The chevron's fixed column, blank for a Task without Subtasks, so every title starts in one place. -->
+            <ColumnDefinition Width="16" />
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
         <!-- The title comes first in the tree, so a row's first text is its title; columns set the order on screen. -->
-        <TextBlock x:Name="RowTitle" Grid.Column="2" Style="{StaticResource BodyText}"
+        <TextBlock x:Name="RowTitle" Grid.Column="3" Style="{StaticResource BodyText}"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
                    Text="{x:Bind Row.Title, Mode=OneWay}"
                    TextDecorations="{x:Bind local:TaskRow.TitleDecorations(Row.IsCompleted, Row.KeepsFullStrength), Mode=OneWay, FallbackValue=None}"
@@ -85,15 +95,25 @@
         <Border x:Name="ListStripe" Width="3" CornerRadius="1.5" Margin="0,4"
                 Background="{x:Bind local:TaskRow.StripeBrush(Row.ListColorHex), Mode=OneWay, FallbackValue={x:Null}}"
                 Opacity="{x:Bind local:TaskRow.StripeOpacity(Row.HasListColor), Mode=OneWay, FallbackValue=0}" />
+        <!-- Opens and closes the Task's Subtask rows, and nothing else; Right and Left in the list do the same. -->
+        <Button x:Name="Chevron" Grid.Column="1" Template="{StaticResource ChevronTemplate}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" IsTabStop="False"
+                AutomationProperties.Name="Subtasks"
+                Visibility="{x:Bind Row.HasSubtasks, Mode=OneWay}"
+                Command="{x:Bind ToggleOpenCommand, Mode=OneWay}"
+                CommandParameter="{x:Bind Row, Mode=OneWay}">
+            <FontIcon x:Name="ChevronGlyph" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                      Glyph="{x:Bind local:CollapsibleHeading.Chevron(Row.IsOpen), Mode=OneWay, FallbackValue='&#xE76C;'}" />
+        </Button>
         <!-- Fluent's own box with its 4 px corners, as in the WPF app, without the room Fluent reserves for a label. -->
-        <local:CommandCheckBox x:Name="CompletedBox" Grid.Column="1"
+        <local:CommandCheckBox x:Name="CompletedBox" Grid.Column="2"
                                MinWidth="0" MinHeight="0" Padding="0"
                                VerticalAlignment="Center"
                                AutomationProperties.Name="Completed"
                                IsChecked="{x:Bind Row.IsCompleted, Mode=OneWay}"
                                Command="{x:Bind ToggleCompleteCommand, Mode=OneWay}"
                                CommandParameter="{x:Bind Row, Mode=OneWay}" />
-        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
             <TextBlock Style="{StaticResource RowIcon}" Text="&#xE8EE;"
                        AutomationProperties.Name="Repeats" ToolTipService.ToolTip="Repeats"
                        Visibility="{x:Bind Row.IsRecurring, Mode=OneWay}" />

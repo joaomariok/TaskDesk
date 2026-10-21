@@ -111,6 +111,7 @@ public sealed partial class MainViewModel
         var ordered = await taskService.MoveSubtaskAsync(subtask.Id, newIndex, cancellationToken);
         row.Subtasks.Clear();
         row.Subtasks.AddRange(ordered);
+        row.RefreshSubtaskProgress();
         if (row == DetailTask)
         {
             RebuildSubtaskItems();

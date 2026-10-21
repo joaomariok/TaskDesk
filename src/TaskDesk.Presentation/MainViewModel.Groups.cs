@@ -1,9 +1,10 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace TaskDesk.Presentation;
 
-// The one Task list's groups, built over the three row collections.
+// The one Task list's groups, built over the three row collections, and which Tasks show their Subtask rows.
 public sealed partial class MainViewModel
 {
     private TaskGroup? _overdueGroup;
@@ -65,4 +66,23 @@ public sealed partial class MainViewModel
             group.IsExpanded = value;
         }
     }
+
+    // ---- Open Tasks: a Task's Subtask rows under its row ----
+
+    // The ids of the open Tasks, kept while the view model lives and never saved. Every row reads it, so the state
+    // outlives the rows a page load, search or Filter change replaces.
+    private readonly HashSet<Guid> _openTasks = [];
+
+    /// <summary>
+    /// Opens <paramref name="row"/>'s Task: its Subtask rows show under it. Only that Task's rows change; the
+    /// selection stays. Does nothing for a Task without Subtasks.
+    /// </summary>
+    public void OpenTask(TaskRowViewModel row) => row.SetOpen(true);
+
+    /// <summary>Closes <paramref name="row"/>'s Task: its Subtask rows leave the list.</summary>
+    public void CloseTask(TaskRowViewModel row) => row.SetOpen(false);
+
+    /// <summary>Opens a closed Task or closes an open one (the chevron).</summary>
+    [RelayCommand]
+    private void ToggleTaskOpen(TaskRowViewModel? row) => row?.SetOpen(!row.IsOpen);
 }

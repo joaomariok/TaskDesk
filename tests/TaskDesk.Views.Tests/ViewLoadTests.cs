@@ -47,6 +47,15 @@ public sealed class ViewLoadTests
         {
             Row = new TaskRowViewModel(new TaskItem { Id = Guid.NewGuid(), Title = "Water plants" }),
         },
+        [nameof(SubtaskRow)] = _ => new SubtaskRow
+        {
+            Row = new TaskRowViewModel(new TaskItem
+            {
+                Id = Guid.NewGuid(),
+                Title = "Plan trip",
+                Subtasks = [new Subtask { Id = Guid.NewGuid(), Title = "Book hotel" }],
+            }).SubtaskRows[0],
+        },
         [nameof(QuickAddView)] = db => new QuickAddView(NewQuickAddViewModel(db)),
         [nameof(SettingsView)] = _ => new SettingsView(NewSettingsViewModel()),
     };

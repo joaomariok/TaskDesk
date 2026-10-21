@@ -194,6 +194,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="NewSubtaskBox" MaxLength="500" PlaceholderText="Add a subtask"
                                  AutomationProperties.Name="New subtask title"
+                                 AutomationProperties.AutomationId="NewSubtaskBox"
                                  Text="{x:Bind ViewModel.NewSubtaskTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  KeyDown="OnAddBoxKeyDown" />
                         <Button Grid.Column="1" Content="Add"

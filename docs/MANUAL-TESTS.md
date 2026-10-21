@@ -64,6 +64,7 @@ Mark each item with the date and result.
 - [ ] Space toggles complete, Delete removes the Task, Ctrl+Z and the Undo bar restore it (within 10 seconds) **(automated, except the recurring case)**; undoing a recurring Task's completion also removes the Occurrence it produced.
 - [ ] Edits in the detail pane save on their own (text after about 0.5 s); kill the process right after typing and restart: the edit is there. **(automated: edit then close and restart; killing the process is still manual)**
 - [ ] Subtasks: add, tick, delete, undo; the "done/total" progress shows on the row.
+- [ ] Subtasks in the Task list: a Task with Subtasks shows a right-pointing chevron, and a Task without leaves the column blank. A click on the chevron opens and closes the Task without selecting the row or opening the pane; Right and Left on the focused row do the same. Open a Task, switch to another List, a Smart View and a Tag page and come back: it is still open. Complete the open Task: its whole block stays for the completion hold, then moves into "Completed (N)" together, dimmed once; Ctrl+Z brings it back whole.
 - [ ] Due dates: Today, Upcoming, Overdue, All, Completed views contain the right Tasks, including a Task due today at a time that has just passed.
 - [ ] Recurrence: complete a repeating Task and the next Occurrence appears; Skip works; deleting an Occurrence offers "Delete this occurrence" and "Stop repeating".
 - [ ] Search and filters (priority, Tags, has due, has reminder) work in the current view, and Esc or clearing restores it.

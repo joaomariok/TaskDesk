@@ -82,4 +82,6 @@
     <Style TargetType="local:CommandToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}" />
     <!-- The Task list's "Completed (N)" heading draws Fluent's Button. -->
     <Style TargetType="local:CollapsibleHeading" BasedOn="{StaticResource DefaultButtonStyle}" />
+    <!-- The Task list's row container draws Fluent's list item. -->
+    <Style TargetType="local:TaskRowListItem" BasedOn="{StaticResource DefaultListViewItemStyle}" />
 </ResourceDictionary>

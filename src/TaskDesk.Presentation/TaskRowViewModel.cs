@@ -5,7 +5,7 @@ using TaskDesk.Core.Tasks;
 namespace TaskDesk.Presentation;
 
 /// <summary>A Task as shown in the List: the last saved state of a <see cref="TaskItem"/>.</summary>
-public sealed partial class TaskRowViewModel : ObservableObject
+public sealed partial class TaskRowViewModel : ObservableObject, ITaskListRow
 {
     private readonly TimeProvider _clock;
 
@@ -17,10 +17,14 @@ public sealed partial class TaskRowViewModel : ObservableObject
     /// <param name="list">The List the Task belongs to, when known.</param>
     /// <param name="showListName">True in Smart Views and a Tag's page, where the List's name is a caption.</param>
     /// <param name="keepsFullStrength">True on the Completed Smart View, where completed rows are not dimmed.</param>
+    /// <param name="openTasks">
+    /// The ids of the open Tasks, shared with the view model's other rows; a row of its own when null.
+    /// </param>
     public TaskRowViewModel(
         TaskItem item, TimeProvider? clock = null, TaskList? list = null, bool showListName = false,
-        bool keepsFullStrength = false)
+        bool keepsFullStrength = false, ISet<Guid>? openTasks = null)
     {
+        _openTasks = openTasks ?? new HashSet<Guid>();
         KeepsFullStrength = keepsFullStrength;
         _clock = clock ?? TimeProvider.System;
         ListName = list?.Name ?? "";
@@ -32,6 +36,9 @@ public sealed partial class TaskRowViewModel : ObservableObject
     }
 
     public Guid Id { get; }
+
+    /// <summary>The row itself: a Task row belongs to its own Task.</summary>
+    public TaskRowViewModel TaskRow => this;
 
     /// <summary>The name of the List the Task belongs to, or empty when unknown.</summary>
     public string ListName { get; }
@@ -94,6 +101,91 @@ public sealed partial class TaskRowViewModel : ObservableObject
 
     public bool HasSubtasks => SubtaskProgress.Length > 0;
 
+    // The ids of the open Tasks, shared by every row of a view model, so the state outlives the row.
+    private readonly ISet<Guid> _openTasks;
+    private IReadOnlyList<SubtaskListRowViewModel> _subtaskRows = [];
+
+    /// <summary>
+    /// True while the Task's Subtask rows show under it (its chevron points down). Only a Task with Subtasks is
+    /// ever open.
+    /// </summary>
+    public bool IsOpen => HasSubtasks && _openTasks.Contains(Id);
+
+    /// <summary>A Subtask row for each Subtask, in their manual order; kept for the same Subtask across changes.</summary>
+    public IReadOnlyList<SubtaskListRowViewModel> SubtaskRows => _subtaskRows;
+
+    /// <summary>The Subtask rows the list shows under the Task: all of them while it is open, none while closed.</summary>
+    public IReadOnlyList<SubtaskListRowViewModel> ShownSubtaskRows => IsOpen ? _subtaskRows : [];
+
+    /// <summary>Opens or closes the Task. Does nothing for a Task without Subtasks.</summary>
+    internal void SetOpen(bool isOpen)
+    {
+        if (isOpen == IsOpen || (isOpen && !HasSubtasks))
+        {
+            return;
+        }
+
+        if (isOpen)
+        {
+            _openTasks.Add(Id);
+        }
+        else
+        {
+            _openTasks.Remove(Id);
+        }
+
+        OnPropertyChanged(nameof(IsOpen));
+        OnPropertyChanged(nameof(ShownSubtaskRows));
+    }
+
+    partial void OnIsCompletedChanged(bool value)
+    {
+        foreach (var row in _subtaskRows)
+        {
+            row.OnTaskCompletionChanged();
+        }
+    }
+
+    // Brings the Subtask rows in line with Subtasks: a Subtask keeps its row, a new one gets one. A Task whose last
+    // Subtask went loses its chevron and leaves the open state.
+    private void RefreshSubtaskRows()
+    {
+        var wasOpen = _openTasks.Contains(Id) && _subtaskRows.Count > 0;
+        var kept = _subtaskRows.ToDictionary(r => r.Id);
+        var rows = new List<SubtaskListRowViewModel>(Subtasks.Count);
+        foreach (var subtask in Subtasks)
+        {
+            if (kept.TryGetValue(subtask.Id, out var row))
+            {
+                row.Apply(subtask);
+            }
+            else
+            {
+                row = new SubtaskListRowViewModel(subtask, this);
+            }
+
+            rows.Add(row);
+        }
+
+        var changed = !rows.SequenceEqual(_subtaskRows);
+        _subtaskRows = rows;
+        if (rows.Count == 0)
+        {
+            _openTasks.Remove(Id);
+        }
+
+        if (wasOpen != IsOpen)
+        {
+            OnPropertyChanged(nameof(IsOpen));
+        }
+
+        if (changed)
+        {
+            OnPropertyChanged(nameof(SubtaskRows));
+            OnPropertyChanged(nameof(ShownSubtaskRows));
+        }
+    }
+
     /// <summary>The Due as shown on the chip ("Today 18:00", "Thu", "Thu 15 Oct"), or empty.</summary>
     [ObservableProperty]
     private string _dueText = "";
@@ -151,5 +243,10 @@ public sealed partial class TaskRowViewModel : ObservableObject
         DueState = IsOverdue ? DueState.Overdue : date == today ? DueState.Today : DueState.Later;
     }
 
-    internal void RefreshSubtaskProgress() => SubtaskProgress = Core.Tasks.SubtaskProgress.Format(Subtasks);
+    /// <summary>Shows a change to <see cref="Subtasks"/>: the progress and the Subtask rows follow it.</summary>
+    internal void RefreshSubtaskProgress()
+    {
+        SubtaskProgress = Core.Tasks.SubtaskProgress.Format(Subtasks);
+        RefreshSubtaskRows();
+    }
 }

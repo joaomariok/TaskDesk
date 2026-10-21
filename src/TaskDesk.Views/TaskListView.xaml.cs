@@ -42,8 +42,8 @@ public sealed partial class TaskListView : UserControl
 
     /// <summary>
     /// Runs the Task list shortcut for a key: Space completes and Delete deletes the selected Task, Enter opens it
-    /// in the detail pane, Ctrl+Z undoes the last delete or completion. Returns false when the key is not a
-    /// shortcut or there is nothing to do.
+    /// in the detail pane, Right opens and Left closes its Subtask rows, Ctrl+Z undoes the last delete or
+    /// completion. Returns false when the key is not a shortcut or there is nothing to do.
     /// </summary>
     public bool TryShortcut(VirtualKey key, VirtualKeyModifiers modifiers)
     {
@@ -57,6 +57,20 @@ public sealed partial class TaskListView : UserControl
 
             ViewModel.OpenDetailPane(selected);
             DetailFocusRequested?.Invoke(this, EventArgs.Empty);
+            return true;
+        }
+
+        // Right opens the selected Task's Subtask rows and Left closes them.
+        if (modifiers == VirtualKeyModifiers.None && key is VirtualKey.Right or VirtualKey.Left
+            && ViewModel.SelectedTask is { HasSubtasks: true } task)
+        {
+            var open = key == VirtualKey.Right;
+            if (task.IsOpen == open)
+            {
+                return false;
+            }
+
+            SetTaskOpen(task, open);
             return true;
         }
 
@@ -138,20 +152,52 @@ public sealed partial class TaskListView : UserControl
     // the view model's toggle.
     private void OnRowContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
+        if (args.Item is SubtaskListRowViewModel subtask)
+        {
+            AutomationProperties.SetName(args.ItemContainer, subtask.AccessibleName);
+            return;
+        }
+
         if (args.Item is not TaskRowViewModel row)
         {
             return;
         }
 
         AutomationProperties.SetName(args.ItemContainer, row.Title);
+        if (args.ItemContainer is TaskRowListItem item)
+        {
+            item.SetOpen ??= SetTaskOpen;
+        }
+
         if (args.ItemContainer.ContentTemplateRoot is TaskRow view)
         {
             view.ToggleCompleteCommand = ViewModel.ToggleCompleteCommand;
+            view.ToggleOpenCommand = ViewModel.ToggleTaskOpenCommand;
+        }
+    }
+
+    private void SetTaskOpen(TaskRowViewModel row, bool open)
+    {
+        if (open)
+        {
+            ViewModel.OpenTask(row);
+        }
+        else
+        {
+            ViewModel.CloseTask(row);
         }
     }
 
     private void OnTaskSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        // Subtask rows cannot take the selection yet: a click or an arrow key that lands on one leaves the selected
+        // Task where it was, so Space, Delete, Enter and F2 still act on that Task.
+        if (e.AddedItems.Count > 0 && e.AddedItems[0] is SubtaskListRowViewModel)
+        {
+            ShowSelection();
+            return;
+        }
+
         // A selection that only lost its row comes from the row moving between groups: the view model keeps the
         // selected Task, and the list selects the row again where it lands.
         if (e.AddedItems.Count > 0 && e.AddedItems[0] is TaskRowViewModel row)

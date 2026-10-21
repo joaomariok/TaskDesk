@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    One Subtask row under its open Task: no List stripe and no chevron, the checkbox in the column of the Task's
+    title, then the Subtask's title in body text, and nothing on the right. A ticked Subtask is dimmed and struck
+    through; under a completed Task the whole block is dimmed once; the Completed Smart View keeps full strength.
+-->
+<UserControl
+    x:Class="TaskDesk.Views.SubtaskRow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TaskDesk.Views">
+    <Grid x:Name="RowRoot" ColumnSpacing="8"
+          Opacity="{x:Bind local:SubtaskRow.RowOpacity(Row.IsDimmed), Mode=OneWay, FallbackValue=1}">
+        <!-- The Task row's stripe, chevron and checkbox widths (TaskRow.xaml), left blank. -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="3" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="20" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <TextBlock x:Name="RowTitle" Grid.Column="4" Style="{StaticResource BodyText}"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                   Text="{x:Bind Row.Title, Mode=OneWay}"
+                   TextDecorations="{x:Bind local:SubtaskRow.TitleDecorations(Row.IsStruckThrough), Mode=OneWay, FallbackValue=None}"
+                   ToolTipService.ToolTip="{x:Bind Row.Title, Mode=OneWay}" />
+        <!-- The Task row's box. It shows the tick only: ticking from the list is not there yet, so it runs nothing. -->
+        <local:CommandCheckBox x:Name="TickedBox" Grid.Column="3"
+                               MinWidth="0" MinHeight="0" Padding="0"
+                               VerticalAlignment="Center"
+                               AutomationProperties.Name="Subtask done"
+                               IsChecked="{x:Bind Row.IsCompleted, Mode=OneWay}" />
+    </Grid>
+</UserControl>

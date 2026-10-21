@@ -2,7 +2,8 @@
 <!--
     The Task list area: one list over the page's groups (the Overdue group on the Today view only, the open
     Tasks with no heading, and the collapsible "Completed (N)" group right after them) and the Undo bar. The
-    Completed Smart View shows its completed Tasks as the open group, with no heading. Space completes and Delete
+    Completed Smart View shows its completed Tasks as the open group, with no heading. An open Task's Subtask rows
+    follow its row in every group (SubtaskRow.xaml). Space completes and Delete
     deletes the selected Task; Ctrl+Z undoes the last delete or completion.
 -->
 <UserControl
@@ -22,6 +23,13 @@
         <DataTemplate x:Key="TaskRowTemplate" x:DataType="presentation:TaskRowViewModel">
             <local:TaskRow Row="{x:Bind Mode=OneTime}" />
         </DataTemplate>
+        <!-- An open Task's Subtask rows, in the same container style, so they are as tall as a Task row. -->
+        <DataTemplate x:Key="SubtaskRowTemplate" x:DataType="presentation:SubtaskListRowViewModel">
+            <local:SubtaskRow Row="{x:Bind Mode=OneTime}" />
+        </DataTemplate>
+        <local:TaskListRowTemplateSelector x:Key="RowTemplateSelector"
+                                           Task="{StaticResource TaskRowTemplate}"
+                                           Subtask="{StaticResource SubtaskRowTemplate}" />
         <CollectionViewSource x:Name="GroupsSource" IsSourceGrouped="True"
                               Source="{x:Bind ViewModel.Groups, Mode=OneTime}" />
         <!-- A group heading's container draws nothing and takes no room or focus of its own: the open group's
@@ -82,7 +90,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <!-- One list and one scroll; sticky headings are off, so a heading scrolls with its rows. -->
-        <ListView x:Name="OpenTaskList" SelectionMode="Single" IsSynchronizedWithCurrentItem="False"
+        <local:TaskRowList x:Name="OpenTaskList" SelectionMode="Single" IsSynchronizedWithCurrentItem="False"
                   AutomationProperties.Name="Tasks"
                   AutomationProperties.AutomationId="OpenTaskList"
                   CanDragItems="True" AllowDrop="True"
@@ -90,7 +98,7 @@
                   DragOver="OnTaskDragOver" DragLeave="OnTaskDragLeave" Drop="OnTaskDrop"
                   ItemsSource="{x:Bind GroupsSource.View, Mode=OneTime}"
                   ItemContainerStyle="{StaticResource TaskRowContainer}"
-                  ItemTemplate="{StaticResource TaskRowTemplate}"
+                  ItemTemplateSelector="{StaticResource RowTemplateSelector}"
                   ContainerContentChanging="OnRowContainerChanging"
                   SelectionChanged="OnTaskSelectionChanged"
                   PreviewKeyDown="OnTaskListPreviewKeyDown">
@@ -103,7 +111,7 @@
                 <GroupStyle HeaderContainerStyle="{StaticResource GroupHeadingContainer}"
                             HeaderTemplateSelector="{StaticResource GroupHeadingSelector}" />
             </ListView.GroupStyle>
-        </ListView>
+        </local:TaskRowList>
         <!-- The insertion line shows where a dragged Task lands; it overlays the rows and takes no input. -->
         <Rectangle x:Name="TaskInsertionLine" Height="2" RadiusX="1" RadiusY="1" VerticalAlignment="Top"
                    Fill="{ThemeResource AccentFillColorDefaultBrush}" IsHitTestVisible="False"

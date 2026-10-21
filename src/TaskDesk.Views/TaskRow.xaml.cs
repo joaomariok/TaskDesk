@@ -17,9 +17,19 @@ public sealed partial class TaskRow : UserControl
     public static readonly DependencyProperty ToggleCompleteCommandProperty = DependencyProperty.Register(
         nameof(ToggleCompleteCommand), typeof(ICommand), typeof(TaskRow), new PropertyMetadata(null));
 
+    public static readonly DependencyProperty ToggleOpenCommandProperty = DependencyProperty.Register(
+        nameof(ToggleOpenCommand), typeof(ICommand), typeof(TaskRow), new PropertyMetadata(null));
+
     public TaskRow()
     {
         InitializeComponent();
+    }
+
+    /// <summary>What the Subtasks chevron runs, with the row as its parameter: opening or closing the Task.</summary>
+    public ICommand? ToggleOpenCommand
+    {
+        get => (ICommand?)GetValue(ToggleOpenCommandProperty);
+        set => SetValue(ToggleOpenCommandProperty, value);
     }
 
     /// <summary>The Task the row shows.</summary>
