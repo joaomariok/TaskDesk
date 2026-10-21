@@ -129,6 +129,41 @@ public sealed partial class MainViewModel
             ? change()
             : Task.CompletedTask); // a change queued ahead of this one deleted it already
 
+    /// <summary>
+    /// Ticks or unticks a Subtask from its row in the Task list. It saves in order with the detail pane's pending
+    /// saves, flips the saved state on its turn, updates the Task's progress and the pane, and adds no undo entry.
+    /// </summary>
+    [RelayCommand]
+    private Task ToggleSubtaskAsync(SubtaskListRowViewModel? subtask, CancellationToken cancellationToken)
+        => subtask is null
+            ? Task.CompletedTask
+            : Saves.Enqueue(() => StoreListTickAsync(subtask.TaskRow, subtask.Id)) ?? Task.CompletedTask;
+
+    private async Task<bool> StoreListTickAsync(TaskRowViewModel row, Guid subtaskId)
+    {
+        var known = row.Subtasks.FindIndex(s => s.Id == subtaskId);
+        if (known < 0)
+        {
+            return false; // a change queued ahead of this one deleted it
+        }
+
+        var updated = await taskService.SetSubtaskCompletedAsync(subtaskId, !row.Subtasks[known].IsCompleted);
+        known = row.Subtasks.FindIndex(s => s.Id == subtaskId);
+        if (known < 0)
+        {
+            return true;
+        }
+
+        row.Subtasks[known] = updated;
+        row.RefreshSubtaskProgress();
+        if (row == DetailTask)
+        {
+            SubtaskItems.FirstOrDefault(s => s.Id == subtaskId)?.ApplyCompleted(updated.IsCompleted);
+        }
+
+        return true;
+    }
+
     private void RebuildSubtaskItems()
     {
         SubtaskItems.Clear();

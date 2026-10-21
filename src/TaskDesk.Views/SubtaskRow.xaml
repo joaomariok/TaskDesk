@@ -24,11 +24,13 @@
                    Text="{x:Bind Row.Title, Mode=OneWay}"
                    TextDecorations="{x:Bind local:SubtaskRow.TitleDecorations(Row.IsStruckThrough), Mode=OneWay, FallbackValue=None}"
                    ToolTipService.ToolTip="{x:Bind Row.Title, Mode=OneWay}" />
-        <!-- The Task row's box. It shows the tick only: ticking from the list is not there yet, so it runs nothing. -->
+        <!-- The Task row's box: a click or a screen reader's Toggle ticks the Subtask, and the box shows the saved tick. -->
         <local:CommandCheckBox x:Name="TickedBox" Grid.Column="3"
                                MinWidth="0" MinHeight="0" Padding="0"
                                VerticalAlignment="Center"
                                AutomationProperties.Name="Subtask done"
-                               IsChecked="{x:Bind Row.IsCompleted, Mode=OneWay}" />
+                               IsChecked="{x:Bind Row.IsCompleted, Mode=OneWay}"
+                               Command="{x:Bind ToggleCommand, Mode=OneWay}"
+                               CommandParameter="{x:Bind Row, Mode=OneWay}" />
     </Grid>
 </UserControl>

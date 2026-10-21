@@ -40,6 +40,14 @@ public sealed partial class SubtaskRowViewModel : ObservableObject
         }
     }
 
+    // The tick as saved from the Task list; the title in the field stays as typed.
+    internal void ApplyCompleted(bool isCompleted)
+    {
+        _applying = true;
+        IsCompleted = isCompleted;
+        _applying = false;
+    }
+
     internal void Apply(Subtask subtask)
     {
         _applying = true;

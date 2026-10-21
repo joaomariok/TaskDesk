@@ -474,12 +474,17 @@ public sealed partial class MainViewModel(
     private Task ToggleCompleteAsync(TaskRowViewModel? row, CancellationToken cancellationToken)
         => row is null ? Task.CompletedTask : ToggleAsync(row, cancellationToken);
 
-    /// <summary>Toggles the selected Task (the Space shortcut); nothing while a Subtask row is selected.</summary>
+    /// <summary>
+    /// Toggles the selected Task (the Space shortcut); on a selected Subtask row it ticks or unticks that Subtask
+    /// instead, and never completes its Task.
+    /// </summary>
     [RelayCommand]
     private Task ToggleSelectedCompleteAsync(CancellationToken cancellationToken)
-        => SelectedTask is null || SelectedSubtaskRow is not null // a Subtask row never completes its Task
-            ? Task.CompletedTask
-            : ToggleAsync(SelectedTask, cancellationToken);
+        => SelectedSubtaskRow is { } subtask
+            ? ToggleSubtaskAsync(subtask, cancellationToken)
+            : SelectedTask is null
+                ? Task.CompletedTask
+                : ToggleAsync(SelectedTask, cancellationToken);
 
     private Task ToggleAsync(TaskRowViewModel row, CancellationToken cancellationToken) => _lifetime.RunAsync(async token =>
     {

@@ -43,8 +43,8 @@ public sealed partial class TaskListView : UserControl
     /// <summary>
     /// Runs the Task list shortcut for a key: Space completes and Delete deletes the selected Task, Enter opens it
     /// in the detail pane, Right opens and Left closes its Subtask rows, Ctrl+Z undoes the last delete or
-    /// completion. On a selected Subtask row, Enter opens its Task, Left selects the Task, and Space and Delete do
-    /// nothing. Returns false when the key is not a shortcut or there is nothing to do.
+    /// completion. On a selected Subtask row, Enter opens its Task, Left selects the Task, Space ticks or unticks
+    /// the Subtask, and Delete does nothing. Returns false when the key is not a shortcut or there is nothing to do.
     /// </summary>
     public bool TryShortcut(VirtualKey key, VirtualKeyModifiers modifiers)
     {
@@ -187,6 +187,11 @@ public sealed partial class TaskListView : UserControl
         if (args.Item is SubtaskListRowViewModel subtask)
         {
             AutomationProperties.SetName(args.ItemContainer, subtask.AccessibleName);
+            if (args.ItemContainer.ContentTemplateRoot is SubtaskRow subtaskView)
+            {
+                subtaskView.ToggleCommand = ViewModel.ToggleSubtaskCommand;
+            }
+
             return;
         }
 
