@@ -75,6 +75,13 @@ public sealed partial class MainViewModel
     [NotifyCanExecuteChangedFor(nameof(ClearDetailDueTimeCommand))]
     private TimeSpan? _detailDueTime;
 
+    /// <summary>
+    /// "Notify at Due" of the shown Task: with a Due, it notifies once at the Due. The pane shows the switch only
+    /// while the Task has a Due; a change saves at once.
+    /// </summary>
+    [ObservableProperty]
+    private bool _detailNotifyAtDue;
+
     /// <summary>Completes when every save started so far has finished.</summary>
     public Task PendingSave => Saves.WaitForAllAsync();
 
@@ -131,6 +138,7 @@ public sealed partial class MainViewModel
         DetailPriority = value?.Priority ?? Priority.None;
         DetailDueDate = value?.Item.DueDate?.ToDateTime(TimeOnly.MinValue);
         DetailDueTime = value?.Item.DueTime?.ToTimeSpan();
+        DetailNotifyAtDue = value?.Item.NotifyAtDue ?? true;
         LoadReminderDetail(value?.Item);
         _loadingDetail = false;
         Repeat.Load(value?.Item.Recurrence, value?.Item.DueDate);
@@ -162,6 +170,22 @@ public sealed partial class MainViewModel
     }
 
     partial void OnDetailDueTimeChanged(TimeSpan? value) => ScheduleDueSave();
+
+    partial void OnDetailNotifyAtDueChanged(bool value)
+    {
+        if (_loadingDetail || DetailTask is not { } row)
+        {
+            return;
+        }
+
+        _ = Saves.Enqueue(
+            async () =>
+            {
+                ApplyReminderChange(row, await Reminders.SetNotifyAtDueAsync(row.Id, value));
+                return true;
+            },
+            accepted: () => ErrorMessage = null);
+    }
 
     /// <summary>Clears the Due time (the pane's "Clear Due time" button): the Due becomes date-only.</summary>
     [RelayCommand(CanExecute = nameof(CanClearDetailDueTime))]

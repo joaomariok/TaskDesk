@@ -444,6 +444,40 @@ public sealed class DetailPaneSectionsTests
         }
     }
 
+    [UITestMethod]
+    public async Task Notify_at_Due_shows_only_with_a_Due_and_saves_at_once()
+    {
+        using var db = await DatabaseAsync();
+        var id = await AddAsync(db, "Pay rent");
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Pay rent");
+            var box = VisualTree.Find<CheckBox>(pane, "NotifyAtDueBox");
+            Assert.AreEqual(Visibility.Collapsed, box.Visibility, "Notify at Due shows without a Due.");
+            Assert.AreEqual("Notify at Due", box.Content as string, "No visible label.");
+            Assert.AreEqual("Notify at Due", AutomationProperties.GetName(box));
+
+            Named<CalendarDatePicker>(pane, "Due date").Date =
+                new DateTimeOffset(new DateTime(2026, 10, 19, 0, 0, 0, DateTimeKind.Local));
+            await UiWait.UntilAsync(() => box.Visibility == Visibility.Visible && box.ActualHeight > 0,
+                () => "Notify at Due did not show once the Task had a Due.", Ct);
+            Assert.IsTrue(box.IsChecked, "Notify at Due is off for a new Task.");
+
+            var toggle = (IToggleProvider)FrameworkElementAutomationPeer.CreatePeerForElement(box)
+                .GetPattern(PatternInterface.Toggle);
+            toggle.Toggle();
+            await UiWait.UntilAsync(() => !viewModel.DetailNotifyAtDue, () => "The switch did not turn off.", Ct);
+            await viewModel.PendingSave; // saved at once: nothing debounced to flush
+            Assert.IsFalse((await db.QueryAsync(c => c.Tasks.Where(t => t.Id == id))).Single().NotifyAtDue,
+                "Switching Notify at Due off did not save.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     // The realized row buttons of the Reminders list, which open the flyout on their Reminder.
     private static List<Button> ReminderRows(DetailPane pane)
     {

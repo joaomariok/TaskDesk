@@ -81,7 +81,8 @@ public static class JsonExportFormat
         [.. OrderedTags(t).Select(tag => tag.Id)],
         [.. OrderedSubtasks(t).Select(s => new ExportSubtask(s.Id, s.Title, s.IsCompleted, s.SortOrder))],
         Utc(t.CreatedUtc),
-        Utc(t.UpdatedUtc));
+        Utc(t.UpdatedUtc),
+        NotifyAtDue: t.NotifyAtDue);
 
     /// <summary>A Task's Tags in the same order the export lists them.</summary>
     internal static IEnumerable<TaskDesk.Core.Tags.Tag> OrderedTags(TaskItem task) =>

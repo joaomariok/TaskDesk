@@ -79,6 +79,10 @@ public class ReminderBeforeDueViewModelTests
             SmartView view, int skip = 0, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<TaskItem>>([.. tasks.All.Where(t => !t.IsCompleted)]);
 
+        public Task<TaskItem> SetNotifyAtDueAsync(
+            Guid taskId, bool notifyAtDue, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<TaskItem> SnoozeAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

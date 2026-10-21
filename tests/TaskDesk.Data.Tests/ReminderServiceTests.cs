@@ -362,8 +362,12 @@ public class ReminderServiceTests
     [Fact]
     public async Task A_missed_Reminder_still_fires_after_edits_to_other_fields()
     {
+        // "Notify at Due" is off, so no moment of this Task depends on its Due and the Due edit is like any other
+        // field edit (with it on, a Due edit counts past moments as notified; ticket #118).
         using var db = await StartAsync();
-        var task = await AddDueAsync(db);
+        var task = await AddAsync(db, "a", Now.AddMinutes(-1));
+        await db.Get<IReminderService>().SetNotifyAtDueAsync(task.Id, false, Ct);
+        AdvanceToNow(db);
         var tasks = db.Get<ITaskService>();
 
         await tasks.UpdateTaskAsync(task.Id, "renamed", "notes", Priority.High, Ct);

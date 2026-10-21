@@ -28,21 +28,26 @@ public static class ReminderCalculator
 
     /// <summary>
     /// The due rule (SPEC 7.4, ADR 0006). A Task is due to notify at <paramref name="now"/> when it is open,
-    /// not snoozed past <paramref name="now"/>, and one of its moments (the planned Reminder, the end of the
-    /// Snooze) lies after "notified through" and at or before <paramref name="now"/>. Returns the latest such
+    /// not snoozed past <paramref name="now"/>, and one of its moments (a Reminder, the Due notification, the end
+    /// of the Snooze) lies after "notified through" and at or before <paramref name="now"/>. Returns the latest such
     /// moment, its due instant, or null when the Task is not due.
     /// </summary>
     /// <param name="rules">The local rules the Due is read in; <see cref="MomentRules.Utc"/> when null.</param>
     public static DateTime? DueInstant(TaskItem task, DateTimeOffset now, MomentRules? rules = null)
     {
-        var nowUtc = now.UtcDateTime;
+        return LatestDue(task, now.UtcDateTime, Moments(task, rules ?? MomentRules.Utc, includeDue: true));
+    }
+
+    // The latest of the moments that makes the Task due at nowUtc, or null.
+    private static DateTime? LatestDue(TaskItem task, DateTime nowUtc, IEnumerable<DateTime> moments)
+    {
         if (task.IsCompleted || task.SnoozedUntilUtc > nowUtc)
         {
             return null;
         }
 
         DateTime? latest = null;
-        foreach (var moment in Moments(task, rules ?? MomentRules.Utc))
+        foreach (var moment in moments)
         {
             if (moment <= nowUtc && (task.NotifiedThroughUtc is not { } through || moment > through)
                 && (latest is null || moment > latest))
@@ -58,9 +63,14 @@ public static class ReminderCalculator
     public static bool IsDue(TaskItem task, DateTimeOffset now, MomentRules? rules = null) =>
         DueInstant(task, now, rules) is not null;
 
-    // The moments a Task notifies at.
-    private static IEnumerable<DateTime> Moments(TaskItem task, MomentRules rules)
+    // The moments a Task notifies at: its Reminders, its Due notification (when includeDue) and its Snooze end.
+    private static IEnumerable<DateTime> Moments(TaskItem task, MomentRules rules, bool includeDue)
     {
+        if (includeDue && task.NotifyAtDue && DueMoment(task.DueDate, task.DueTime, rules) is { } due)
+        {
+            yield return due;
+        }
+
         foreach (var reminder in task.Reminders)
         {
             if (MomentOf(reminder, task, rules) is { } moment)
@@ -259,13 +269,14 @@ public static class ReminderCalculator
     /// Sets the Task's Due. Before-Due Reminders move with it, and like a change to a Reminder it counts moments
     /// already past at <paramref name="now"/> as notified (<see cref="MarkPastNotified"/>): moments moved into the
     /// past never fire, moments moved into the future do. Clearing the Due removes the before-Due Reminders, which
-    /// have nothing to count from; fixed Reminders stay. A Task with no moment that depends on the Due is left
-    /// like any other field edit, so a missed fixed Reminder still fires. Returns the removed Reminders.
+    /// have nothing to count from; fixed Reminders stay. A Task with no moment that depends on the Due ("Notify at
+    /// Due" off and no before-Due Reminder) is left like any other field edit, so a missed fixed Reminder still
+    /// fires. "Notify at Due" keeps its value. Returns the removed Reminders.
     /// </summary>
     public static IReadOnlyList<Reminder> ChangeDue(
         TaskItem task, DateOnly? dueDate, TimeOnly? dueTime, DateTimeOffset now)
     {
-        var movesMoments = task.Reminders.Exists(r => r.Kind == ReminderKind.BeforeDue);
+        var movesMoments = task.NotifyAtDue || task.Reminders.Exists(r => r.Kind == ReminderKind.BeforeDue);
         task.DueDate = dueDate;
         task.DueTime = dueTime;
         List<Reminder> removed = dueDate is null ? task.Reminders.FindAll(r => r.Kind == ReminderKind.BeforeDue) : [];
@@ -276,6 +287,43 @@ public static class ReminderCalculator
         }
 
         return removed;
+    }
+
+    /// <summary>
+    /// Switches "Notify at Due". Like a change to the Due, it counts moments already past at <paramref name="now"/>
+    /// as notified (<see cref="MarkPastNotified"/>). Returns false, changing nothing, when it already has this value.
+    /// </summary>
+    public static bool SetNotifyAtDue(TaskItem task, bool on, DateTimeOffset now)
+    {
+        if (task.NotifyAtDue == on)
+        {
+            return false;
+        }
+
+        task.NotifyAtDue = on;
+        MarkPastNotified(task, now);
+        return true;
+    }
+
+    /// <summary>
+    /// The upgrade rule of the Due notification: a Due moment already past at <paramref name="now"/> counts as
+    /// notified, so the upgrade doesn't fire a pile of Overdue notifications. A Task already due to notify for
+    /// another moment (an armed Reminder already past, a Snooze that ended) is left alone, so it still notifies
+    /// once; a running Snooze ends after the Due moment, so it keeps running.
+    /// </summary>
+    public static void CountPastDueAsNotified(TaskItem task, DateTimeOffset now, MomentRules rules)
+    {
+        var nowUtc = now.UtcDateTime;
+        if (DueMoment(task.DueDate, task.DueTime, rules) is not { } due || due > nowUtc
+            || LatestDue(task, nowUtc, Moments(task, rules, includeDue: false)) is not null)
+        {
+            return;
+        }
+
+        if (task.NotifiedThroughUtc is not { } through || through < due)
+        {
+            task.NotifiedThroughUtc = due;
+        }
     }
 
     /// <summary>Puts the Task's Reminders in the order they fire, the first one first.</summary>

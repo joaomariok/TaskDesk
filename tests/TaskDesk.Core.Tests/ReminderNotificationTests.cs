@@ -35,6 +35,17 @@ public class ReminderNotificationTests
     }
 
     [Fact]
+    public void An_Overdue_Task_s_body_begins_with_Overdue()
+    {
+        var notification = ReminderNotification.For(
+            new DueReminder(TaskId, "Pay rent", new DateOnly(2026, 10, 20), new TimeOnly(14, 30), "Home", DueAt,
+                IsOverdue: true),
+            CultureInfo.InvariantCulture);
+
+        Assert.Equal("Overdue · Due 10/20/2026 14:30 · Home", notification.Body);
+    }
+
+    [Fact]
     public void Open_and_Mark_done_arguments_round_trip_through_the_parser()
     {
         Assert.Equal(

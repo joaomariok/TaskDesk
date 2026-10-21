@@ -81,6 +81,7 @@ public static class JsonImportFormat
         Priority = task.Priority,
         DueDate = task.DueDate,
         DueTime = task.DueTime,
+        NotifyAtDue = task.NotifyAtDue,
         Reminders =
         [
             .. task.Reminders.Select(r => new Reminder

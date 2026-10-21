@@ -13,6 +13,10 @@ Mark each item with the date and result.
 - [ ] App not running (Exit from the tray first, with a Reminder armed or after creating one from another start): click Mark done or a Snooze button on the toast. The app starts hidden, applies the action and no window appears. Click the body: the window opens on that Task.
 - [ ] Sleep the PC with several Reminders due, then wake it. Up to three due Reminders show individual toasts; more than three show one "N reminders missed" summary that opens the Today view.
 - [ ] Turn on Do Not Disturb: no popup, and the Reminder is not lost.
+- [ ] Due notification, timed: give a Task with no Reminder a Due two minutes ahead (today, with a Due time). At the Due time (within 30 s) a toast appears with the Task title and "Due … · List", and nothing more for that Due. Untick "Notify at Due" under the Due time on another such Task: no toast at its Due.
+- [ ] Due notification, date-only: set "Default reminder time" in Settings two minutes ahead, then give a Task with no Reminder today's date as its Due (no time). At that time a toast appears for it.
+- [ ] A Task already Overdue that notifies (for example, a Reminder set two minutes ahead on a Task due yesterday): the toast body begins with "Overdue · ". The tray balloon fallback shows the same body.
+- [ ] Upgrade from a build without the Due notification, with Tasks whose Due has passed: no burst of Overdue toasts at the first start; a Reminder that was armed and already past still shows once.
 - [ ] Force the fallback (see ADR 0002 item d, on a machine without the runtime): a banner explains it and a tray balloon is used instead.
 - [ ] Checking the ADR 0002 pending items on a clean machine: toast appears, buttons work, app launches from a closed state, icon and name are right. Record the results in the ADR.
 

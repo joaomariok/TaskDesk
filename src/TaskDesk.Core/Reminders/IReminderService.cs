@@ -37,6 +37,13 @@ public interface IReminderService
     Task<TaskItem> RemoveReminderAsync(Guid reminderId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Switches "Notify at Due" of a Task. The change counts moments already past as notified (see
+    /// <see cref="ReminderCalculator.SetNotifyAtDue"/>). Returns the Task with its details loaded.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No Task has this id.</exception>
+    Task<TaskItem> SetNotifyAtDueAsync(Guid taskId, bool notifyAtDue, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Snoozes a Task until now + <paramref name="duration"/>: it notifies once when the Snooze ends; the planned
     /// Reminder is left unchanged (see <see cref="ReminderCalculator.Snooze"/>). A completed Task is left as it
     /// is. Returns the Task with its Tags and Subtasks loaded.

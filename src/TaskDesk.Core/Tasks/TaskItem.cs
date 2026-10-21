@@ -17,6 +17,11 @@ public sealed class TaskItem
     /// <summary>Due time: a local wall-clock time; only allowed when <see cref="DueDate"/> is set.</summary>
     public TimeOnly? DueTime { get; set; }
 
+    /// <summary>
+    /// "Notify at Due": with a Due, the Task notifies once at its Due moment (the Due notification). On for every
+    /// new Task; kept when the Due is cleared and set again.
+    /// </summary>
+    public bool NotifyAtDue { get; set; } = true;
 
     /// <summary>
     /// The end of the Task's Snooze (UTC): nothing notifies before it, and the Task notifies once when it ends.

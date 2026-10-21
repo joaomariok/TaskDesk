@@ -243,6 +243,16 @@ public sealed class JsonExportFormatTests
             FirstTask(json).GetProperty("reminders").EnumerateArray().Select(r => JsonSerializer.Serialize(r)));
     }
 
+    [Fact]
+    public void Each_Task_carries_notifyAtDue()
+    {
+        using var on = Parse(OneTask(new TaskItem { Id = Guid.NewGuid(), Title = "a" }));
+        using var off = Parse(OneTask(new TaskItem { Id = Guid.NewGuid(), Title = "a", NotifyAtDue = false }));
+
+        Assert.True(FirstTask(on).GetProperty("notifyAtDue").GetBoolean());
+        Assert.False(FirstTask(off).GetProperty("notifyAtDue").GetBoolean());
+    }
+
     private static ExportData OneTask(TaskItem task) => new([], [], [task]);
 
     private static JsonElement FirstTask(JsonDocument json) => json.RootElement.GetProperty("tasks")[0];

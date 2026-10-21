@@ -465,6 +465,7 @@ public class MainViewModelTests
                 CompletedUtc = source.CompletedUtc,
                 DueDate = source.DueDate,
                 DueTime = source.DueTime,
+                NotifyAtDue = source.NotifyAtDue,
                 Reminders =
                 [
                     .. source.Reminders.Select(r => new TaskDesk.Core.Reminders.Reminder

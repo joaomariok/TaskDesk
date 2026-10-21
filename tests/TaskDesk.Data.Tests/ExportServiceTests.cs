@@ -178,7 +178,8 @@ public sealed class ExportServiceTests
                       "tagIds": [],
                       "subtasks": [],
                       "createdUtc": "2026-10-02T09:05:00Z",
-                      "updatedUtc": "2026-10-16T02:30:00Z"
+                      "updatedUtc": "2026-10-16T02:30:00Z",
+                      "notifyAtDue": true
                     },
                     {
                       "id": "00000000-0000-0000-0000-0000000000b1",
@@ -234,7 +235,8 @@ public sealed class ExportServiceTests
                         }
                       ],
                       "createdUtc": "2026-10-02T09:00:00Z",
-                      "updatedUtc": "2026-10-03T10:00:00Z"
+                      "updatedUtc": "2026-10-03T10:00:00Z",
+                      "notifyAtDue": true
                     }
                   ]
                 }

@@ -211,6 +211,7 @@ internal sealed class TaskService(
             CompletedUtc = snapshot.CompletedUtc,
             DueDate = snapshot.DueDate,
             DueTime = snapshot.DueTime,
+            NotifyAtDue = snapshot.NotifyAtDue,
             Reminders = [.. snapshot.Reminders.Select(r => new Reminder
             {
                 Id = r.Id,

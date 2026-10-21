@@ -147,6 +147,9 @@ namespace TaskDesk.Data.Migrations
                     b.Property<DateTime?>("NotifiedThroughUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("NotifyAtDue")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
 

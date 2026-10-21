@@ -174,4 +174,84 @@ public class DatabaseInitializerTests
         due = Assert.Single(await reminders.ListDueAsync(ct));
         Assert.Equal((armedFuture, now.AddHours(1)), (due.TaskId, due.DueAtUtc));
     }
+
+    // ---- Ticket 118: the Due notification ----
+
+    private static async Task<Guid> InsertDueTaskAsync(
+        TaskDeskDbContext context, Guid listId, string title, string dueDate, string? dueTime,
+        DateTime? notifiedThrough = null, DateTime? snoozed = null, DateTime? reminder = null)
+    {
+        var id = Guid.NewGuid();
+        var created = Sql(new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
+        await context.Database.ExecuteSqlAsync(
+            $"""
+            INSERT INTO Tasks (Id, ListId, Title, Priority, IsCompleted, SortOrder, CreatedUtc, UpdatedUtc,
+                DueDate, DueTime, NotifiedThroughUtc, SnoozedUntilUtc)
+            VALUES ({id.ToString().ToUpperInvariant()}, {listId.ToString().ToUpperInvariant()}, {title},
+                0, 0, 1, {created}, {created}, {dueDate}, NULLIF({dueTime ?? ""}, ''),
+                NULLIF({Sql(notifiedThrough)}, ''), NULLIF({Sql(snoozed)}, ''))
+            """,
+            TestContext.Current.CancellationToken);
+        if (reminder is not null)
+        {
+            await context.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO Reminders (Id, TaskId, Kind, AtUtc)
+                VALUES ({Guid.NewGuid().ToString().ToUpperInvariant()}, {id.ToString().ToUpperInvariant()}, 0,
+                    {Sql(reminder)})
+                """,
+                TestContext.Current.CancellationToken);
+        }
+
+        return id;
+    }
+
+    [Fact]
+    public async Task Upgrading_turns_Notify_at_Due_on_and_counts_Dues_already_past_as_notified()
+    {
+        // Now is 2026-10-16 09:30 UTC; the time zone is UTC and the default Reminder time 09:00.
+        var ct = TestContext.Current.CancellationToken;
+        using var db = new TempDatabase();
+        db.Paths.EnsureDirectories();
+        var now = db.Clock.GetUtcNow().UtcDateTime;
+        Guid pastDue, dueAhead, armedPast, snoozed;
+        await using (var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(ct))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync("20261020235855_Ticket117_BeforeDue", ct);
+            var listId = Guid.NewGuid();
+            await context.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO Lists (Id, Name, SortOrder, IsDefault, CreatedUtc)
+                VALUES ({listId.ToString().ToUpperInvariant()}, 'Inbox', 0, 1, {Sql(now)})
+                """,
+                ct);
+            pastDue = await InsertDueTaskAsync(context, listId, "past Due", "2026-10-15", null);
+            dueAhead = await InsertDueTaskAsync(context, listId, "Due ahead", "2026-10-16", "10:00:00");
+            armedPast = await InsertDueTaskAsync(
+                context, listId, "armed past", "2026-10-14", null, notifiedThrough: now.AddDays(-3),
+                reminder: now.AddDays(-1));
+            snoozed = await InsertDueTaskAsync(
+                context, listId, "snoozed", "2026-10-15", "12:00:00", notifiedThrough: now.AddDays(-1),
+                snoozed: now.AddMinutes(10));
+        }
+
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
+
+        Assert.All(await db.QueryAsync(c => c.Tasks), t => Assert.True(t.NotifyAtDue, t.Title));
+        var reminders = db.Get<IReminderService>();
+        var due = Assert.Single(await reminders.ListDueAsync(ct));
+        Assert.Equal(armedPast, due.TaskId);
+        Assert.True(await reminders.TryMarkFiredAsync(due.TaskId, due.DueAtUtc, ct));
+        Assert.Empty(await reminders.ListDueAsync(ct));
+
+        db.Clock.Advance(TimeSpan.FromMinutes(10)); // 09:40: the Snooze ends
+        due = Assert.Single(await reminders.ListDueAsync(ct));
+        Assert.Equal((snoozed, now.AddMinutes(10)), (due.TaskId, due.DueAtUtc));
+        Assert.True(await reminders.TryMarkFiredAsync(due.TaskId, due.DueAtUtc, ct));
+
+        db.Clock.Advance(TimeSpan.FromMinutes(20)); // 10:00: the Due still ahead at the upgrade notifies
+        due = Assert.Single(await reminders.ListDueAsync(ct));
+        Assert.Equal((dueAhead, now.AddMinutes(30)), (due.TaskId, due.DueAtUtc));
+        Assert.DoesNotContain(pastDue, (await reminders.ListDueAsync(ct)).Select(d => d.TaskId));
+    }
 }

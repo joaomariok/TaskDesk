@@ -78,6 +78,10 @@ public class ReminderViewModelTests
         public Task<IReadOnlyList<DueReminder>> ListDueAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<TaskItem> SetNotifyAtDueAsync(
+            Guid taskId, bool notifyAtDue, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<bool> TryMarkFiredAsync(Guid taskId, DateTime dueAtUtc, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

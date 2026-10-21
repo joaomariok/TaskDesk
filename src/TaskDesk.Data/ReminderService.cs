@@ -49,6 +49,12 @@ internal sealed class ReminderService(
         return task;
     }
 
+    public Task<TaskItem> SetNotifyAtDueAsync(
+        Guid taskId, bool notifyAtDue, CancellationToken cancellationToken = default) =>
+        ChangeAsync(
+            taskId, t => ReminderCalculator.SetNotifyAtDue(t, notifyAtDue, clock.GetUtcNow()),
+            "Notify at Due changed", cancellationToken);
+
     private static Task<TaskItem> FindOwnerAsync(
         TaskDeskDbContext context, Guid reminderId, CancellationToken cancellationToken) =>
         FindAsync(
@@ -97,12 +103,15 @@ internal sealed class ReminderService(
 
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         // The SQL narrows to the candidates (SPEC 7.4); the due rule itself is the Core function, in memory. A
-        // before-Due Reminder's moment depends on the Due and the local rules, so every one is a candidate.
+        // before-Due Reminder's moment depends on the Due and the local rules, so every one is a candidate. A Due
+        // moment is never before local midnight of its date, so only a Due up to today can be due.
+        var today = DueCalculator.LocalToday(now, rules.Zone);
         var candidates = await context.Tasks
             .AsNoTracking()
             .WithDetails()
             .Where(t => !t.IsCompleted && (t.SnoozedUntilUtc == null || t.SnoozedUntilUtc <= nowUtc)
-                && (t.Reminders.Any(r => r.Kind == ReminderKind.BeforeDue
+                && ((t.NotifyAtDue && t.DueDate != null && t.DueDate <= today)
+                    || t.Reminders.Any(r => r.Kind == ReminderKind.BeforeDue
                         || (r.AtUtc <= nowUtc && (t.NotifiedThroughUtc == null || r.AtUtc > t.NotifiedThroughUtc)))
                     || (t.SnoozedUntilUtc <= nowUtc
                         && (t.NotifiedThroughUtc == null || t.SnoozedUntilUtc > t.NotifiedThroughUtc))))
@@ -119,7 +128,8 @@ internal sealed class ReminderService(
             .ToDictionaryAsync(l => l.Id, l => l.Name, cancellationToken);
         return [.. due.Select(t => new DueReminder(
             t.Id, t.Title, t.DueDate, t.DueTime, listNames.GetValueOrDefault(t.ListId, ""),
-            ReminderCalculator.DueInstant(t, now, rules)!.Value))];
+            ReminderCalculator.DueInstant(t, now, rules)!.Value,
+            DueCalculator.IsOverdue(t.DueDate, t.DueTime, t.IsCompleted, now, rules.Zone)))];
     }
 
     public async Task<bool> TryMarkFiredAsync(

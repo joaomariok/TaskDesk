@@ -230,6 +230,13 @@
                             <FontIcon Glyph="&#xE711;" FontSize="12" />
                         </Button>
                     </Grid>
+                    <!-- Notify at Due: only once the Task has a Due; it saves at once. -->
+                    <CheckBox x:Name="NotifyAtDueBox" Content="Notify at Due"
+                              Margin="{StaticResource FieldMargin}"
+                              AutomationProperties.Name="Notify at Due"
+                              AutomationProperties.AutomationId="NotifyAtDueBox"
+                              Visibility="{x:Bind ViewModel.HasDetailDue, Mode=OneWay}"
+                              IsChecked="{x:Bind ViewModel.DetailNotifyAtDue, Mode=TwoWay}" />
                     <TextBlock x:Name="DueErrorText" Style="{StaticResource FieldErrorText}"
                                Text="{x:Bind ViewModel.DueError, Mode=OneWay}"
                                Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.DueError), Mode=OneWay, FallbackValue=Collapsed}" />

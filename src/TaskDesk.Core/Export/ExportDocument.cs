@@ -25,6 +25,7 @@ public sealed record ExportTag(Guid Id, string Name, string? ColorHex);
 /// The single Reminder of a schema version 1 file, read only for import, which turns it into one Fixed Reminder.
 /// Never written.
 /// </param>
+/// <param name="NotifyAtDue">"Notify at Due"; a file without it (older files) means on.</param>
 public sealed record ExportTask(
     Guid Id,
     Guid ListId,
@@ -45,7 +46,8 @@ public sealed record ExportTask(
     IReadOnlyList<ExportSubtask> Subtasks,
     DateTime CreatedUtc,
     DateTime UpdatedUtc,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ReminderUtc = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ReminderUtc = null,
+    bool NotifyAtDue = true);
 
 /// <summary>
 /// A Reminder of a Task: its kind and, for a Fixed Reminder, its instant, or for a before-Due Reminder, its amount

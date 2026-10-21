@@ -2,10 +2,15 @@ namespace TaskDesk.Core.Reminders;
 
 /// <summary>A due Reminder with what its notification shows.</summary>
 /// <param name="DueAtUtc">The instant the Reminder fired at: its Snooze when set, otherwise the planned Reminder.</param>
+/// <param name="IsOverdue">Whether the Task was Overdue when it was listed (<see cref="TaskDesk.Core.Tasks.DueCalculator.IsOverdue"/>).</param>
 public sealed record DueReminder(
-    Guid TaskId, string Title, DateOnly? DueDate, TimeOnly? DueTime, string ListName, DateTime DueAtUtc);
+    Guid TaskId, string Title, DateOnly? DueDate, TimeOnly? DueTime, string ListName, DateTime DueAtUtc,
+    bool IsOverdue = false);
 
-/// <summary>What a Reminder notification shows: title = Task title, body = Due and List name.</summary>
+/// <summary>
+/// What a Reminder notification shows: title = Task title, body = Due and List name, after "Overdue · " when the
+/// Task is Overdue.
+/// </summary>
 public sealed record ReminderNotification(Guid TaskId, string Title, string Body)
 {
     public static ReminderNotification For(DueReminder reminder, IFormatProvider culture)
@@ -16,6 +21,11 @@ public sealed record ReminderNotification(Guid TaskId, string Title, string Body
                 : string.Format(culture, "Due {0:d}", date)
             : null;
         var body = due is null ? reminder.ListName : $"{due} · {reminder.ListName}";
+        if (reminder.IsOverdue)
+        {
+            body = $"Overdue · {body}"; // whatever made it fire
+        }
+
         return new ReminderNotification(reminder.TaskId, reminder.Title, body);
     }
 }

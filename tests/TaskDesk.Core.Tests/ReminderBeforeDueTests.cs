@@ -231,8 +231,10 @@ public class ReminderBeforeDueTests
     [Fact]
     public void Changing_the_Due_of_a_Task_with_only_fixed_Reminders_keeps_a_missed_one()
     {
-        // No moment of this Task depends on the Due, so the change is like an edit to any other field.
+        // No moment of this Task depends on the Due ("Notify at Due" is off), so the change is like an edit to any
+        // other field.
         var task = TaskDue(Monday, null, ReminderValue.Fixed(UtcTime(15, 5)));
+        task.NotifyAtDue = false;
         task.NotifiedThroughUtc = UtcTime(15, 4);
 
         ReminderCalculator.ChangeDue(task, Monday.AddDays(1), null, UtcAt(15, 6));

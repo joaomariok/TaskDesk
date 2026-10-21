@@ -119,6 +119,29 @@ public sealed class JsonImportFormatTests
     }
 
     [Fact]
+    public void A_Task_without_notifyAtDue_notifies_at_its_Due()
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse(
+            JsonExportFormat.Serialize(WithTask(t => t with { NotifyAtDue = false })))!;
+        var task = json["tasks"]![0]!.AsObject();
+        Assert.True(task.Remove("notifyAtDue"));
+
+        var read = JsonImportFormat.Read(Encoding.UTF8.GetBytes(json.ToJsonString()));
+
+        Assert.True(read.Tasks[0].NotifyAtDue);
+        Assert.True(JsonImportFormat.ToTask(read.Tasks[0], InboxId).NotifyAtDue);
+    }
+
+    [Fact]
+    public void Notify_at_Due_off_is_read_back()
+    {
+        var read = JsonImportFormat.Read(JsonExportFormat.Serialize(WithTask(t => t with { NotifyAtDue = false })));
+
+        Assert.False(read.Tasks[0].NotifyAtDue);
+        Assert.False(JsonImportFormat.ToTask(read.Tasks[0], InboxId).NotifyAtDue);
+    }
+
+    [Fact]
     public void A_structurally_broken_export_is_rejected_as_malformed()
     {
         var error = Reject("""{ "format": "taskdesk-export", "schemaVersion": 1, "lists": "oops", "tags": [], "tasks": [] }""");

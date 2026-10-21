@@ -180,6 +180,10 @@ public sealed class DetailSaveQueueTests
             return await inner.RemoveReminderAsync(reminderId, cancellationToken);
         }
 
+        public Task<TaskItem> SetNotifyAtDueAsync(
+            Guid taskId, bool notifyAtDue, CancellationToken cancellationToken = default)
+            => inner.SetNotifyAtDueAsync(taskId, notifyAtDue, cancellationToken);
+
         public Task<TaskItem> SnoozeAsync(Guid taskId, TimeSpan duration, CancellationToken cancellationToken = default)
             => inner.SnoozeAsync(taskId, duration, cancellationToken);
 

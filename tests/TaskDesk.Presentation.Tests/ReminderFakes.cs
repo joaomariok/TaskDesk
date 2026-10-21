@@ -50,6 +50,15 @@ internal sealed class FakeReminderService(FakeTimeProvider clock, List<TaskItem>
         ChangeAsync(
             Owner(reminderId), null, task => ReminderCalculator.RemoveReminder(task, reminderId, clock.GetUtcNow()));
 
+    public Task<TaskItem> SetNotifyAtDueAsync(
+        Guid taskId, bool notifyAtDue, CancellationToken cancellationToken = default)
+    {
+        var task = Tasks.SingleOrDefault(t => t.Id == taskId)
+            ?? throw new KeyNotFoundException($"Task {taskId} does not exist.");
+        ReminderCalculator.SetNotifyAtDue(task, notifyAtDue, clock.GetUtcNow());
+        return Task.FromResult(task);
+    }
+
     private TaskItem Owner(Guid reminderId) =>
         Tasks.SingleOrDefault(t => t.Reminders.Any(r => r.Id == reminderId))
         ?? throw new KeyNotFoundException($"Reminder {reminderId} does not exist.");
