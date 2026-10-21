@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TaskDesk.Core.Backups;
@@ -59,15 +60,7 @@ internal sealed class DatabaseInitializer(
                 .SqlQueryRaw<long>("SELECT user_version AS \"Value\" FROM pragma_user_version")
                 .SingleAsync(cancellationToken) < DueUpgradeDone)
         {
-            try
-            {
-                await CountPastDuesAsNotifiedAsync(context, cancellationToken);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                // Not fatal: the transaction rolled back, user_version stays unrecorded and the next start retries.
-                logger.LogWarning(ex, "The upgrade rule of the Due notification failed; it will run again at the next start");
-            }
+            await CountPastDuesAsNotifiedAsync(context, cancellationToken);
         }
 
         try
@@ -102,7 +95,7 @@ internal sealed class DatabaseInitializer(
     {
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var now = clock.GetUtcNow();
-        var rules = new MomentRules(clock.LocalTimeZone, settings.Load().DefaultReminderTime);
+        var rules = new MomentRules(clock.LocalTimeZone, LoadDefaultReminderTime());
         var tasks = await context.Tasks
             .Include(t => t.Reminders)
             .Where(t => !t.IsCompleted && t.NotifyAtDue && t.DueDate != null)
@@ -113,8 +106,23 @@ internal sealed class DatabaseInitializer(
         }
 
         var counted = await context.SaveChangesAsync(cancellationToken);
-        await context.Database.ExecuteSqlRawAsync("PRAGMA user_version = 1" /* DueUpgradeDone */, cancellationToken);
+        var setUserVersion = string.Create(CultureInfo.InvariantCulture, $"PRAGMA user_version = {DueUpgradeDone}");
+        await context.Database.ExecuteSqlRawAsync(setUserVersion, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         logger.LogInformation("Counted {Count} Dues already past as notified", counted);
+    }
+
+    // An unreadable settings.json must not block startup or skip the rule: fall back to the initial default.
+    private TimeOnly LoadDefaultReminderTime()
+    {
+        try
+        {
+            return settings.Load().DefaultReminderTime;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "The settings could not be read; the upgrade rule uses the initial Reminder time");
+            return ShellSettings.InitialReminderTime;
+        }
     }
 }

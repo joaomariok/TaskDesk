@@ -320,22 +320,39 @@ public class DatabaseInitializerTests
     }
 
     [Fact]
-    public async Task A_failing_upgrade_rule_does_not_stop_startup_and_is_retried_on_the_next_start()
+    public async Task An_unreadable_settings_store_lets_the_upgrade_rule_run_with_the_initial_Reminder_time()
     {
+        // Now is 2026-10-16 09:30 UTC; the time zone is UTC. The fallback time is 09:00.
         var ct = TestContext.Current.CancellationToken;
-        var settings = new ThrowingSettingsStore { Fails = true };
+        var settings = new ThrowingSettingsStore { Throw = new InvalidOperationException("settings unreadable") };
         using var db = new TempDatabase(services => services.AddSingleton<IShellSettingsStore>(settings));
-        var initializer = db.Get<IDatabaseInitializer>();
+        db.Paths.EnsureDirectories();
+        var now = db.Clock.GetUtcNow().UtcDateTime;
+        Guid pastToday, tomorrow;
+        await using (var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(ct))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync("20261020235855_Ticket117_BeforeDue", ct);
+            var listId = Guid.NewGuid();
+            await context.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO Lists (Id, Name, SortOrder, IsDefault, CreatedUtc)
+                VALUES ({listId.ToString().ToUpperInvariant()}, 'Inbox', 0, 1, {Sql(now)})
+                """,
+                ct);
+            pastToday = await InsertDueTaskAsync(context, listId, "date-only today", "2026-10-16", null);
+            tomorrow = await InsertDueTaskAsync(context, listId, "date-only tomorrow", "2026-10-17", null);
+        }
 
-        await initializer.InitializeAsync(ct);
-
-        Assert.Equal("Inbox", Assert.Single(await db.QueryAsync(c => c.Lists)).Name);
-        Assert.Equal(0, await UserVersionAsync(db, ct));
-
-        settings.Fails = false;
-        await initializer.InitializeAsync(ct);
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
 
         Assert.Equal(1, await UserVersionAsync(db, ct));
+        settings.Throw = null; // the Reminder service reads the settings too
+        var reminders = db.Get<IReminderService>();
+        Assert.Empty(await reminders.ListDueAsync(ct)); // 09:00 today is past, so it counts as notified
+        db.Clock.Advance(TimeSpan.FromDays(1));
+        var due = Assert.Single(await reminders.ListDueAsync(ct));
+        Assert.Equal(tomorrow, due.TaskId);
+        Assert.DoesNotContain(pastToday, (await reminders.ListDueAsync(ct)).Select(d => d.TaskId));
     }
 
     [Fact]
@@ -349,6 +366,38 @@ public class DatabaseInitializerTests
             () => db.Get<IDatabaseInitializer>().InitializeAsync(cts.Token));
     }
 
+    [Fact]
+    public async Task Cancellation_raised_while_reading_settings_is_not_replaced_by_the_fallback_time()
+    {
+        // The token is never cancelled, so only the rule's own handling decides whether this propagates.
+        var settings = new ThrowingSettingsStore { Throw = new OperationCanceledException() };
+        using var db = new TempDatabase(services => services.AddSingleton<IShellSettingsStore>(settings));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => db.Get<IDatabaseInitializer>().InitializeAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task A_database_error_in_the_upgrade_rule_stops_startup_with_a_DatabaseStartupException()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var db = new TempDatabase();
+        var initializer = db.Get<IDatabaseInitializer>();
+        await initializer.InitializeAsync(ct);
+        await using (var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(ct))
+        {
+            var listId = (await db.QueryAsync(c => c.Lists)).Single().Id;
+            await InsertDueTaskAsync(context, listId, "past Due", "2026-10-15", null);
+            await context.Database.ExecuteSqlRawAsync("UPDATE Tasks SET NotifyAtDue = 1", ct);
+            await context.Database.ExecuteSqlRawAsync(
+                "CREATE TRIGGER fail_update BEFORE UPDATE ON Tasks BEGIN SELECT RAISE(ABORT, 'rule failed'); END", ct);
+            await context.Database.ExecuteSqlRawAsync("PRAGMA user_version = 0", ct);
+        }
+
+        await Assert.ThrowsAsync<DatabaseStartupException>(() => initializer.InitializeAsync(ct));
+        Assert.Equal(0, await UserVersionAsync(db, ct));
+    }
+
     private static async Task<long> UserVersionAsync(TempDatabase db, CancellationToken ct)
     {
         await using var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(ct);
@@ -359,13 +408,13 @@ public class DatabaseInitializerTests
 
     private sealed class ThrowingSettingsStore : IShellSettingsStore
     {
-        public bool Fails { get; set; }
+        public Exception? Throw { get; set; }
         public Action? OnLoad { get; set; }
 
         public ShellSettings Load()
         {
             OnLoad?.Invoke();
-            return Fails ? throw new InvalidOperationException("settings unreadable") : new ShellSettings();
+            return Throw is { } ex ? throw ex : new ShellSettings();
         }
 
         public void Save(ShellSettings settings)
