@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Data;
@@ -27,8 +28,8 @@ internal sealed class DueService(
 
         if (task.DueDate != dueDate || task.DueTime != dueTime)
         {
-            task.DueDate = dueDate;
-            task.DueTime = dueTime;
+            // Before-Due Reminders move with the Due; clearing it deletes them in the same save.
+            context.Reminders.RemoveRange(ReminderCalculator.ChangeDue(task, dueDate, dueTime, clock.GetUtcNow()));
             task.UpdatedUtc = clock.GetUtcNow().UtcDateTime;
             await context.SaveChangesAsync(cancellationToken);
             logger.LogInformation("Task {TaskId} Due changed", taskId);

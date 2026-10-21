@@ -7,6 +7,7 @@ using TaskDesk.Core.Import;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Paths;
 using TaskDesk.Core.Reminders;
+using TaskDesk.Core.Shell;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 
@@ -20,6 +21,8 @@ public static class DataServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddSingleton(paths);
+        // The Reminder rules read the default Reminder time from settings.json each time they run.
+        services.TryAddSingleton<IShellSettingsStore>(_ => new JsonShellSettingsStore(paths.SettingsFile));
         services.AddSingleton<TaskChangeInterceptor>();
         services.AddSingleton<ITaskChangeNotifier>(sp => sp.GetRequiredService<TaskChangeInterceptor>());
         services.AddDbContextFactory<TaskDeskDbContext>((sp, options) => options

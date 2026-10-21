@@ -342,6 +342,108 @@ public sealed class DetailPaneSectionsTests
         }
     }
 
+    [UITestMethod]
+    public async Task Before_Due_is_off_without_a_Due_and_its_presets_and_Custom_show_in_the_flyout()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "No due");
+        await AddAsync(db, "Pay rent", new DateOnly(2026, 10, 20));
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            // Without a Due, the Before Due mode is unavailable and the date and time show.
+            var pane = await OpenPaneAsync(window, "No due");
+            var (flyout, editor) = await OpenReminderFlyoutAsync(pane, Named<Button>(pane, "Add reminder"));
+            var beforeDue = VisualTree.Find<RadioButton>(editor, "BeforeDueModeButton");
+            Assert.IsFalse(beforeDue.IsEnabled, "Before Due is available without a Due.");
+            Assert.AreEqual(Visibility.Visible, VisualTree.Find<StackPanel>(editor, "DateAndTimePanel").Visibility);
+            Assert.AreEqual(Visibility.Collapsed, VisualTree.Find<StackPanel>(editor, "BeforeDuePanel").Visibility);
+            flyout.Hide();
+            await UiWait.UntilAsync(() => !viewModel.ReminderEditor.IsOpen, () => "Closing kept the editor open.", Ct);
+
+            // With a Due it is available; picking it swaps the date and time for the presets.
+            pane = await OpenPaneAsync(window, "Pay rent");
+            (flyout, editor) = await OpenReminderFlyoutAsync(pane, Named<Button>(pane, "Add reminder"));
+            Assert.IsTrue(beforeDue.IsEnabled, "Before Due is unavailable with a Due.");
+            var mode = VisualTree.Find<RadioButtons>(editor, "ReminderModeButtons");
+            mode.SelectedIndex = ReminderEditorViewModel.BeforeDueMode;
+            await UiWait.UntilAsync(
+                () => VisualTree.Find<StackPanel>(editor, "BeforeDuePanel").ActualHeight > 0,
+                () => "The Before Due choices did not show.", Ct);
+            Assert.AreEqual(Visibility.Collapsed, VisualTree.Find<StackPanel>(editor, "DateAndTimePanel").Visibility);
+            var offset = VisualTree.Find<ComboBox>(editor, "BeforeDueOffsetBox");
+            Assert.AreEqual("Time before Due", AutomationProperties.GetName(offset));
+            CollectionAssert.AreEqual(
+                ReminderEditorViewModel.OffsetChoices.ToList(), offset.Items.Cast<string>().ToList());
+            Assert.AreEqual(Visibility.Collapsed, VisualTree.Find<Grid>(editor, "CustomOffsetRow").Visibility);
+
+            // "Custom…" shows the number and the unit; a preset hides them again.
+            offset.SelectedIndex = ReminderEditorViewModel.CustomIndex;
+            await UiWait.UntilAsync(
+                () => VisualTree.Find<Grid>(editor, "CustomOffsetRow").ActualHeight > 0,
+                () => "Custom did not show its number and unit.", Ct);
+            var amount = VisualTree.Find<NumberBox>(editor, "CustomAmountBox");
+            var unit = VisualTree.Find<ComboBox>(editor, "CustomUnitBox");
+            Assert.AreEqual("Number before Due", AutomationProperties.GetName(amount));
+            Assert.AreEqual("Unit before Due", AutomationProperties.GetName(unit));
+            Assert.IsTrue(amount.Focus(FocusState.Keyboard) && unit.Focus(FocusState.Keyboard), "Custom takes no focus.");
+            offset.SelectedIndex = 5; // 1 day
+            await UiWait.UntilAsync(
+                () => VisualTree.Find<Grid>(editor, "CustomOffsetRow").Visibility == Visibility.Collapsed,
+                () => "A preset kept the Custom number and unit.", Ct);
+
+            Invoke(VisualTree.Find<Button>(editor, "SaveReminderButton"));
+            await UiWait.UntilAsync(() => !flyout.IsOpen, () => "Save did not close the flyout.", Ct);
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 1, () => "The new Reminder has no row.", Ct);
+            await viewModel.FlushPendingSaveAsync();
+            Assert.AreEqual(
+                ReminderValue.BeforeDue(1, ReminderUnit.Days), (await db.QueryAsync(c => c.Reminders)).Single().Value);
+            StringAssert.StartsWith(viewModel.DetailReminders.Single().Text, "1 day before Due · ");
+
+            // A click on the row opens the flyout in the Before Due mode on that preset.
+            (flyout, editor) = await OpenReminderFlyoutAsync(pane, ReminderRows(pane)[0]);
+            Assert.AreEqual(ReminderEditorViewModel.BeforeDueMode, mode.SelectedIndex);
+            Assert.AreEqual(5, offset.SelectedIndex);
+            flyout.Hide();
+            await UiWait.UntilAsync(() => !viewModel.ReminderEditor.IsOpen, () => "Closing kept the editor open.", Ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Clearing_the_Due_removes_the_before_Due_rows_and_keeps_the_fixed_one()
+    {
+        using var db = await DatabaseAsync();
+        var id = await AddAsync(db, "Pay rent", new DateOnly(2026, 10, 20));
+        var reminders = db.Get<IReminderService>();
+        await reminders.AddReminderAsync(id, ReminderValue.BeforeDue(2, ReminderUnit.Hours), Ct);
+        await reminders.AddReminderAsync(id, ReminderValue.Fixed(new DateTime(2026, 10, 18, 8, 0, 0, DateTimeKind.Utc)), Ct);
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Pay rent");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 2, () => "The Reminders have no rows.", Ct);
+
+            // Moving the Due moves the before-Due row's moment.
+            viewModel.DetailDueDate = new DateTime(2026, 10, 21);
+            await UiWait.UntilAsync(
+                () => viewModel.DetailReminders.Any(r => r.FiresAtUtc == new DateTime(2026, 10, 21, 7, 0, 0, DateTimeKind.Utc)),
+                () => "The before-Due row did not move with the Due.", Ct);
+
+            VisualTree.Find<CalendarDatePicker>(pane, "DetailDueDatePicker").Date = null;
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 1, () => "The before-Due row stayed.", Ct);
+            await viewModel.FlushPendingSaveAsync();
+            Assert.AreEqual(ReminderKind.Fixed, (await db.QueryAsync(c => c.Reminders)).Single().Kind);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     // The realized row buttons of the Reminders list, which open the flyout on their Reminder.
     private static List<Button> ReminderRows(DetailPane pane)
     {

@@ -161,6 +161,70 @@ public sealed class JsonImportFormatTests
         Assert.Equal(document.Tasks[0].NextOccurrenceId, read.Tasks[0].NextOccurrenceId);
     }
 
+    [Fact]
+    public void A_before_Due_Reminder_is_read_with_its_amount_and_unit()
+    {
+        var json = Encoding.UTF8.GetString(JsonExportFormat.Serialize(Valid)).Replace(
+            "\"reminders\": [\n        {\n          \"kind\": \"Fixed\",\n          \"atUtc\": \"2026-10-20T12:00:00Z\"\n        }\n      ]",
+            "\"reminders\": [{ \"kind\": \"BeforeDue\", \"amount\": 3, \"unit\": \"Weeks\" }]",
+            StringComparison.Ordinal);
+
+        var read = JsonImportFormat.Read(Encoding.UTF8.GetBytes(json));
+        var task = JsonImportFormat.ToTask(read.Tasks[0], InboxId);
+
+        Assert.Equal([new ExportReminder(ReminderKind.BeforeDue, null, 3, ReminderUnit.Weeks)], read.Tasks[0].Reminders);
+        Assert.Equal([ReminderValue.BeforeDue(3, ReminderUnit.Weeks)], task.Reminders.Select(r => r.Value));
+    }
+
+    public static TheoryData<string> InvalidBeforeDueReminders() =>
+    [
+        "amount 0", "amount 1000", "no amount", "no unit", "unknown unit", "with an instant", "on a Task without a Due",
+        "same amount and unit twice", "fixed with an amount",
+    ];
+
+    [Theory]
+    [MemberData(nameof(InvalidBeforeDueReminders))]
+    public void Invalid_before_Due_Reminders_are_rejected(string problem)
+    {
+        var beforeDue = new ExportReminder(ReminderKind.BeforeDue, null, 1, ReminderUnit.Days);
+        var document = problem switch
+        {
+            "amount 0" => WithTask(t => t with { Reminders = [beforeDue with { Amount = 0 }] }),
+            "amount 1000" => WithTask(t => t with { Reminders = [beforeDue with { Amount = 1000 }] }),
+            "no amount" => WithTask(t => t with { Reminders = [beforeDue with { Amount = null }] }),
+            "no unit" => WithTask(t => t with { Reminders = [beforeDue with { Unit = null }] }),
+            "unknown unit" => WithTask(t => t with { Reminders = [beforeDue with { Unit = (ReminderUnit)9 }] }),
+            "with an instant" => WithTask(t => t with { Reminders = [beforeDue with { AtUtc = ReminderAt }] }),
+            "on a Task without a Due" => WithTask(t => t with
+            {
+                DueDate = null,
+                DueTime = null,
+                Recurrence = null,
+                Reminders = [beforeDue],
+            }),
+            "same amount and unit twice" => WithTask(t => t with { Reminders = [beforeDue, beforeDue] }),
+            "fixed with an amount" => WithTask(t => t with { Reminders = [t.Reminders[0] with { Amount = 1 }] }),
+            _ => throw new ArgumentOutOfRangeException(nameof(problem)),
+        };
+
+        var error = Reject(document);
+
+        Assert.False(string.IsNullOrWhiteSpace(error.Message));
+    }
+
+    [Fact]
+    public void A_fixed_and_a_before_Due_Reminder_on_one_Task_are_both_read()
+    {
+        var both = WithTask(t => t with
+        {
+            Reminders = [t.Reminders[0], new ExportReminder(ReminderKind.BeforeDue, null, 1, ReminderUnit.Days)],
+        });
+
+        var read = JsonImportFormat.Read(JsonExportFormat.Serialize(both));
+
+        Assert.Equal(2, read.Tasks[0].Reminders.Count);
+    }
+
     public static TheoryData<string> InvalidDocuments() =>
     [
         "no default list", "two default lists", "duplicate list id", "duplicate list name", "blank list name",

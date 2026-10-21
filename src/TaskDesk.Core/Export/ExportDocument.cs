@@ -47,10 +47,15 @@ public sealed record ExportTask(
     DateTime UpdatedUtc,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ReminderUtc = null);
 
-/// <summary>A Reminder of a Task: its kind and, for a Fixed Reminder, its instant.</summary>
+/// <summary>
+/// A Reminder of a Task: its kind and, for a Fixed Reminder, its instant, or for a before-Due Reminder, its amount
+/// and unit.
+/// </summary>
 public sealed record ExportReminder(
     ReminderKind Kind,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? AtUtc);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? AtUtc,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Amount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ReminderUnit? Unit = null);
 
 public sealed record ExportRecurrence(
     RecurrenceFrequency Frequency,

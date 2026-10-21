@@ -89,6 +89,8 @@ public static class JsonImportFormat
                 TaskId = task.Id,
                 Kind = r.Kind,
                 AtUtc = Utc(r.AtUtc),
+                Amount = r.Amount,
+                Unit = r.Unit,
             }),
         ],
         SnoozedUntilUtc = Utc(task.SnoozedUntilUtc),
@@ -266,11 +268,17 @@ public static class JsonImportFormat
         Require(task.Reminders is not null && task.Reminders.All(r => r is not null), $"Task {task.Id} has no \"reminders\".");
         foreach (var reminder in task.Reminders!)
         {
-            Require(reminder.Kind == ReminderKind.Fixed && reminder.AtUtc is not null,
-                $"Task {task.Id} has a Reminder that is not a Fixed Reminder with \"atUtc\".");
+            var value = new ReminderValue(reminder.Kind, Utc(reminder.AtUtc), reminder.Amount, reminder.Unit);
+            Require(
+                value is { Kind: ReminderKind.Fixed, AtUtc: not null, Amount: null, Unit: null }
+                    || ReminderCalculator.IsValidBeforeDue(value),
+                $"Task {task.Id} has a Reminder that is neither a Fixed Reminder with \"atUtc\" nor a BeforeDue "
+                + $"Reminder with an \"amount\" from {ReminderValue.MinAmount} to {ReminderValue.MaxAmount} and a \"unit\".");
+            Require(reminder.Kind != ReminderKind.BeforeDue || task.DueDate is not null,
+                $"Task {task.Id} has a BeforeDue Reminder but no Due date.");
         }
 
-        Require(task.Reminders!.Select(r => r.AtUtc).Distinct().Count() == task.Reminders!.Count,
+        Require(task.Reminders!.Distinct().Count() == task.Reminders!.Count,
             $"Task {task.Id} has the same Reminder twice.");
         if (task.Recurrence is null)
         {

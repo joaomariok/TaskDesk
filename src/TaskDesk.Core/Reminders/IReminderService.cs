@@ -11,7 +11,10 @@ public interface IReminderService
     /// with its details loaded, including its Reminders.
     /// </summary>
     /// <exception cref="KeyNotFoundException">No Task has this id.</exception>
-    /// <exception cref="ArgumentException">The Task already has this Reminder.</exception>
+    /// <exception cref="ArgumentException">
+    /// The Task already has this Reminder, the value is incomplete, or it is a before-Due Reminder and the Task has no
+    /// Due.
+    /// </exception>
     Task<TaskItem> AddReminderAsync(Guid taskId, ReminderValue reminder, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -19,7 +22,10 @@ public interface IReminderService
     /// <see cref="ReminderCalculator.UpdateReminder"/>). Returns its Task with its details loaded.
     /// </summary>
     /// <exception cref="KeyNotFoundException">No Reminder has this id.</exception>
-    /// <exception cref="ArgumentException">Another Reminder of the Task has this value.</exception>
+    /// <exception cref="ArgumentException">
+    /// Another Reminder of the Task has this value, the value is incomplete, or it is a before-Due Reminder and the
+    /// Task has no Due.
+    /// </exception>
     Task<TaskItem> UpdateReminderAsync(
         Guid reminderId, ReminderValue reminder, CancellationToken cancellationToken = default);
 

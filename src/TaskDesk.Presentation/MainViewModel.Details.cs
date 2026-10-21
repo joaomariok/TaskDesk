@@ -198,6 +198,11 @@ public sealed partial class MainViewModel
             Repeat.Load(null, updated.DueDate); // the Repeat defaults follow the new Due date
         }
 
+        if (row == DetailTask)
+        {
+            LoadReminderRows(updated); // before-Due Reminders moved with the Due, or went with it
+        }
+
         if (InOverdueGroup(row) != OverdueTasks.Contains(row))
         {
             Place(row);

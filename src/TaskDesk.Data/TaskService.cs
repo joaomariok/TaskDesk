@@ -217,6 +217,8 @@ internal sealed class TaskService(
                 TaskId = snapshot.Id,
                 Kind = r.Kind,
                 AtUtc = r.AtUtc,
+                Amount = r.Amount,
+                Unit = r.Unit,
             })],
             SnoozedUntilUtc = snapshot.SnoozedUntilUtc,
             NotifiedThroughUtc = snapshot.NotifiedThroughUtc,

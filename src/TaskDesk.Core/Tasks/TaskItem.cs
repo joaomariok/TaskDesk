@@ -53,8 +53,9 @@ public sealed class TaskItem
     public List<Subtask> Subtasks { get; set; } = [];
 
     /// <summary>
-    /// The Task's Reminders, the one that fires first first, loaded only by queries that include them. Never
-    /// changed by a Snooze.
+    /// The Task's Reminders, loaded only by queries that include them: fixed ones by their instant, before-Due ones
+    /// first. <see cref="TaskDesk.Core.Reminders.ReminderCalculator.Order"/> puts them in the order they fire.
+    /// Never changed by a Snooze.
     /// </summary>
     public List<TaskDesk.Core.Reminders.Reminder> Reminders { get; set; } = [];
 }

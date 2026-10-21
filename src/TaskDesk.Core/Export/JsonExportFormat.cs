@@ -70,7 +70,7 @@ public static class JsonExportFormat
         t.Priority,
         t.DueDate,
         t.DueTime,
-        [.. OrderedReminders(t).Select(r => new ExportReminder(r.Kind, Utc(r.AtUtc)))],
+        [.. OrderedReminders(t).Select(r => new ExportReminder(r.Kind, Utc(r.AtUtc), r.Amount, r.Unit))],
         Utc(t.SnoozedUntilUtc),
         t.IsCompleted,
         Utc(t.CompletedUtc),
@@ -87,9 +87,12 @@ public static class JsonExportFormat
     internal static IEnumerable<TaskDesk.Core.Tags.Tag> OrderedTags(TaskItem task) =>
         task.Tags.OrderBy(tag => tag.NormalizedName, StringComparer.Ordinal).ThenBy(tag => tag.Id);
 
-    /// <summary>A Task's Reminders in the order they fire, as the export lists them.</summary>
+    /// <summary>
+    /// A Task's Reminders in the order they fire, as the export lists them. The Due is read in UTC, so the order
+    /// is the same on every machine.
+    /// </summary>
     internal static IEnumerable<TaskDesk.Core.Reminders.Reminder> OrderedReminders(TaskItem task) =>
-        task.Reminders.OrderBy(TaskDesk.Core.Reminders.ReminderCalculator.MomentOf).ThenBy(r => r.Id);
+        task.Reminders.OrderBy(r => TaskDesk.Core.Reminders.ReminderCalculator.MomentOf(r, task)).ThenBy(r => r.Id);
 
     /// <summary>A Task's Subtasks in the same order the export lists them.</summary>
     internal static IEnumerable<Subtask> OrderedSubtasks(TaskItem task) =>

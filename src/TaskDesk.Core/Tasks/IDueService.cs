@@ -7,8 +7,10 @@ public interface IDueService
     const int CompletedPageSize = 100;
 
     /// <summary>
-    /// Sets or clears the Due of a Task (local calendar date and optional local time).
-    /// Returns the Task with its Tags and Subtasks loaded.
+    /// Sets or clears the Due of a Task (local calendar date and optional local time). Before-Due Reminders move with
+    /// it, and clearing it deletes them in the same save
+    /// (see <see cref="TaskDesk.Core.Reminders.ReminderCalculator.ChangeDue"/>).
+    /// Returns the Task with its Tags, Subtasks and Reminders loaded.
     /// </summary>
     /// <exception cref="KeyNotFoundException">No Task has this id.</exception>
     /// <exception cref="ArgumentException">A Due time without a Due date.</exception>

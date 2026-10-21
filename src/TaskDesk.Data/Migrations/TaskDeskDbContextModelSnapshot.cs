@@ -22,6 +22,9 @@ namespace TaskDesk.Data.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("Amount")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime?>("AtUtc")
                         .HasColumnType("TEXT");
 
@@ -30,6 +33,9 @@ namespace TaskDesk.Data.Migrations
 
                     b.Property<Guid>("TaskId")
                         .HasColumnType("TEXT");
+
+                    b.Property<int?>("Unit")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 

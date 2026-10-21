@@ -473,6 +473,8 @@ public class MainViewModelTests
                         TaskId = r.TaskId,
                         Kind = r.Kind,
                         AtUtc = r.AtUtc,
+                        Amount = r.Amount,
+                        Unit = r.Unit,
                     }),
                 ],
                 SnoozedUntilUtc = source.SnoozedUntilUtc,

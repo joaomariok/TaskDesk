@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TaskDesk.Core.Reminders;
+using TaskDesk.Core.Shell;
 using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Data;
@@ -9,14 +10,18 @@ namespace TaskDesk.Data;
 internal sealed class ReminderService(
     IDbContextFactory<TaskDeskDbContext> contextFactory,
     TimeProvider clock,
+    IShellSettingsStore settings,
     ILogger<ReminderService> logger) : IReminderService
 {
+    // The local time zone and the default Reminder time, read each time a rule runs, so a change applies at once.
+    private MomentRules Rules() => new(clock.LocalTimeZone, settings.Load().DefaultReminderTime);
+
     public async Task<TaskItem> AddReminderAsync(
         Guid taskId, ReminderValue reminder, CancellationToken cancellationToken = default)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var task = await FindAsync(context, t => t.Id == taskId, $"Task {taskId} does not exist.", cancellationToken);
-        var added = ReminderCalculator.AddReminder(task, reminder, clock.GetUtcNow());
+        var added = ReminderCalculator.AddReminder(task, reminder, clock.GetUtcNow(), Rules());
         context.Reminders.Add(added);
         await SaveAsync(context, task, "Reminder added", cancellationToken);
         return task;
@@ -27,7 +32,7 @@ internal sealed class ReminderService(
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var task = await FindOwnerAsync(context, reminderId, cancellationToken);
-        if (ReminderCalculator.UpdateReminder(task, reminderId, reminder, clock.GetUtcNow()))
+        if (ReminderCalculator.UpdateReminder(task, reminderId, reminder, clock.GetUtcNow(), Rules()))
         {
             await SaveAsync(context, task, "Reminder changed", cancellationToken);
         }
@@ -88,19 +93,21 @@ internal sealed class ReminderService(
     {
         var now = clock.GetUtcNow();
         var nowUtc = now.UtcDateTime;
+        var rules = Rules();
 
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        // The SQL narrows to the candidates (SPEC 7.4); the due rule itself is the Core function, in memory.
+        // The SQL narrows to the candidates (SPEC 7.4); the due rule itself is the Core function, in memory. A
+        // before-Due Reminder's moment depends on the Due and the local rules, so every one is a candidate.
         var candidates = await context.Tasks
             .AsNoTracking()
             .WithDetails()
             .Where(t => !t.IsCompleted && (t.SnoozedUntilUtc == null || t.SnoozedUntilUtc <= nowUtc)
-                && (t.Reminders.Any(r => r.AtUtc <= nowUtc
-                        && (t.NotifiedThroughUtc == null || r.AtUtc > t.NotifiedThroughUtc))
+                && (t.Reminders.Any(r => r.Kind == ReminderKind.BeforeDue
+                        || (r.AtUtc <= nowUtc && (t.NotifiedThroughUtc == null || r.AtUtc > t.NotifiedThroughUtc)))
                     || (t.SnoozedUntilUtc <= nowUtc
                         && (t.NotifiedThroughUtc == null || t.SnoozedUntilUtc > t.NotifiedThroughUtc))))
             .ToListAsync(cancellationToken);
-        var due = ReminderCalculator.SelectDue(candidates, now);
+        var due = ReminderCalculator.SelectDue(candidates, now, rules);
         if (due.Count == 0)
         {
             return [];
@@ -112,7 +119,7 @@ internal sealed class ReminderService(
             .ToDictionaryAsync(l => l.Id, l => l.Name, cancellationToken);
         return [.. due.Select(t => new DueReminder(
             t.Id, t.Title, t.DueDate, t.DueTime, listNames.GetValueOrDefault(t.ListId, ""),
-            ReminderCalculator.DueInstant(t, now)!.Value))];
+            ReminderCalculator.DueInstant(t, now, rules)!.Value))];
     }
 
     public async Task<bool> TryMarkFiredAsync(

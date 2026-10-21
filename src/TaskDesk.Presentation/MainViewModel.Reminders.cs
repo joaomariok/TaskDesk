@@ -54,28 +54,57 @@ public sealed partial class MainViewModel
 
         var now = _clock.GetUtcNow().UtcDateTime;
         var today = DueCalculator.LocalToday(_clock.GetUtcNow(), _clock.LocalTimeZone);
+        var rules = Rules();
         var rows = task.Reminders
-            .Select(r => (Reminder: r, At: ReminderCalculator.MomentOf(r)))
+            .Select(r => (Reminder: r, At: ReminderCalculator.MomentOf(r, task, rules)))
             .Where(r => r.At is not null)
             .OrderBy(r => r.At)
             .ThenBy(r => r.Reminder.Id);
         foreach (var (reminder, at) in rows)
         {
             var (date, time) = ReminderCalculator.ToLocal(at!.Value, _clock.LocalTimeZone);
+            var when = DueDisplay.Format(date, time, today);
+            var text = reminder is { Kind: ReminderKind.BeforeDue, Amount: { } amount, Unit: { } unit }
+                ? $"{OffsetText(amount, unit)} before Due · {when}"
+                : when;
             DetailReminders.Add(new ReminderRowViewModel(
-                reminder.Id, at.Value, DueDisplay.Format(date, time, today), at.Value <= now, EditReminder,
-                RemoveReminderAsync));
+                reminder.Id, reminder.Value, at.Value, text, at.Value <= now, EditReminder, RemoveReminderAsync));
         }
     }
 
+    // "1 day", "15 minutes": the offset of a before-Due Reminder, as its row reads it.
+    private static string OffsetText(int amount, ReminderUnit unit)
+    {
+        var name = unit switch
+        {
+            ReminderUnit.Minutes => "minute",
+            ReminderUnit.Hours => "hour",
+            ReminderUnit.Days => "day",
+            _ => "week",
+        };
+        return amount == 1 ? $"1 {name}" : $"{amount.ToString(CultureInfo.CurrentCulture)} {name}s";
+    }
+
+    // The local rules the Due is read in, read each time, so a Settings change applies without a restart.
+    private MomentRules Rules() => new(_clock.LocalTimeZone, DefaultReminderTime());
+
+    // Before Due needs a Due: the pane's Due, which a queued Due save stores before any Reminder save.
+    private bool DetailHasDue => DetailDueDate is not null;
+
     /// <summary>Opens the Reminder flyout on a new Reminder ("Add reminder").</summary>
     [RelayCommand]
-    private void AddReminder() => ReminderEditor.Open(null, null, null);
+    private void AddReminder() => ReminderEditor.Open(null, null, null, null, DetailHasDue);
 
     private void EditReminder(ReminderRowViewModel row)
     {
+        if (row.Value.Kind == ReminderKind.BeforeDue)
+        {
+            ReminderEditor.Open(row.Id, null, null, row.Value, DetailHasDue);
+            return;
+        }
+
         var (date, time) = ReminderCalculator.ToLocal(row.FiresAtUtc, _clock.LocalTimeZone);
-        ReminderEditor.Open(row.Id, date.ToDateTime(TimeOnly.MinValue), time.ToTimeSpan());
+        ReminderEditor.Open(row.Id, date.ToDateTime(TimeOnly.MinValue), time.ToTimeSpan(), null, DetailHasDue);
     }
 
     // The flyout's Save: false keeps it open with the error under Reminders.
@@ -84,6 +113,11 @@ public sealed partial class MainViewModel
         if (DetailTask is not { } row)
         {
             return false;
+        }
+
+        if (editor.IsBeforeDue)
+        {
+            return SaveBeforeDueReminder(editor, row);
         }
 
         if (editor.Date is not { } day)
@@ -98,14 +132,36 @@ public sealed partial class MainViewModel
         TimeOnly? time = editor.Time is { } picked ? TimeOnly.FromTimeSpan(picked) : null;
         var value = ReminderValue.Fixed(ReminderCalculator.ToUtc(
             DateOnly.FromDateTime(day), time, _clock.LocalTimeZone, DefaultReminderTime()));
-        var editingId = editor.EditingId;
+        EnqueueReminderSave(row, editor.EditingId, value);
+        return true;
+    }
+
+    private bool SaveBeforeDueReminder(ReminderEditorViewModel editor, TaskRowViewModel row)
+    {
+        if (!DetailHasDue)
+        {
+            ShowFieldError(ErrorPlace.Reminder, "A Reminder before Due needs a Due.");
+            return false;
+        }
+
+        if (editor.BeforeDueValue() is not { } value)
+        {
+            ShowFieldError(
+                ErrorPlace.Reminder,
+                $"A Reminder before Due needs a whole number from {ReminderValue.MinAmount} to {ReminderValue.MaxAmount}.");
+            return false;
+        }
+
+        EnqueueReminderSave(row, editor.EditingId, value);
+        return true;
+    }
+
+    private void EnqueueReminderSave(TaskRowViewModel row, Guid? editingId, ReminderValue value) =>
         _ = Saves.Enqueue(
             () => StoreReminderAsync(row, () => editingId is { } id
                 ? Reminders.UpdateReminderAsync(id, value)
                 : Reminders.AddReminderAsync(row.Id, value)),
             accepted: () => ErrorMessage = null);
-        return true;
-    }
 
     private Task RemoveReminderAsync(ReminderRowViewModel reminder)
     {

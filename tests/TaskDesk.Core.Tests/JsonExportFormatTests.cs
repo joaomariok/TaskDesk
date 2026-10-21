@@ -207,6 +207,42 @@ public sealed class JsonExportFormatTests
         Assert.Equal(0, FirstTask(none).GetProperty("reminders").GetArrayLength());
     }
 
+    [Fact]
+    public void A_before_Due_Reminder_carries_kind_BeforeDue_with_amount_and_unit()
+    {
+        var task = new TaskItem
+        {
+            Id = Guid.NewGuid(),
+            Title = "a",
+            DueDate = new DateOnly(2026, 10, 22),
+            DueTime = new TimeOnly(14, 0),
+            Reminders =
+            [
+                new TaskDesk.Core.Reminders.Reminder
+                {
+                    Id = Guid.NewGuid(),
+                    AtUtc = new DateTime(2026, 10, 22, 13, 0, 0, DateTimeKind.Utc),
+                },
+                new TaskDesk.Core.Reminders.Reminder
+                {
+                    Id = Guid.NewGuid(),
+                    Kind = TaskDesk.Core.Reminders.ReminderKind.BeforeDue,
+                    Amount = 2,
+                    Unit = TaskDesk.Core.Reminders.ReminderUnit.Days,
+                },
+            ],
+        };
+
+        using var json = Parse(OneTask(task));
+
+        Assert.Equal(
+            [
+                """{"kind":"BeforeDue","amount":2,"unit":"Days"}""",
+                """{"kind":"Fixed","atUtc":"2026-10-22T13:00:00Z"}""",
+            ],
+            FirstTask(json).GetProperty("reminders").EnumerateArray().Select(r => JsonSerializer.Serialize(r)));
+    }
+
     private static ExportData OneTask(TaskItem task) => new([], [], [task]);
 
     private static JsonElement FirstTask(JsonDocument json) => json.RootElement.GetProperty("tasks")[0];

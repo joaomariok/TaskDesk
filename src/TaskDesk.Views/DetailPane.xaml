@@ -244,35 +244,88 @@
                                             AutomationProperties.Name="Reminder editor">
                                     <TextBlock Style="{StaticResource BodyStrongText}"
                                                Text="{x:Bind ReminderEditor.Heading, Mode=OneWay}" />
-                                    <TextBlock Text="Date" Style="{StaticResource FieldLabel}" />
-                                    <CalendarDatePicker x:Name="ReminderDatePicker" HorizontalAlignment="Stretch"
-                                                        AutomationProperties.Name="Reminder date"
-                                                        AutomationProperties.AutomationId="ReminderDatePicker"
-                                                        Date="{x:Bind local:DetailPane.ToPickerDate(ReminderEditor.Date), BindBack=SetReminderDate, Mode=TwoWay, FallbackValue={x:Null}}" />
-                                    <!-- The time is optional: left empty, the Reminder fires at the default
-                                         Reminder time. -->
-                                    <TextBlock Text="Time (optional)" Style="{StaticResource FieldLabel}" />
-                                    <Grid ColumnSpacing="4">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TimePicker x:Name="ReminderTimePicker" HorizontalAlignment="Stretch" MinWidth="0"
-                                                    MinuteIncrement="1"
-                                                    AutomationProperties.Name="Reminder time"
-                                                    AutomationProperties.AutomationId="ReminderTimePicker"
-                                                    AutomationProperties.HelpText="Needs a date; left empty, the Reminder fires at the default Reminder time"
-                                                    IsEnabled="{x:Bind ReminderEditor.HasDate, Mode=OneWay}"
-                                                    SelectedTime="{x:Bind ReminderEditor.Time, Mode=TwoWay}" />
-                                        <Button x:Name="ClearReminderTimeButton" Grid.Column="1"
-                                                Style="{StaticResource SmallIconButton}"
-                                                ToolTipService.ToolTip="Clear Reminder time"
-                                                AutomationProperties.Name="Clear Reminder time"
-                                                AutomationProperties.AutomationId="ClearReminderTimeButton"
-                                                Command="{x:Bind ReminderEditor.ClearTimeCommand, Mode=OneTime}">
-                                            <FontIcon Glyph="&#xE711;" FontSize="12" />
-                                        </Button>
-                                    </Grid>
+                                    <!-- The mode: a fixed date and time, or some time before the Due (only while
+                                         the Task has a Due). -->
+                                    <TextBlock Text="When" Style="{StaticResource FieldLabel}" />
+                                    <RadioButtons x:Name="ReminderModeButtons" MaxColumns="2"
+                                                  AutomationProperties.Name="When"
+                                                  AutomationProperties.AutomationId="ReminderModeButtons"
+                                                  SelectedIndex="{x:Bind ReminderEditor.ModeIndex, Mode=TwoWay}">
+                                        <RadioButton x:Name="DateAndTimeModeButton" Content="Date and time"
+                                                     AutomationProperties.AutomationId="DateAndTimeModeButton" />
+                                        <RadioButton x:Name="BeforeDueModeButton" Content="Before Due"
+                                                     AutomationProperties.AutomationId="BeforeDueModeButton"
+                                                     AutomationProperties.HelpText="Needs a Due"
+                                                     IsEnabled="{x:Bind ReminderEditor.CanUseBeforeDue, Mode=OneWay}" />
+                                    </RadioButtons>
+                                    <StackPanel x:Name="DateAndTimePanel" Spacing="4"
+                                                Visibility="{x:Bind ReminderEditor.IsDateAndTime, Mode=OneWay}">
+                                        <TextBlock Text="Date" Style="{StaticResource FieldLabel}" />
+                                        <CalendarDatePicker x:Name="ReminderDatePicker" HorizontalAlignment="Stretch"
+                                                            AutomationProperties.Name="Reminder date"
+                                                            AutomationProperties.AutomationId="ReminderDatePicker"
+                                                            Date="{x:Bind local:DetailPane.ToPickerDate(ReminderEditor.Date), BindBack=SetReminderDate, Mode=TwoWay, FallbackValue={x:Null}}" />
+                                        <!-- The time is optional: left empty, the Reminder fires at the default
+                                             Reminder time. -->
+                                        <TextBlock Text="Time (optional)" Style="{StaticResource FieldLabel}" />
+                                        <Grid ColumnSpacing="4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TimePicker x:Name="ReminderTimePicker" HorizontalAlignment="Stretch" MinWidth="0"
+                                                        MinuteIncrement="1"
+                                                        AutomationProperties.Name="Reminder time"
+                                                        AutomationProperties.AutomationId="ReminderTimePicker"
+                                                        AutomationProperties.HelpText="Needs a date; left empty, the Reminder fires at the default Reminder time"
+                                                        IsEnabled="{x:Bind ReminderEditor.HasDate, Mode=OneWay}"
+                                                        SelectedTime="{x:Bind ReminderEditor.Time, Mode=TwoWay}" />
+                                            <Button x:Name="ClearReminderTimeButton" Grid.Column="1"
+                                                    Style="{StaticResource SmallIconButton}"
+                                                    ToolTipService.ToolTip="Clear Reminder time"
+                                                    AutomationProperties.Name="Clear Reminder time"
+                                                    AutomationProperties.AutomationId="ClearReminderTimeButton"
+                                                    Command="{x:Bind ReminderEditor.ClearTimeCommand, Mode=OneTime}">
+                                                <FontIcon Glyph="&#xE711;" FontSize="12" />
+                                            </Button>
+                                        </Grid>
+                                    </StackPanel>
+                                    <!-- Before Due: a preset, or "Custom…" with a whole number (1 to 999) and a unit. -->
+                                    <StackPanel x:Name="BeforeDuePanel" Spacing="4"
+                                                Visibility="{x:Bind ReminderEditor.IsBeforeDue, Mode=OneWay}">
+                                        <TextBlock Text="Time before Due" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox x:Name="BeforeDueOffsetBox" HorizontalAlignment="Stretch"
+                                                  AutomationProperties.Name="Time before Due"
+                                                  AutomationProperties.AutomationId="BeforeDueOffsetBox"
+                                                  ItemsSource="{x:Bind presentation:ReminderEditorViewModel.OffsetChoices, Mode=OneTime}"
+                                                  SelectedIndex="{x:Bind ReminderEditor.OffsetIndex, Mode=TwoWay}" />
+                                        <Grid x:Name="CustomOffsetRow" ColumnSpacing="8"
+                                              Visibility="{x:Bind ReminderEditor.IsCustomShown, Mode=OneWay}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="Number" Style="{StaticResource FieldLabel}" />
+                                            <NumberBox x:Name="CustomAmountBox" Grid.Row="1" MinWidth="0"
+                                                       Minimum="1" Maximum="999" SmallChange="1" LargeChange="10"
+                                                       SpinButtonPlacementMode="Compact"
+                                                       AutomationProperties.Name="Number before Due"
+                                                       AutomationProperties.AutomationId="CustomAmountBox"
+                                                       AutomationProperties.HelpText="A whole number from 1 to 999"
+                                                       Value="{x:Bind ReminderEditor.CustomAmount, Mode=TwoWay}" />
+                                            <TextBlock Grid.Column="1" Text="Unit" Style="{StaticResource FieldLabel}" />
+                                            <ComboBox x:Name="CustomUnitBox" Grid.Row="1" Grid.Column="1"
+                                                      HorizontalAlignment="Stretch"
+                                                      AutomationProperties.Name="Unit before Due"
+                                                      AutomationProperties.AutomationId="CustomUnitBox"
+                                                      ItemsSource="{x:Bind presentation:ReminderEditorViewModel.UnitChoices, Mode=OneTime}"
+                                                      SelectedIndex="{x:Bind ReminderEditor.CustomUnitIndex, Mode=TwoWay}" />
+                                        </Grid>
+                                    </StackPanel>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8"
                                                 Margin="0,8,0,0">
                                         <Button x:Name="CancelReminderButton" Content="Cancel"
