@@ -25,6 +25,7 @@
         <Style x:Key="ReminderRowButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,4,8,5" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
         </Style>
@@ -283,7 +284,7 @@
                                                             Date="{x:Bind local:DetailPane.ToPickerDate(ReminderEditor.Date), BindBack=SetReminderDate, Mode=TwoWay, FallbackValue={x:Null}}" />
                                         <!-- The time is optional: left empty, the Reminder fires at the default
                                              Reminder time. -->
-                                        <TextBlock Text="Time (optional)" Style="{StaticResource FieldLabel}" />
+                                        <TextBlock Text="Time" Style="{StaticResource FieldLabel}" />
                                         <Grid ColumnSpacing="4">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
@@ -358,40 +359,45 @@
                             </Flyout>
                         </FlyoutBase.AttachedFlyout>
                         <TextBlock Text="Reminders" Style="{StaticResource FieldLabel}" />
-                        <ItemsControl x:Name="ReminderList" IsTabStop="False"
-                                      AutomationProperties.Name="Reminders"
-                                      AutomationProperties.AutomationId="ReminderList"
-                                      ItemsSource="{x:Bind ViewModel.DetailReminders, Mode=OneTime}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="presentation:ReminderRowViewModel">
-                                    <Grid Margin="0,2" ColumnSpacing="2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <Button Style="{StaticResource ReminderRowButton}"
-                                                AutomationProperties.Name="{x:Bind AccessibleName, Mode=OneTime}"
-                                                ToolTipService.ToolTip="Edit reminder"
-                                                Click="OnEditReminderClick">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                        <!-- The rows sit in their own box, a step off the pane, hidden while there is no Reminder.
+                             Each row is one line: its text takes the width the × leaves and ends in "…". -->
+                        <Border x:Name="ReminderBox" Padding="4" CornerRadius="4" BorderThickness="1"
+                                Background="{ThemeResource ReminderBoxBrush}"
+                                BorderBrush="{ThemeResource ReminderBoxStrokeBrush}"
+                                Visibility="{x:Bind ViewModel.HasDetailReminders, Mode=OneWay}">
+                            <ItemsControl x:Name="ReminderList" IsTabStop="False"
+                                          AutomationProperties.Name="Reminders"
+                                          AutomationProperties.AutomationId="ReminderList"
+                                          ItemsSource="{x:Bind ViewModel.DetailReminders, Mode=OneTime}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="presentation:ReminderRowViewModel">
+                                        <Grid ColumnSpacing="2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <!-- A past row looks like a completed Task: dimmed and struck through. -->
+                                            <Button Style="{StaticResource ReminderRowButton}"
+                                                    AutomationProperties.Name="{x:Bind AccessibleName, Mode=OneTime}"
+                                                    ToolTipService.ToolTip="{x:Bind Description, Mode=OneTime}"
+                                                    Click="OnEditReminderClick">
                                                 <TextBlock Style="{StaticResource BodyText}" TextWrapping="NoWrap"
                                                            TextTrimming="CharacterEllipsis"
-                                                           Text="{x:Bind Text, Mode=OneTime}" />
-                                                <TextBlock Style="{StaticResource SecondaryCaptionText}"
-                                                           VerticalAlignment="Center" Text="past"
-                                                           Visibility="{x:Bind IsPast, Mode=OneTime}" />
-                                            </StackPanel>
-                                        </Button>
-                                        <Button Grid.Column="1" Style="{StaticResource SmallIconButton}"
-                                                ToolTipService.ToolTip="Remove reminder"
-                                                AutomationProperties.Name="{x:Bind RemoveName, Mode=OneTime}"
-                                                Command="{x:Bind RemoveCommand, Mode=OneTime}">
-                                            <FontIcon Glyph="&#xE711;" FontSize="12" />
-                                        </Button>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                                                           Text="{x:Bind Text, Mode=OneTime}"
+                                                           Opacity="{x:Bind local:DetailPane.ReminderOpacity(IsPast), Mode=OneTime, FallbackValue=1}"
+                                                           TextDecorations="{x:Bind local:DetailPane.ReminderDecorations(IsPast), Mode=OneTime, FallbackValue=None}" />
+                                            </Button>
+                                            <Button Grid.Column="1" Style="{StaticResource SmallIconButton}"
+                                                    ToolTipService.ToolTip="Remove reminder"
+                                                    AutomationProperties.Name="{x:Bind RemoveName, Mode=OneTime}"
+                                                    Command="{x:Bind RemoveCommand, Mode=OneTime}">
+                                                <FontIcon Glyph="&#xE711;" FontSize="12" />
+                                            </Button>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
                         <Button x:Name="AddReminderButton" Margin="{StaticResource FieldMargin}"
                                 AutomationProperties.Name="Add reminder"
                                 AutomationProperties.AutomationId="AddReminderButton"

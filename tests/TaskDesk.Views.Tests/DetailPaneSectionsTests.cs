@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Reminders;
+using TaskDesk.Core.Shell;
 using TaskDesk.Core.Tags;
 using TaskDesk.Core.Tasks;
 using TaskDesk.Data;
@@ -198,7 +199,7 @@ public sealed class DetailPaneSectionsTests
     }
 
     [UITestMethod]
-    public async Task A_past_Reminder_row_shows_and_announces_past_and_each_Task_shows_its_own_rows()
+    public async Task A_past_Reminder_row_is_dimmed_struck_through_announced_as_past_and_each_Task_shows_its_own_rows()
     {
         using var db = await DatabaseAsync();
         var id = await AddAsync(db, "Call the bank");
@@ -208,7 +209,7 @@ public sealed class DetailPaneSectionsTests
         await reminders.AddReminderAsync(id, ReminderValue.Fixed(now.AddHours(1)), Ct);
         await reminders.AddReminderAsync(id, ReminderValue.Fixed(now.AddHours(2)), Ct);
         db.Clock.Advance(TimeSpan.FromMinutes(90));
-        var (window, _) = await OpenAsync(db);
+        var (window, viewModel) = await OpenAsync(db);
         try
         {
             var pane = await OpenPaneAsync(window, "Call the bank");
@@ -216,8 +217,26 @@ public sealed class DetailPaneSectionsTests
             var names = ReminderRows(pane).Select(AutomationProperties.GetName).ToList();
             StringAssert.EndsWith(names[0], ", past");
             Assert.IsFalse(names[1].Contains("past", StringComparison.Ordinal), names[1]);
-            Assert.AreEqual(Visibility.Visible, PastLabels(ReminderRows(pane)[0]).Single().Visibility);
-            Assert.AreEqual(Visibility.Collapsed, PastLabels(ReminderRows(pane)[1]).Single().Visibility);
+
+            // The past row looks like a completed Task: dimmed and struck through, with no "past" word.
+            var past = RowText(ReminderRows(pane)[0]);
+            var ahead = RowText(ReminderRows(pane)[1]);
+            Assert.AreEqual(Windows.UI.Text.TextDecorations.Strikethrough, past.TextDecorations);
+            Assert.IsLessThan(1.0, past.Opacity, "The past row is not dimmed.");
+            Assert.AreEqual(Windows.UI.Text.TextDecorations.None, ahead.TextDecorations);
+            Assert.AreEqual(1.0, ahead.Opacity);
+            foreach (var row in ReminderRows(pane))
+            {
+                Assert.IsFalse(
+                    VisualTree.Descendants(row).OfType<TextBlock>().Any(t => t.Text.Contains("past", StringComparison.Ordinal)),
+                    "A row shows the word past.");
+            }
+
+            // A past row still opens the flyout on its Reminder.
+            var (flyout, _) = await OpenReminderFlyoutAsync(pane, ReminderRows(pane)[0]);
+            Assert.IsTrue(viewModel.ReminderEditor.IsEditing, "The past row did not open its Reminder.");
+            flyout.Hide();
+            await UiWait.UntilAsync(() => !viewModel.ReminderEditor.IsOpen, () => "Closing kept the editor open.", Ct);
 
             await OpenPaneAsync(window, "Plain");
             await UiWait.UntilAsync(() => ReminderRows(pane).Count == 0, () => "Another Task kept the rows.", Ct);
@@ -229,6 +248,118 @@ public sealed class DetailPaneSectionsTests
             window.Close();
         }
     }
+
+    [UITestMethod]
+    public async Task The_Reminders_box_shows_only_with_Reminders_holds_its_rows_and_Add_reminder_sits_below_it()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "Call the bank");
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Call the bank");
+            var box = VisualTree.Find<Border>(pane, "ReminderBox");
+            var add = Named<Button>(pane, "Add reminder");
+            Assert.AreEqual(Visibility.Collapsed, box.Visibility, "The box shows without a Reminder.");
+            var addLeft = Offset(add, pane).X;
+
+            var (flyout, editor) = await OpenReminderFlyoutAsync(pane, add);
+            viewModel.ReminderEditor.Date = new DateTime(2026, 10, 20);
+            viewModel.ReminderEditor.Time = new TimeSpan(14, 30, 0);
+            Invoke(VisualTree.Find<Button>(editor, "SaveReminderButton"));
+            await UiWait.UntilAsync(() => !flyout.IsOpen, () => "Save did not close the flyout.", Ct);
+            await UiWait.UntilAsync(() => box.Visibility == Visibility.Visible && ReminderRows(pane).Count == 1,
+                () => "The box did not show with the new Reminder.", Ct);
+            pane.UpdateLayout();
+
+            Assert.AreEqual(new Thickness(1), box.BorderThickness);
+            Assert.AreEqual(new CornerRadius(4), box.CornerRadius);
+            var row = (FrameworkElement)VisualTree.Descendants(box).OfType<Grid>()
+                .First(g => g.DataContext is ReminderRowViewModel);
+            var inside = Bounds(row, box);
+            Assert.IsTrue(
+                inside.Left > 1 && inside.Top > 1 && inside.Right < box.ActualWidth - 1
+                    && inside.Bottom < box.ActualHeight - 1,
+                $"The row at {inside} touches the box outline ({box.ActualWidth} x {box.ActualHeight}).");
+            Assert.IsGreaterThanOrEqualTo(Bottom(box, pane), Top(add, pane), "Add reminder is not below the box.");
+            Assert.AreEqual(addLeft, Offset(add, pane).X, 0.5, "Add reminder moved sideways with the box.");
+            Assert.AreEqual(Offset(box, pane).X, Offset(add, pane).X, 0.5, "Add reminder is not aligned with the box.");
+            Assert.AreEqual(viewModel.DetailReminders[0].Description,
+                ToolTipService.GetToolTip(ReminderRows(pane)[0]) as string, "The row's tooltip is not its full wording.");
+
+            Invoke(Named<Button>(pane, viewModel.DetailReminders[0].RemoveName));
+            await UiWait.UntilAsync(() => box.Visibility == Visibility.Collapsed,
+                () => "The box stayed with no Reminder left.", Ct);
+            Assert.AreEqual(addLeft, Offset(add, pane).X, 0.5, "Add reminder moved sideways when the box hid.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Each_Reminder_row_fits_one_line_in_the_320_px_pane_and_a_long_one_ends_in_an_ellipsis()
+    {
+        using var db = await DatabaseAsync();
+        var rent = await AddAsync(db, "Pay rent", new DateOnly(2026, 10, 26));
+        var passport = await AddAsync(db, "Renew passport", new DateOnly(2027, 12, 29));
+        var reminders = db.Get<IReminderService>();
+        await reminders.AddReminderAsync(rent, ReminderValue.BeforeDue(1, ReminderUnit.Days), Ct);
+        await reminders.AddReminderAsync(passport, ReminderValue.BeforeDue(999, ReminderUnit.Weeks), Ct);
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Pay rent");
+            Assert.AreEqual(PaneLayout.DetailLimits.Default, pane.ActualWidth, 1, "The pane is not at its 320 px default.");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 1, () => "The Reminder has no row.", Ct);
+            pane.UpdateLayout();
+            StringAssert.StartsWith(viewModel.DetailReminders[0].Text, "1 day before · ");
+            var (text, width, needed, trimmed) = CheckRowInsideBox(pane);
+            Assert.IsFalse(trimmed, $"'{text}' is trimmed at the 320 px pane.");
+            Assert.IsLessThanOrEqualTo(width + 1, needed, $"'{text}' needs {needed} px but has {width}.");
+
+            await OpenPaneAsync(window, "Renew passport");
+            await UiWait.UntilAsync(
+                () => ReminderRows(pane).Count == 1 && viewModel.DetailReminders[0].Text.StartsWith("999 weeks", StringComparison.Ordinal),
+                () => "The long Reminder has no row.", Ct);
+            pane.UpdateLayout();
+            (text, width, needed, trimmed) = CheckRowInsideBox(pane);
+            Assert.IsGreaterThan(width + 1, needed, $"'{text}' ({needed} px) is not long enough to need trimming.");
+            Assert.IsTrue(trimmed, $"'{text}' does not end in an ellipsis.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // Checks the single row's text, its x and the box stay inside one another and the pane, all on one line, and
+    // returns the text, the width it has, the width it needs unbounded and whether it is trimmed.
+    private static (string Text, double Width, double Needed, bool Trimmed) CheckRowInsideBox(DetailPane pane)
+    {
+        var box = VisualTree.Find<Border>(pane, "ReminderBox");
+        var rowButton = ReminderRows(pane).Single();
+        var text = RowText(rowButton);
+        var remove = Named<Button>(pane, ((ReminderRowViewModel)rowButton.DataContext).RemoveName);
+        var textBounds = Bounds(text, pane);
+        var removeBounds = Bounds(remove, pane);
+        var boxBounds = Bounds(box, pane);
+        Assert.IsLessThanOrEqualTo(removeBounds.Left + 0.5, textBounds.Right, $"'{text.Text}' runs under its x.");
+        Assert.IsLessThanOrEqualTo(boxBounds.Right - 1, removeBounds.Right, "The x runs past the box.");
+        Assert.IsLessThanOrEqualTo(pane.ActualWidth + 0.5, boxBounds.Right, "The box runs past the pane.");
+        Assert.IsGreaterThanOrEqualTo(boxBounds.Left + 1, textBounds.Left, "The text starts outside the box.");
+        Assert.AreEqual(TextWrapping.NoWrap, text.TextWrapping);
+        var isTrimmed = text.IsTextTrimmed;
+        var width = text.ActualWidth;
+
+        // Measured without a limit, the text's own width; the measure rounds up to whole pixels.
+        text.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return (text.Text, width, text.DesiredSize.Width, isTrimmed);
+    }
+
+    private static Rect Bounds(FrameworkElement element, UIElement root) =>
+        element.TransformToVisual(root).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
 
     [UITestMethod]
     public async Task Every_Reminder_control_is_reachable_with_Tab_and_has_a_name()
@@ -270,7 +401,7 @@ public sealed class DetailPaneSectionsTests
 
             Assert.IsTrue(VisualTree.Descendants(editor).OfType<TextBlock>().Any(t => t.Text == "Date"), "No Date label.");
             Assert.IsTrue(
-                VisualTree.Descendants(editor).OfType<TextBlock>().Any(t => t.Text == "Time (optional)"), "No Time label.");
+                VisualTree.Descendants(editor).OfType<TextBlock>().Any(t => t.Text == "Time"), "No Time label.");
             flyout.Hide();
         }
         finally
@@ -398,7 +529,7 @@ public sealed class DetailPaneSectionsTests
             await viewModel.FlushPendingSaveAsync();
             Assert.AreEqual(
                 ReminderValue.BeforeDue(1, ReminderUnit.Days), (await db.QueryAsync(c => c.Reminders)).Single().Value);
-            StringAssert.StartsWith(viewModel.DetailReminders.Single().Text, "1 day before Due · ");
+            StringAssert.StartsWith(viewModel.DetailReminders.Single().Text, "1 day before · ");
 
             // A click on the row opens the flyout in the Before Due mode on that preset.
             (flyout, editor) = await OpenReminderFlyoutAsync(pane, ReminderRows(pane)[0]);
@@ -528,11 +659,11 @@ public sealed class DetailPaneSectionsTests
     {
         var list = VisualTree.Find<ItemsControl>(pane, "ReminderList");
         return [.. VisualTree.Descendants(list).OfType<Button>()
-            .Where(b => b.DataContext is ReminderRowViewModel && b.Content is StackPanel)];
+            .Where(b => b.DataContext is ReminderRowViewModel && b.Content is TextBlock)];
     }
 
-    private static List<TextBlock> PastLabels(Button row) =>
-        [.. VisualTree.Descendants(row).OfType<TextBlock>().Where(t => t.Text == "past")];
+    // The one line of text of a Reminder row.
+    private static TextBlock RowText(Button row) => (TextBlock)row.Content;
 
     // Invokes a control that opens the Reminder flyout and waits for the flyout's editor to show.
     private async Task<(Flyout Flyout, FrameworkElement Editor)> OpenReminderFlyoutAsync(DetailPane pane, Button opener)

@@ -258,6 +258,13 @@ public sealed partial class DetailPane : UserControl
     public static Visibility ShownWithText(string? text) =>
         string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
 
+    /// <summary>A past Reminder row is dimmed like a completed Task's row.</summary>
+    public static double ReminderOpacity(bool isPast) => TaskRow.RowOpacity(isPast, keepsFullStrength: false);
+
+    /// <summary>A past Reminder row is struck through like a completed Task's title.</summary>
+    public static Windows.UI.Text.TextDecorations ReminderDecorations(bool isPast) =>
+        TaskRow.TitleDecorations(isPast, keepsFullStrength: false);
+
     /// <summary>A List without a colour shows a hollow ring instead of a dot.</summary>
     public static Visibility ShownWithoutColour(bool hasListColor) =>
         hasListColor ? Visibility.Collapsed : Visibility.Visible;

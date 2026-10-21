@@ -263,25 +263,49 @@ public class ReminderBeforeDueViewModelTests
         await SaveAsync(s);
 
         var row = Assert.Single(s.Vm.DetailReminders);
-        Assert.Equal("1 day before Due · Tomorrow 09:00", row.Text);
+        Assert.Equal("1 day before · Tomorrow 09:00", row.Text);
+        Assert.Equal("1 day before Due, Tomorrow 09:00", row.Description);
+        Assert.Equal("Reminder 1 day before Due, Tomorrow 09:00", row.AccessibleName);
         Assert.Equal(Utc(21, 12), row.FiresAtUtc);
         Assert.False(row.IsPast);
     }
 
-    public static TheoryData<int, ReminderUnit, string> OffsetTextCases => new()
+    [Fact]
+    public async Task A_past_before_Due_row_keeps_its_full_wording_and_adds_past_to_its_description()
     {
-        { 1, ReminderUnit.Minutes, "1 minute" },
-        { 5, ReminderUnit.Minutes, "5 minutes" },
-        { 1, ReminderUnit.Hours, "1 hour" },
-        { 36, ReminderUnit.Hours, "36 hours" },
-        { 2, ReminderUnit.Days, "2 days" },
-        { 1, ReminderUnit.Weeks, "1 week" },
-        { 3, ReminderUnit.Weeks, "3 weeks" },
+        // Due today (Tuesday) at 12:00 local; "2 h before" fired at 10:00 local, the clock's time.
+        var s = await StartAsync(due: new DateOnly(2026, 10, 20), time: new TimeOnly(12, 0));
+        await s.Services.AddReminderAsync(s.Tasks.All[0].Id, ReminderValue.BeforeDue(2, ReminderUnit.Hours), Ct);
+        await s.Vm.LoadAsync(Ct);
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+
+        var row = Assert.Single(s.Vm.DetailReminders);
+        Assert.True(row.IsPast);
+        Assert.Equal("2 h before · Today 10:00", row.Text);
+        Assert.Equal("2 hours before Due, Today 10:00, past", row.Description);
+        Assert.Equal("Reminder 2 hours before Due, Today 10:00, past", row.AccessibleName);
+        Assert.Equal("Remove reminder 2 hours before Due, Today 10:00", row.RemoveName);
+    }
+
+    public static TheoryData<int, ReminderUnit, string, string> OffsetTextCases => new()
+    {
+        { 1, ReminderUnit.Minutes, "1 min", "1 minute" },
+        { 5, ReminderUnit.Minutes, "5 min", "5 minutes" },
+        { 15, ReminderUnit.Minutes, "15 min", "15 minutes" },
+        { 1, ReminderUnit.Hours, "1 h", "1 hour" },
+        { 2, ReminderUnit.Hours, "2 h", "2 hours" },
+        { 36, ReminderUnit.Hours, "36 h", "36 hours" },
+        { 1, ReminderUnit.Days, "1 day", "1 day" },
+        { 2, ReminderUnit.Days, "2 days", "2 days" },
+        { 1, ReminderUnit.Weeks, "1 week", "1 week" },
+        { 2, ReminderUnit.Weeks, "2 weeks", "2 weeks" },
+        { 3, ReminderUnit.Weeks, "3 weeks", "3 weeks" },
     };
 
     [Theory]
     [MemberData(nameof(OffsetTextCases))]
-    public async Task A_before_Due_row_names_its_amount_and_unit(int amount, ReminderUnit unit, string text)
+    public async Task A_before_Due_row_names_its_amount_and_unit_compactly_and_in_full_in_its_description(
+        int amount, ReminderUnit unit, string compact, string full)
     {
         var s = await StartAsync(due: new DateOnly(2026, 12, 31));
 
@@ -289,7 +313,9 @@ public class ReminderBeforeDueViewModelTests
         await s.Vm.LoadAsync(Ct);
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        Assert.StartsWith(text + " before Due · ", Assert.Single(s.Vm.DetailReminders).Text);
+        var row = Assert.Single(s.Vm.DetailReminders);
+        Assert.StartsWith(compact + " before · ", row.Text);
+        Assert.StartsWith(full + " before Due, ", row.Description);
     }
 
     [Fact]
@@ -306,13 +332,14 @@ public class ReminderBeforeDueViewModelTests
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
         Assert.Equal([Utc(21, 17), Utc(22, 15), Utc(22, 16)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
-        Assert.StartsWith("1 day before Due", s.Vm.DetailReminders[0].Text);
-        Assert.StartsWith("1 hour before Due", s.Vm.DetailReminders[2].Text);
+        Assert.StartsWith("1 day before · ", s.Vm.DetailReminders[0].Text);
+        Assert.StartsWith("1 h before · ", s.Vm.DetailReminders[2].Text);
     }
 
     [Fact]
     public async Task Rows_refresh_after_a_Due_change_and_clearing_the_Due_removes_before_Due_rows()
     {
+        using var culture = new CultureScope("en-GB");
         var s = await StartAsync();
         var id = s.Tasks.All[0].Id;
         await s.Services.AddReminderAsync(id, ReminderValue.BeforeDue(2, ReminderUnit.Hours), Ct);
@@ -325,8 +352,7 @@ public class ReminderBeforeDueViewModelTests
         await s.Vm.PendingSave;
 
         Assert.Equal([Utc(23, 10), Utc(25, 12)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
-        var friday = new DateOnly(2026, 10, 23).ToString("ddd", System.Globalization.CultureInfo.CurrentCulture);
-        Assert.Equal($"2 hours before Due · {friday} 07:00", s.Vm.DetailReminders[0].Text);
+        Assert.Equal("2 h before · Fri 23 Oct 07:00", s.Vm.DetailReminders[0].Text);
 
         s.Vm.DetailDueDate = null;
         await s.Vm.PendingSave;
@@ -377,7 +403,7 @@ public class ReminderBeforeDueViewModelTests
         Assert.Equal(
             [ReminderValue.BeforeDue(4, ReminderUnit.Days), ReminderValue.BeforeDue(2, ReminderUnit.Days)],
             s.Tasks.All[0].Reminders.Select(r => r.Value));
-        Assert.StartsWith("4 days before Due", s.Vm.DetailReminders[0].Text);
+        Assert.StartsWith("4 days before · ", s.Vm.DetailReminders[0].Text);
     }
 
     [Fact]

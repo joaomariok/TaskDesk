@@ -17,9 +17,11 @@ public sealed class FoundationTests
     [
         "CaptionText", "BodyText", "BodyStrongText", "SubtitleText", "TitleText", "SecondaryCaptionText",
         "FieldLabel", "FieldLabelMargin", "FieldMargin", "OverdueBrush", "TodayBrush", "ListStripeBrush",
+        "ReminderBoxBrush", "ReminderBoxStrokeBrush",
     ];
 
-    private static readonly string[] MeaningBrushes = ["OverdueBrush", "TodayBrush", "ListStripeBrush"];
+    private static readonly string[] MeaningBrushes =
+        ["OverdueBrush", "TodayBrush", "ListStripeBrush", "ReminderBoxBrush", "ReminderBoxStrokeBrush"];
 
     public TestContext TestContext { get; set; } = null!;
 
@@ -62,6 +64,23 @@ public sealed class FoundationTests
         Assert.AreEqual(Rgb(listStripe), colours["ListStripeBrush"], "ListStripeBrush is Fluent's strong stroke.");
         Assert.AreEqual(colours["AccentTextFillColorPrimaryBrush"], colours["TodayBrush"],
             "TodayBrush is the accent in Fluent's readable accent-text shade.");
+    }
+
+    // The Reminders box: a step lighter than the detail pane (#EEEEEE) in Light, a step darker (#1C1C1C) in Dark,
+    // outlined by Fluent's control hairline.
+    [UITestMethod]
+    [DataRow(ElementTheme.Light, 0xFFEEEEEEu, 0xFFF9F9F9u, 0x0F000000u)]
+    [DataRow(ElementTheme.Dark, 0xFF1C1C1Cu, 0xFF131313u, 0x12FFFFFFu)]
+    public async Task The_Reminders_box_is_a_step_off_the_pane_with_a_hairline(
+        ElementTheme theme, uint pane, uint box, uint stroke)
+    {
+        var colours = await ResolveAsync(
+            theme, ["SolidBackgroundFillColorSecondaryBrush", "ReminderBoxBrush", "ReminderBoxStrokeBrush"],
+            TestContext.CancellationToken);
+
+        Assert.AreEqual(Rgb(pane), colours["SolidBackgroundFillColorSecondaryBrush"], "The pane is not Pane Grey.");
+        Assert.AreEqual(Rgb(box), colours["ReminderBoxBrush"], $"{theme}: the box tone.");
+        Assert.AreEqual(Rgb(stroke), colours["ReminderBoxStrokeBrush"], $"{theme}: the box outline.");
     }
 
     // Re-expresses the WPF App tests' contrast check (RailTests.Rail_badge_text_reads_at_body_text_contrast,

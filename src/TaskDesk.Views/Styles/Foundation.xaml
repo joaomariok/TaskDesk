@@ -14,6 +14,9 @@
            OverdueBrush     Overdue Due text, icons and badges (Fluent's critical colour)
            TodayBrush       Due-today text and icons (the system accent, readable accent-text shade)
            ListStripeBrush  the outline of a colourless List (ring or rail square); stands in for List colours in high contrast
+           ReminderBoxBrush the detail pane's Reminders box: a step lighter than the pane in Light
+                            (SolidBackgroundFillColorTertiary), a step darker in Dark (ControlOnImageFillColorTertiary)
+           ReminderBoxStrokeBrush  the Reminders box's hairline (ControlStrokeColorDefault)
          Each theme takes the colours Fluent gives SystemFillColorCriticalBrush, AccentTextFillColorPrimaryBrush and
          ControlStrongStrokeColorDefaultBrush in that theme. A StaticResource alias to those brushes would resolve
          once, in the app's theme, and not follow a window's requested theme. -->
@@ -22,21 +25,29 @@
             <SolidColorBrush x:Key="OverdueBrush" Color="{ThemeResource SystemFillColorCritical}" />
             <SolidColorBrush x:Key="TodayBrush" Color="{ThemeResource SystemAccentColorLight3}" />
             <SolidColorBrush x:Key="ListStripeBrush" Color="{ThemeResource ControlStrongStrokeColorDefault}" />
+            <SolidColorBrush x:Key="ReminderBoxBrush" Color="{ThemeResource ControlOnImageFillColorTertiary}" />
+            <SolidColorBrush x:Key="ReminderBoxStrokeBrush" Color="{ThemeResource ControlStrokeColorDefault}" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
             <SolidColorBrush x:Key="OverdueBrush" Color="{ThemeResource SystemFillColorCritical}" />
             <SolidColorBrush x:Key="TodayBrush" Color="{ThemeResource SystemAccentColorDark2}" />
             <SolidColorBrush x:Key="ListStripeBrush" Color="{ThemeResource ControlStrongStrokeColorDefault}" />
+            <SolidColorBrush x:Key="ReminderBoxBrush" Color="{ThemeResource SolidBackgroundFillColorTertiary}" />
+            <SolidColorBrush x:Key="ReminderBoxStrokeBrush" Color="{ThemeResource ControlStrokeColorDefault}" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
             <SolidColorBrush x:Key="OverdueBrush" Color="{ThemeResource SystemFillColorCritical}" />
             <SolidColorBrush x:Key="TodayBrush" Color="{ThemeResource SystemAccentColorLight3}" />
             <SolidColorBrush x:Key="ListStripeBrush" Color="{ThemeResource ControlStrongStrokeColorDefault}" />
+            <SolidColorBrush x:Key="ReminderBoxBrush" Color="{ThemeResource ControlOnImageFillColorTertiary}" />
+            <SolidColorBrush x:Key="ReminderBoxStrokeBrush" Color="{ThemeResource ControlStrokeColorDefault}" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
             <SolidColorBrush x:Key="OverdueBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="TodayBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="ListStripeBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+            <SolidColorBrush x:Key="ReminderBoxBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="ReminderBoxStrokeBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 

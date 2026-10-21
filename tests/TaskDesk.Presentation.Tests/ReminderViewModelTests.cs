@@ -242,6 +242,53 @@ public class ReminderViewModelTests
         Assert.Equal("Remove reminder Today 09:00", past.RemoveName);
     }
 
+    // The clock is at local Tuesday 20 Oct 2026 10:00 (UTC-3).
+    public static TheoryData<string, DateTime, string> MomentCases => new()
+    {
+        { "today", Utc(20, 17), "Today 14:00" },
+        { "tomorrow", Utc(21, 12), "Tomorrow 09:00" },
+        { "later this week: the date, never a bare weekday", Utc(23, 12), "Fri 23 Oct 09:00" },
+        { "later this year", new DateTime(2026, 12, 25, 21, 30, 0, DateTimeKind.Utc), "Fri 25 Dec 18:30" },
+        { "another year", new DateTime(2027, 1, 5, 12, 0, 0, DateTimeKind.Utc), "Tue 5 Jan 2027 09:00" },
+        { "yesterday: the date", Utc(19, 12), "Mon 19 Oct 09:00" },
+    };
+
+    [Theory]
+    [MemberData(nameof(MomentCases))]
+    public async Task A_Reminder_row_reads_Today_Tomorrow_or_its_date_with_the_year_only_when_not_this_year(
+        string because, DateTime atUtc, string text)
+    {
+        using var culture = new CultureScope("en-GB");
+        var s = await StartAsync("a");
+
+        await SelectWithRemindersAsync(s, atUtc);
+
+        var row = Assert.Single(s.Vm.DetailReminders);
+        Assert.True(text == row.Text, $"{because}: '{row.Text}', not '{text}'.");
+        Assert.StartsWith(text, row.Description);
+    }
+
+    [Fact]
+    public async Task The_Reminders_box_shows_only_while_the_Task_has_Reminders()
+    {
+        var s = await StartAsync("a", "b");
+        await SelectWithRemindersAsync(s, Utc(20, 14));
+        Assert.True(s.Vm.HasDetailReminders);
+        var changes = new List<string?>();
+        s.Vm.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        s.Vm.SelectedTask = s.Vm.Tasks[1];
+
+        Assert.False(s.Vm.HasDetailReminders);
+        Assert.Contains(nameof(MainViewModel.HasDetailReminders), changes);
+
+        var editor = Add(s);
+        editor.Date = new DateTime(2026, 10, 22);
+        await SaveAsync(s);
+
+        Assert.True(s.Vm.HasDetailReminders);
+    }
+
     [Fact]
     public async Task Moving_to_another_Task_shows_its_Reminders()
     {

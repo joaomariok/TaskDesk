@@ -14,6 +14,9 @@ public sealed partial class MainViewModel
     /// <summary>The selected Task's Reminders, the one that fires first first.</summary>
     public System.Collections.ObjectModel.ObservableCollection<ReminderRowViewModel> DetailReminders { get; } = [];
 
+    /// <summary>True while the selected Task has a Reminder: the Reminders box shows only then.</summary>
+    public bool HasDetailReminders => DetailReminders.Count > 0;
+
     /// <summary>The Reminder flyout, opened by "Add reminder" or a click on a row.</summary>
     public ReminderEditorViewModel ReminderEditor => _reminderEditor ??= new(DefaultReminderTime, SaveReminder);
 
@@ -49,6 +52,7 @@ public sealed partial class MainViewModel
         DetailReminders.Clear();
         if (task is null)
         {
+            OnPropertyChanged(nameof(HasDetailReminders));
             return;
         }
 
@@ -63,26 +67,17 @@ public sealed partial class MainViewModel
         foreach (var (reminder, at) in rows)
         {
             var (date, time) = ReminderCalculator.ToLocal(at!.Value, _clock.LocalTimeZone);
-            var when = DueDisplay.Format(date, time, today);
-            var text = reminder is { Kind: ReminderKind.BeforeDue, Amount: { } amount, Unit: { } unit }
-                ? $"{OffsetText(amount, unit)} before Due · {when}"
-                : when;
+            var when = ReminderWording.Moment(date, time, today);
+            var (text, wording) = reminder is { Kind: ReminderKind.BeforeDue, Amount: { } amount, Unit: { } unit }
+                ? ($"{ReminderWording.CompactOffset(amount, unit)} before · {when}",
+                    $"{ReminderWording.FullOffset(amount, unit)} before Due, {when}")
+                : (when, when);
             DetailReminders.Add(new ReminderRowViewModel(
-                reminder.Id, reminder.Value, at.Value, text, at.Value <= now, EditReminder, RemoveReminderAsync));
+                reminder.Id, reminder.Value, at.Value, text, wording, at.Value <= now, EditReminder,
+                RemoveReminderAsync));
         }
-    }
 
-    // "1 day", "15 minutes": the offset of a before-Due Reminder, as its row reads it.
-    private static string OffsetText(int amount, ReminderUnit unit)
-    {
-        var name = unit switch
-        {
-            ReminderUnit.Minutes => "minute",
-            ReminderUnit.Hours => "hour",
-            ReminderUnit.Days => "day",
-            _ => "week",
-        };
-        return amount == 1 ? $"1 {name}" : $"{amount.ToString(CultureInfo.CurrentCulture)} {name}s";
+        OnPropertyChanged(nameof(HasDetailReminders));
     }
 
     // The local rules the Due is read in, read each time, so a Settings change applies without a restart.

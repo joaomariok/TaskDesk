@@ -535,7 +535,7 @@ public sealed class DetailPaneTests
             var time = VisualTree.Find<TimePicker>(editor, "ReminderTimePicker");
             var clear = VisualTree.Find<Button>(editor, "ClearReminderTimeButton");
 
-            Assert.IsTrue(Label(editor, "Time (optional)").ActualHeight > 0, "The Reminder time has no visible label.");
+            Assert.IsTrue(Label(editor, "Time").ActualHeight > 0, "The Reminder time has no visible label.");
             Assert.AreEqual(1, time.MinuteIncrement);
             Assert.IsNull(time.SelectedTime);
             Assert.IsFalse(time.IsEnabled, "The Reminder time picker is enabled without a Reminder date.");
@@ -1155,7 +1155,7 @@ public sealed class DetailPaneTests
 
     private static List<Button> RowButtons(DetailPane pane) =>
         [.. VisualTree.Descendants(VisualTree.Find<ItemsControl>(pane, "ReminderList")).OfType<Button>()
-            .Where(b => b.DataContext is ReminderRowViewModel && b.Content is StackPanel && b.ActualHeight > 0)];
+            .Where(b => b.DataContext is ReminderRowViewModel && b.Content is TextBlock && b.ActualHeight > 0)];
 
     // Invokes what opens the Reminder flyout and waits for its editor to show.
     private async Task<FrameworkElement> OpenReminderFlyoutAsync(DetailPane pane, Button opener)

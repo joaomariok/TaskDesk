@@ -10,6 +10,8 @@ colors:
   surface-base-dark: "#202020"
   surface-pane: "#EEEEEE"
   surface-pane-dark: "#1C1C1C"
+  reminder-box: "#F9F9F9"
+  reminder-box-dark: "#131313"
   card-fill: "#FFFFFFB3"
   card-fill-dark: "#FFFFFF0D"
   card-stroke: "#0000000F"
@@ -75,6 +77,11 @@ components:
     typography: "{typography.caption}"
     rounded: "{rounded.pill}"
     padding: "1px 8px"
+  reminder-box:
+    backgroundColor: "{colors.reminder-box}"
+    typography: "{typography.body}"
+    rounded: "{rounded.control}"
+    padding: "4px"
   settings-card:
     backgroundColor: "{colors.card-fill}"
     rounded: "{rounded.control}"
@@ -143,8 +150,9 @@ A neutral Fluent palette lifted by the user's own Windows accent, with two signa
 - **Soft Ink** (`text-secondary`, `text-secondary-dark`): captions, counts, row captions, empty-state text, hints, the neutral Due chip, and the fill of the rail's count badges (with inverse text, at least 4.5:1 in Light and Dark).
 - **Window Base** (`surface-base`, `surface-base-dark`): overlays such as the Tags flyout and the expanded sidebar.
 - **Pane Grey** (`surface-pane`, `surface-pane-dark`): the detail pane's background, a step off the list.
+- **Reminder Box** (`reminder-box`, `reminder-box-dark`): the detail pane's Reminders box, a step lighter than pane grey in Light (Fluent's `SolidBackgroundFillColorTertiary`) and a step darker in Dark (`ControlOnImageFillColorTertiary`), used through `ReminderBoxBrush`. Its outline is the control hairline (`ReminderBoxStrokeBrush`).
 - **Card Veil** (`card-fill`, `card-fill-dark`) with **Hairline** (`card-stroke`, `card-stroke-dark`): Settings cards, the quick-add card and InfoBar edges.
-- **Control Hairline** (`control-stroke`, `control-stroke-dark`): pill-chip borders.
+- **Control Hairline** (`control-stroke`, `control-stroke-dark`): pill-chip borders and the Reminders box outline.
 - **Strong Stroke** (`strong-stroke`, `strong-stroke-dark`): the hollow ring of a List with no colour (`ListStripeBrush`).
 
 ### List colours (data)
@@ -153,7 +161,7 @@ A neutral Fluent palette lifted by the user's own Windows accent, with two signa
 ### Named Rules
 **The Meaning-Only Rule.** Colour beyond the neutrals and the system accent marks a fact: Overdue, today, caution, or which List a Task belongs to. Never use colour for decoration.
 
-**The Theme-Resource Rule.** Every colour in the app is a `{ThemeResource}` to a Fluent key or one of the meaning-named brushes (`OverdueBrush`, `TodayBrush`, `ListStripeBrush`); the only literal colours are the List presets. A new meaning gets a new named brush in each theme dictionary of `TaskDesk.Views/Styles/Foundation.xaml`, not a hex value in XAML.
+**The Theme-Resource Rule.** Every colour in the app is a `{ThemeResource}` to a Fluent key or one of the meaning-named brushes (`OverdueBrush`, `TodayBrush`, `ListStripeBrush`, `ReminderBoxBrush`, `ReminderBoxStrokeBrush`); the only literal colours are the List presets. A new meaning gets a new named brush in each theme dictionary of `TaskDesk.Views/Styles/Foundation.xaml`, not a hex value in XAML.
 
 **The Words-Too Rule.** In high contrast every signal colour becomes the system text colour, so meaning must also be in text: "Overdue" sits in the Overdue header and the badge shows a count.
 
@@ -178,7 +186,7 @@ A neutral Fluent palette lifted by the user's own Windows accent, with two signa
 
 ## Layout
 
-The main window has three areas: sidebar, list and detail pane, with 12 px gutters (`spacing.md`) that double as splitters. It starts at 900 × 600 and never goes below 800 × 500. The sidebar defaults to 180 px (140 to 400) and the detail pane to 260 px (220 to 600); both widths persist. The list keeps at least 240 px.
+The main window has three areas: sidebar, list and detail pane, with 12 px gutters (`spacing.md`) that double as splitters. It starts at 900 × 600 and never goes below 800 × 500. The sidebar defaults to 180 px (140 to 400) and the detail pane to 320 px (320 to 600); both widths persist. The list keeps at least 240 px.
 
 The layout responds to the width you actually use, mid-size and popped in and out:
 - **Below 900 px**, the sidebar collapses to a 56 px icon rail. A hamburger button opens the full sidebar as a 260 px overlay.
@@ -238,6 +246,7 @@ One heading row: on the left, the subtitle-size name of what is shown; a long na
 
 ### Cards / Containers
 - **Settings card:** card veil, hairline border, 4 px corners, at least 60 px tall, 8 × 16 px padding. The title and a one-line description in soft ink sit on the left, and the control on the right. Cards sit 2 px apart under a body-strong group heading.
+- **Reminders box:** in the detail pane, the Reminder rows sit in a box of reminder-box tone (a step lighter than pane grey in Light, a step darker in Dark) with a 1 px control hairline, 4 px corners and 4 px inner padding, so no row touches the outline. It is hidden while the Task has no Reminder; "Add reminder" sits below it, left-aligned with it. Each row is one line: a quiet full-width button holding the body-text wording (8 × 4 px padding), then a quiet × button. The text takes the width the × leaves and ends in "…" when it does not fit, so it never runs under the × or past the box; at the 320 px pane "1 day before · Sun 25 Oct 09:00" fits whole. The row reads "Today 09:00", "Tomorrow 09:00" or the date ("Sun 25 Oct 09:00", with the year when not the current one), never a bare weekday; a before-Due row leads with its compact offset ("15 min", "2 h", "1 day", "2 weeks") and " before · ". Its tooltip and accessible name keep the full wording ("1 day before Due, Sun 25 Oct 09:00"). A past row looks like a completed Task: dimmed to 60 % and struck through, with no "past" word; screen readers still hear ", past".
 - **Quick-add card:** a 420 px borderless window drawn as a card: card veil, hairline, 8 px corners, 24 px padding. It holds a 20 px "New Task" title box, then List and Due side by side, then the caption hint.
 
 ### Inputs / Fields
