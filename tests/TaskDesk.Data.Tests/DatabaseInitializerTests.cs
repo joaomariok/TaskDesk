@@ -2,7 +2,9 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.DependencyInjection;
 using TaskDesk.Core.Reminders;
+using TaskDesk.Core.Shell;
 
 namespace TaskDesk.Data.Tests;
 
@@ -315,5 +317,59 @@ public class DatabaseInitializerTests
 
         var due = Assert.Single(await db.Get<IReminderService>().ListDueAsync(ct));
         Assert.Equal(dueAhead, due.TaskId);
+    }
+
+    [Fact]
+    public async Task A_failing_upgrade_rule_does_not_stop_startup_and_is_retried_on_the_next_start()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var settings = new ThrowingSettingsStore { Fails = true };
+        using var db = new TempDatabase(services => services.AddSingleton<IShellSettingsStore>(settings));
+        var initializer = db.Get<IDatabaseInitializer>();
+
+        await initializer.InitializeAsync(ct);
+
+        Assert.Equal("Inbox", Assert.Single(await db.QueryAsync(c => c.Lists)).Name);
+        Assert.Equal(0, await UserVersionAsync(db, ct));
+
+        settings.Fails = false;
+        await initializer.InitializeAsync(ct);
+
+        Assert.Equal(1, await UserVersionAsync(db, ct));
+    }
+
+    [Fact]
+    public async Task Cancellation_during_the_upgrade_rule_still_propagates()
+    {
+        using var cts = new CancellationTokenSource();
+        var settings = new ThrowingSettingsStore { OnLoad = cts.Cancel };
+        using var db = new TempDatabase(services => services.AddSingleton<IShellSettingsStore>(settings));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => db.Get<IDatabaseInitializer>().InitializeAsync(cts.Token));
+    }
+
+    private static async Task<long> UserVersionAsync(TempDatabase db, CancellationToken ct)
+    {
+        await using var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(ct);
+        return await context.Database
+            .SqlQueryRaw<long>("SELECT user_version AS \"Value\" FROM pragma_user_version")
+            .SingleAsync(ct);
+    }
+
+    private sealed class ThrowingSettingsStore : IShellSettingsStore
+    {
+        public bool Fails { get; set; }
+        public Action? OnLoad { get; set; }
+
+        public ShellSettings Load()
+        {
+            OnLoad?.Invoke();
+            return Fails ? throw new InvalidOperationException("settings unreadable") : new ShellSettings();
+        }
+
+        public void Save(ShellSettings settings)
+        {
+        }
     }
 }

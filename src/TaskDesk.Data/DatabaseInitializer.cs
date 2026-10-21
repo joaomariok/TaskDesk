@@ -59,7 +59,15 @@ internal sealed class DatabaseInitializer(
                 .SqlQueryRaw<long>("SELECT user_version AS \"Value\" FROM pragma_user_version")
                 .SingleAsync(cancellationToken) < DueUpgradeDone)
         {
-            await CountPastDuesAsNotifiedAsync(context, cancellationToken);
+            try
+            {
+                await CountPastDuesAsNotifiedAsync(context, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Not fatal: the transaction rolled back, user_version stays unrecorded and the next start retries.
+                logger.LogWarning(ex, "The upgrade rule of the Due notification failed; it will run again at the next start");
+            }
         }
 
         try
@@ -105,7 +113,7 @@ internal sealed class DatabaseInitializer(
         }
 
         var counted = await context.SaveChangesAsync(cancellationToken);
-        await context.Database.ExecuteSqlRawAsync($"PRAGMA user_version = {DueUpgradeDone}", cancellationToken);
+        await context.Database.ExecuteSqlRawAsync("PRAGMA user_version = 1" /* DueUpgradeDone */, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         logger.LogInformation("Counted {Count} Dues already past as notified", counted);
     }

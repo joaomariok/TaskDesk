@@ -12,17 +12,17 @@ public sealed class TempDatabase : IDisposable
     private readonly string? _ownedRoot;
     private readonly ServiceProvider _provider;
 
-    public TempDatabase()
-        : this(Path.Combine(Path.GetTempPath(), "taskdesk-tests-" + Guid.NewGuid().ToString("N")), owner: true)
+    public TempDatabase(Action<IServiceCollection>? configure = null)
+        : this(Path.Combine(Path.GetTempPath(), "taskdesk-tests-" + Guid.NewGuid().ToString("N")), owner: true, configure)
     {
     }
 
     /// <summary>A second app instance over the folder of an existing one; it does not delete the folder.</summary>
-    public TempDatabase(IAppPaths existing) : this(existing.DataDirectory, owner: false)
+    public TempDatabase(IAppPaths existing) : this(existing.DataDirectory, owner: false, configure: null)
     {
     }
 
-    private TempDatabase(string root, bool owner)
+    private TempDatabase(string root, bool owner, Action<IServiceCollection>? configure)
     {
         _ownedRoot = owner ? root : null;
         Paths = AppPaths.ForRoot(root);
@@ -31,6 +31,7 @@ public sealed class TempDatabase : IDisposable
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(Clock);
         services.AddTaskDeskData(Paths);
+        configure?.Invoke(services);
         _provider = services.BuildServiceProvider();
     }
 
