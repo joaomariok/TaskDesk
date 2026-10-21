@@ -390,7 +390,7 @@
                                             <Button Grid.Column="1" Style="{StaticResource SmallIconButton}"
                                                     ToolTipService.ToolTip="Remove reminder"
                                                     AutomationProperties.Name="{x:Bind RemoveName, Mode=OneTime}"
-                                                    Command="{x:Bind RemoveCommand, Mode=OneTime}">
+                                                    Click="OnRemoveReminderClick">
                                                 <FontIcon Glyph="&#xE711;" FontSize="12" />
                                             </Button>
                                         </Grid>

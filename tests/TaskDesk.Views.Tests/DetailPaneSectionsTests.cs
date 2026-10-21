@@ -857,6 +857,72 @@ public sealed class DetailPaneSectionsTests
         }
     }
 
+    [UITestMethod]
+    public async Task Opening_another_Task_never_moves_the_focus_onto_its_Reminder_rows()
+    {
+        using var db = await DatabaseAsync();
+        var bank = await AddAsync(db, "Call the bank");
+        var rent = await AddAsync(db, "Pay rent");
+        var reminders = db.Get<IReminderService>();
+        var now = db.Clock.GetUtcNow().UtcDateTime;
+        foreach (var task in new[] { bank, rent })
+        {
+            foreach (var hours in new[] { 1, 2, 3 })
+            {
+                await reminders.AddReminderAsync(task, ReminderValue.Fixed(now.AddHours(hours)), Ct);
+            }
+        }
+
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Call the bank");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 3, () => "The Reminders have no rows.", Ct);
+            ReminderRows(pane)[1].Focus(FocusState.Keyboard);
+
+            await OpenPaneAsync(window, "Pay rent");
+            await UiWait.UntilAsync(() => viewModel.DetailTask?.Id == rent && ReminderRows(pane).Count == 3,
+                () => "The other Task's rows did not show.", Ct);
+            pane.UpdateLayout();
+            Assert.IsFalse(
+                FocusManager.GetFocusedElement(pane.XamlRoot) is Button { DataContext: ReminderRowViewModel },
+                $"The focus went to {Describe(FocusManager.GetFocusedElement(pane.XamlRoot))}, a row of the other Task.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Clearing_the_Due_under_a_focused_before_Due_row_moves_the_focus_to_Add_reminder()
+    {
+        using var db = await DatabaseAsync();
+        var id = await AddAsync(db, "Pay rent", new DateOnly(2026, 10, 20));
+        var reminders = db.Get<IReminderService>();
+        await reminders.AddReminderAsync(id, ReminderValue.BeforeDue(2, ReminderUnit.Hours), Ct);
+        await reminders.AddReminderAsync(id, ReminderValue.Fixed(new DateTime(2026, 10, 18, 8, 0, 0, DateTimeKind.Utc)), Ct);
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Pay rent");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 2, () => "The Reminders have no rows.", Ct);
+            var beforeDue = viewModel.DetailReminders.Single(r => r.Value.Kind == ReminderKind.BeforeDue);
+            ReminderRows(pane).Single(b => b.DataContext == beforeDue).Focus(FocusState.Keyboard);
+
+            VisualTree.Find<CalendarDatePicker>(pane, "DetailDueDatePicker").Date = null;
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 1, () => "The before-Due row stayed.", Ct);
+            await viewModel.FlushPendingSaveAsync();
+            await UiWait.UntilAsync(
+                () => FocusManager.GetFocusedElement(pane.XamlRoot) is Button { Name: "AddReminderButton" },
+                () => $"The focus went to {Describe(FocusManager.GetFocusedElement(pane.XamlRoot))}, not Add reminder.", Ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     // True when the focus is on the listed row's button (column 0) or x (column 1) of the given Reminder.
     private static bool FocusIsOnRow(DetailPane pane, Guid reminder, int column) =>
         FocusManager.GetFocusedElement(pane.XamlRoot) is Button { DataContext: ReminderRowViewModel row } button

@@ -9,10 +9,11 @@ public sealed class ReminderRowViewModel
     private readonly string _wording;
 
     internal ReminderRowViewModel(
-        Guid id, ReminderValue value, DateTime firesAtUtc, string text, string wording, bool isPast,
+        Guid id, Guid taskId, ReminderValue value, DateTime firesAtUtc, string text, string wording, bool isPast,
         Action<ReminderRowViewModel> edit, Func<ReminderRowViewModel, Task> remove)
     {
         Id = id;
+        TaskId = taskId;
         Value = value;
         FiresAtUtc = firesAtUtc;
         Text = text;
@@ -23,6 +24,9 @@ public sealed class ReminderRowViewModel
     }
 
     public Guid Id { get; }
+
+    /// <summary>The Task the Reminder belongs to.</summary>
+    public Guid TaskId { get; }
 
     /// <summary>What the Reminder is set to: a fixed instant, or an offset before the Due.</summary>
     public ReminderValue Value { get; }

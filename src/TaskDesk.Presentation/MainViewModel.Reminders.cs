@@ -131,7 +131,7 @@ public sealed partial class MainViewModel
                     $"{ReminderWording.FullOffset(amount, unit)} before Due, {when}")
                 : (when, when);
             DetailReminders.Add(new ReminderRowViewModel(
-                reminder.Id, reminder.Value, at.Value, text, wording, at.Value <= now, EditReminder,
+                reminder.Id, task.Id, reminder.Value, at.Value, text, wording, at.Value <= now, EditReminder,
                 RemoveReminderAsync));
         }
 

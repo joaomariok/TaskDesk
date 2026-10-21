@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
@@ -179,10 +180,9 @@ public sealed partial class DetailPane : UserControl
         }
     }
 
-    // What opened the Reminder flyout, which takes the focus back when it closes: the control, the Reminder of a
-    // row opener (its row may be rebuilt, and the old button let go of, before the flyout closes), and how the
-    // opener had the focus, so a keyboard user gets the focus visual back.
-    private Control? _reminderOpener;
+    // What opened the Reminder flyout, which takes the focus back when it closes: the Reminder of a row opener
+    // (its row may be rebuilt, and the old button let go of, before the flyout closes), null for "Add reminder",
+    // and how the opener had the focus, so a keyboard user gets the focus visual back.
     private Guid? _reminderOpenerId;
     private FocusState _reminderOpenerFocus;
 
@@ -207,9 +207,8 @@ public sealed partial class DetailPane : UserControl
 
     private void ShowReminderFlyout(Control opener, Guid? reminderId)
     {
-        _reminderOpener = opener;
         _reminderOpenerId = reminderId;
-        _reminderOpenerFocus = opener.FocusState == FocusState.Unfocused ? FocusState.Programmatic : opener.FocusState;
+        _reminderOpenerFocus = RestorableFocus(opener.FocusState);
         _reminderShows++;
         ReminderFlyout.ShowAt(opener);
     }
@@ -239,46 +238,101 @@ public sealed partial class DetailPane : UserControl
         // closed the editor already, so a row opener is found again by its Reminder.
         Control target = _reminderOpenerId is { } id
             ? ReminderRowControl(id, column: 0) ?? AddReminderButton
-            : _reminderOpener is { IsLoaded: true } opener ? opener : AddReminderButton;
-        _reminderOpener = null;
+            : AddReminderButton;
         _reminderOpenerId = null;
         target.Focus(_reminderOpenerFocus);
         ReminderEditor.CancelCommand.Execute(null);
     }
 
-    // The Reminder whose row (column 0) or × (column 1) had the focus when the rows began a rebuild, its place in
-    // the list and the Task it belongs to.
-    private (Guid Id, int Index, Guid? TaskId, int Column, FocusState State)? _focusedReminder;
+    // The Reminder whose × was pressed, the Task it belongs to and its place in the rows, from the press until the
+    // rebuild that drops it, or until its removal ends without one (refused, or nothing stored).
+    private (Guid Id, Guid TaskId, int Index)? _removedReminder;
+
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
+    private async void OnRemoveReminderClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: ReminderRowViewModel row } || !row.RemoveCommand.CanExecute(null))
+        {
+            return;
+        }
+
+        var removed = (row.Id, row.TaskId, ViewModel.DetailReminders.IndexOf(row));
+        _removedReminder = removed;
+        try
+        {
+            await row.RemoveCommand.ExecuteAsync(null);
+        }
+        finally
+        {
+            if (_removedReminder == removed)
+            {
+                _removedReminder = null;
+            }
+        }
+    }
+
+    // The Reminder whose × was pressed, once a rebuild of its own Task's rows no longer lists it; null otherwise.
+    // The record goes once used, and when the pane shows another Task.
+    private (Guid Id, Guid TaskId, int Index)? TakeRemovedReminder()
+    {
+        if (_removedReminder is not { } removed)
+        {
+            return null;
+        }
+
+        if (ViewModel.DetailTask?.Id == removed.TaskId && ViewModel.DetailReminders.Any(r => r.Id == removed.Id))
+        {
+            return null; // not removed yet
+        }
+
+        _removedReminder = null;
+        return ViewModel.DetailTask?.Id == removed.TaskId ? removed : null;
+    }
+
+    // The Reminder whose row (column 0) or × (column 1) had the focus when the rows began a rebuild, and the Task
+    // it belongs to.
+    private (Guid Id, Guid TaskId, int Column, FocusState State)? _focusedReminder;
 
     private void OnReminderRowsRebuilding(object? sender, EventArgs e) =>
         _focusedReminder = XamlRoot is { } root
             && FocusManager.GetFocusedElement(root) is Button { DataContext: ReminderRowViewModel row } button
-                ? (row.Id, ViewModel.DetailReminders.IndexOf(row), ViewModel.DetailTask?.Id, Grid.GetColumn(button),
-                    button.FocusState)
+                ? (row.Id, row.TaskId, Grid.GetColumn(button), button.FocusState)
                 : null;
 
-    // A rebuild replaces every row, the focused one too: the focus goes to that Reminder's new row. When the
-    // Reminder is gone from the same Task (removed with its ×), it goes to the row now in its place, else the
-    // previous row, else "Add reminder".
+    // A rebuild replaces every row, the focused one too: the focus goes to that Reminder's new row. A Reminder
+    // removed with its × hands the focus to the row now in its place, else the previous row, else "Add reminder".
+    // Gone from the same Task any other way (a cleared Due drops a before-Due row), it goes to "Add reminder";
+    // when the pane shows another Task, the focus stays where XAML puts it, never on that Task's rows.
     private void OnReminderRowsRebuilt(object? sender, EventArgs e)
     {
+        var removed = TakeRemovedReminder();
         if (_focusedReminder is not { } focused)
         {
             return;
         }
 
         _focusedReminder = null;
-        var target = ReminderRowControl(focused.Id, focused.Column);
-        if (target is null && focused.TaskId is { } taskId && ViewModel.DetailTask?.Id == taskId)
+        if (ViewModel.DetailTask?.Id != focused.TaskId)
         {
-            var rows = ViewModel.DetailReminders;
-            target = rows.Count > 0
-                ? ReminderRowControl(rows[Math.Clamp(focused.Index, 0, rows.Count - 1)].Id, focused.Column)
-                : AddReminderButton;
+            return;
         }
 
-        target?.Focus(focused.State == FocusState.Unfocused ? FocusState.Programmatic : focused.State);
+        Control? target = ReminderRowControl(focused.Id, focused.Column);
+        if (target is null)
+        {
+            var rows = ViewModel.DetailReminders;
+            target = removed?.Id == focused.Id && rows.Count > 0
+                ? ReminderRowControl(rows[Math.Min(removed.Value.Index, rows.Count - 1)].Id, focused.Column)
+                : null;
+            target ??= AddReminderButton;
+        }
+
+        target.Focus(RestorableFocus(focused.State));
     }
+
+    // A control's focus state to hand on: Unfocused (a control that lost the focus already) becomes Programmatic.
+    private static FocusState RestorableFocus(FocusState state) =>
+        state == FocusState.Unfocused ? FocusState.Programmatic : state;
 
     // The row button (column 0) or × (column 1) of a listed Reminder; null when it has no row.
     private Button? ReminderRowControl(Guid id, int column)
