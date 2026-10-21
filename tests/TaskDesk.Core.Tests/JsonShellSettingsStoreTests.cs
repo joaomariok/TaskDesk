@@ -53,4 +53,42 @@ public sealed class JsonShellSettingsStoreTests : IDisposable
 
         Assert.Equal(new ShellSettings(), new JsonShellSettingsStore(FilePath).Load());
     }
+
+    [Theory]
+    [InlineData("{\"startWithWindows\":\"yes\",\"trayHintShown\":\"yes\"}")]
+    [InlineData("{\"startWithWindows\":0,\"trayHintShown\":1}")]
+    [InlineData("{\"startWithWindows\":null,\"trayHintShown\":{}}")]
+    [InlineData("{\"startWithWindows\":[true],\"trayHintShown\":[false]}")]
+    public void A_boolean_key_of_the_wrong_type_reads_as_its_default(string json)
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(FilePath, json);
+
+        var settings = new JsonShellSettingsStore(FilePath).Load();
+
+        Assert.True(settings.StartWithWindows);
+        Assert.False(settings.TrayHintShown);
+    }
+
+    [Fact]
+    public void A_wrong_typed_boolean_key_does_not_hide_the_other_keys()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(FilePath, "{\"startWithWindows\":\"yes\",\"trayHintShown\":true,\"themeMode\":\"Dark\"}");
+
+        var settings = new JsonShellSettingsStore(FilePath).Load();
+
+        Assert.True(settings.TrayHintShown);
+        Assert.Equal(ThemeChoice.Dark, settings.Theme);
+    }
+
+    [Fact]
+    public void An_unreadable_file_throws_instead_of_reading_as_defaults()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(FilePath, "{}");
+        using var held = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        Assert.ThrowsAny<IOException>(() => new JsonShellSettingsStore(FilePath).Load());
+    }
 }

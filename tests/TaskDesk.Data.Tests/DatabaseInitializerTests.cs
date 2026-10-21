@@ -181,9 +181,10 @@ public class DatabaseInitializerTests
 
     private static async Task<Guid> InsertDueTaskAsync(
         TaskDeskDbContext context, Guid listId, string title, string dueDate, string? dueTime,
-        DateTime? notifiedThrough = null, DateTime? snoozed = null, DateTime? reminder = null)
+        DateTime? notifiedThrough = null, DateTime? snoozed = null, DateTime? reminder = null,
+        Guid? taskId = null)
     {
-        var id = Guid.NewGuid();
+        var id = taskId ?? Guid.NewGuid();
         var created = Sql(new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
         await context.Database.ExecuteSqlAsync(
             $"""
@@ -320,15 +321,16 @@ public class DatabaseInitializerTests
     }
 
     [Fact]
-    public async Task An_unreadable_settings_store_lets_the_upgrade_rule_run_with_the_initial_Reminder_time()
+    public async Task An_unreadable_settings_store_skips_the_upgrade_rule_until_the_next_start_reads_the_default_time()
     {
-        // Now is 2026-10-16 09:30 UTC; the time zone is UTC. The fallback time is 09:00.
+        // Now is 2026-10-16 09:30 UTC and the time zone is UTC. The owner's default Reminder time is 18:00, so a
+        // date-only Due today is still ahead; with 09:00 it would count as past.
         var ct = TestContext.Current.CancellationToken;
         var settings = new ThrowingSettingsStore { Throw = new InvalidOperationException("settings unreadable") };
         using var db = new TempDatabase(services => services.AddSingleton<IShellSettingsStore>(settings));
         db.Paths.EnsureDirectories();
         var now = db.Clock.GetUtcNow().UtcDateTime;
-        Guid pastToday, tomorrow;
+        Guid today, tomorrow;
         await using (var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(ct))
         {
             await context.Database.GetService<IMigrator>().MigrateAsync("20261020235855_Ticket117_BeforeDue", ct);
@@ -339,20 +341,67 @@ public class DatabaseInitializerTests
                 VALUES ({listId.ToString().ToUpperInvariant()}, 'Inbox', 0, 1, {Sql(now)})
                 """,
                 ct);
-            pastToday = await InsertDueTaskAsync(context, listId, "date-only today", "2026-10-16", null);
+            today = await InsertDueTaskAsync(context, listId, "date-only today", "2026-10-16", null);
             tomorrow = await InsertDueTaskAsync(context, listId, "date-only tomorrow", "2026-10-17", null);
         }
 
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct); // startup completes without the rule
+
+        Assert.Equal(0, await UserVersionAsync(db, ct));
+        Assert.All(await db.QueryAsync(c => c.Tasks), t => Assert.Null(t.NotifiedThroughUtc));
+
+        settings.Throw = null;
+        settings.DefaultReminderTime = new TimeOnly(18, 0);
         await db.Get<IDatabaseInitializer>().InitializeAsync(ct);
 
         Assert.Equal(1, await UserVersionAsync(db, ct));
-        settings.Throw = null; // the Reminder service reads the settings too
         var reminders = db.Get<IReminderService>();
-        Assert.Empty(await reminders.ListDueAsync(ct)); // 09:00 today is past, so it counts as notified
-        db.Clock.Advance(TimeSpan.FromDays(1));
+        Assert.Empty(await reminders.ListDueAsync(ct));
+        db.Clock.Advance(TimeSpan.FromHours(8.5)); // 18:00: today's Due was ahead at the upgrade, so it notifies
         var due = Assert.Single(await reminders.ListDueAsync(ct));
-        Assert.Equal(tomorrow, due.TaskId);
-        Assert.DoesNotContain(pastToday, (await reminders.ListDueAsync(ct)).Select(d => d.TaskId));
+        Assert.Equal((today, now.AddHours(8.5)), (due.TaskId, due.DueAtUtc));
+        Assert.DoesNotContain(tomorrow, (await reminders.ListDueAsync(ct)).Select(d => d.TaskId));
+    }
+
+    [Fact]
+    public async Task A_non_database_failure_in_the_upgrade_rule_after_Tasks_are_tracked_saves_nothing()
+    {
+        // Two past Dues: the first is counted as notified in memory, the second throws in the calculator (a stored
+        // Reminder before Due whose amount puts its moment before year 1). No List is the Default, so startup saves
+        // later in the same context; the half-applied first Task must not be saved with it.
+        var ct = TestContext.Current.CancellationToken;
+        using var db = new TempDatabase();
+        db.Paths.EnsureDirectories();
+        var now = db.Clock.GetUtcNow().UtcDateTime;
+        var first = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var last = Guid.Parse("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF");
+        await using (var context = await db.Get<IDbContextFactory<TaskDeskDbContext>>().CreateDbContextAsync(ct))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync("20261020235855_Ticket117_BeforeDue", ct);
+            var listId = Guid.NewGuid();
+            await context.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO Lists (Id, Name, SortOrder, IsDefault, CreatedUtc)
+                VALUES ({listId.ToString().ToUpperInvariant()}, 'Not default', 0, 0, {Sql(now)})
+                """,
+                ct);
+            await InsertDueTaskAsync(context, listId, "counts fine", "2026-10-15", null, taskId: first);
+            await InsertDueTaskAsync(context, listId, "breaks the rule", "2026-10-15", null, taskId: last);
+            var amount = int.MaxValue;
+            await context.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO Reminders (Id, TaskId, Kind, Amount, Unit)
+                VALUES ({Guid.NewGuid().ToString().ToUpperInvariant()}, {last.ToString().ToUpperInvariant()}, 1,
+                    {amount}, 0)
+                """,
+                ct);
+        }
+
+        await db.Get<IDatabaseInitializer>().InitializeAsync(ct); // the failure is skipped, startup goes on
+
+        Assert.Equal(0, await UserVersionAsync(db, ct)); // the next start retries
+        Assert.All(await db.QueryAsync(c => c.Tasks), t => Assert.Null(t.NotifiedThroughUtc));
+        Assert.Contains(await db.QueryAsync(c => c.Lists), l => l.IsDefault); // startup carried on and saved
     }
 
     [Fact]
@@ -410,11 +459,12 @@ public class DatabaseInitializerTests
     {
         public Exception? Throw { get; set; }
         public Action? OnLoad { get; set; }
+        public TimeOnly DefaultReminderTime { get; set; } = ShellSettings.InitialReminderTime;
 
         public ShellSettings Load()
         {
             OnLoad?.Invoke();
-            return Throw is { } ex ? throw ex : new ShellSettings();
+            return Throw is { } ex ? throw ex : new ShellSettings(DefaultReminderTime: DefaultReminderTime);
         }
 
         public void Save(ShellSettings settings)

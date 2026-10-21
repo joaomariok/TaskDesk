@@ -47,8 +47,8 @@ public sealed class JsonShellSettingsStore(string path) : IShellSettingsStore
     {
         var root = ReadRoot();
         return new ShellSettings(
-            root[StartKey]?.GetValue<bool>() ?? true,
-            root[HintKey]?.GetValue<bool>() ?? false,
+            ReadBool(root[StartKey], true),
+            ReadBool(root[HintKey], false),
             ReadEnum(root[ThemeKey], ThemeChoice.System),
             ReadEnum(root[CloseKey], CloseBehavior.HideToTray),
             ReadTime(root[ReminderKey]),
@@ -74,6 +74,10 @@ public sealed class JsonShellSettingsStore(string path) : IShellSettingsStore
         File.WriteAllText(temp, root.ToJsonString());
         File.Move(temp, path, overwrite: true);
     }
+
+    // A missing key or a value of the wrong type means the default.
+    private static bool ReadBool(JsonNode? node, bool fallback) =>
+        node is JsonValue value && value.TryGetValue<bool>(out var flag) ? flag : fallback;
 
     private static T ReadEnum<T>(JsonNode? node, T fallback) where T : struct, Enum =>
         node is JsonValue value && value.TryGetValue<string>(out var text)
