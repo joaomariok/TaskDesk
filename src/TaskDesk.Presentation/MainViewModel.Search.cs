@@ -101,6 +101,11 @@ public sealed partial class MainViewModel
 
     partial void OnSearchTextChanged(string value)
     {
+        if (value.Trim().Length == 0)
+        {
+            EndSearchOpening();
+        }
+
         OnPropertyChanged(nameof(IsNarrowed));
         UpdateReorderEnabled();
         NotifyPageStateChanged();

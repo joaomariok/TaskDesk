@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using TaskDesk.Core.Tasks;
 
 namespace TaskDesk.Data;
 
@@ -13,18 +14,16 @@ internal static class TextFold
 {
     public const string SqlName = "taskdesk_fold";
 
-    /// <summary>The folded form of <paramref name="text"/> (invariant lower case); null stays null.</summary>
-    public static string? Apply(string? text) => text?.ToLowerInvariant();
-
     /// <summary>Translated to the SQL function <see cref="SqlName"/>; never runs in memory.</summary>
     public static string? Fold(string? text) =>
-        throw new InvalidOperationException($"{nameof(Fold)} runs in SQL only; use {nameof(Apply)} in memory.");
+        throw new InvalidOperationException(
+            $"{nameof(Fold)} runs in SQL only; use {nameof(SearchFold)}.{nameof(SearchFold.Apply)} in memory.");
 
     public static void Register(DbConnection connection)
     {
         if (connection is SqliteConnection sqlite)
         {
-            sqlite.CreateFunction<string?, string?>(SqlName, Apply, isDeterministic: true);
+            sqlite.CreateFunction<string?, string?>(SqlName, SearchFold.Apply, isDeterministic: true);
         }
     }
 }

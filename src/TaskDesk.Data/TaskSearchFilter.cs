@@ -11,9 +11,9 @@ internal static class TaskSearchFilter
     public static Func<IQueryable<TaskItem>, IQueryable<TaskItem>> Create(TaskSearchQuery query)
     {
         var text = query.Text?.Trim();
-        // Both sides are folded (TextFold), so case is ignored for non-ASCII letters too; the escaping keeps
+        // Both sides are folded (SearchFold), so case is ignored for non-ASCII letters too; the escaping keeps
         // % _ and \ literal.
-        var pattern = string.IsNullOrEmpty(text) ? null : $"%{EscapeLike(TextFold.Apply(text)!)}%";
+        var pattern = string.IsNullOrEmpty(text) ? null : $"%{EscapeLike(SearchFold.Apply(text)!)}%";
         var minPriority = query.MinPriority;
         var tagIds = query.TagIds?.Distinct().ToList() ?? [];
         var hasDue = query.HasDue;

@@ -287,6 +287,7 @@ public sealed partial class MainViewModel(
 
         SortCompleted();
         NotifyCompletedChanged();
+        OpenTasksMatchedBySubtask(_all);
 
         // Reselect the same Task without reopening a detail pane the owner closed.
         SelectedTask = _all.Find(r => r.Id == _reselectId);

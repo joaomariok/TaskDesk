@@ -68,6 +68,7 @@ Mark each item with the date and result.
 - [ ] Due dates: Today, Upcoming, Overdue, All, Completed views contain the right Tasks, including a Task due today at a time that has just passed.
 - [ ] Recurrence: complete a repeating Task and the next Occurrence appears; Skip works; deleting an Occurrence offers "Delete this occurrence" and "Stop repeating".
 - [ ] Search and filters (priority, Tags, has due, has reminder) work in the current view, and Esc or clearing restores it.
+- [ ] Search for a Subtask's title (for example in capitals): its Task opens with all its Subtasks; press Esc and it closes again. A Task you closed during the search stays closed.
 
 ## Keyboard-only
 
