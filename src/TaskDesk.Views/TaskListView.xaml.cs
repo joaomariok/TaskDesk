@@ -333,16 +333,19 @@ public sealed partial class TaskListView : UserControl
         await ViewModel.MoveTaskAsync(oldIndex, newIndex);
     }
 
-    /// <summary>The spans of the open rows, indexed like <c>ViewModel.Tasks</c>; null for a row with no container.</summary>
-    private RowSpan?[] OpenSpans()
+    /// <summary>
+    /// The spans of the open group's rows (each open Task row, then its Subtask rows while it is open), in order;
+    /// null for a row with no container.
+    /// </summary>
+    private List<RowSpan?> OpenRowSpans()
     {
         var all = RowMeasure.Spans(OpenTaskList);
-        var spans = new RowSpan?[ViewModel.Tasks.Count];
+        var spans = new List<RowSpan?>();
         for (var i = 0; i < all.Length; i++)
         {
-            if (OpenTaskList.Items[i] is TaskRowViewModel row && ViewModel.Tasks.IndexOf(row) is >= 0 and var at)
+            if (OpenTaskList.Items[i] is ITaskListRow row && ViewModel.Tasks.Contains(row.TaskRow))
             {
-                spans[at] = all[i];
+                spans.Add(all[i]);
             }
         }
 
@@ -350,10 +353,12 @@ public sealed partial class TaskListView : UserControl
     }
 
     /// <summary>
-    /// The gap over the open rows a drop at <paramref name="position"/> (relative to the list) lands in: over a
+    /// The gap over the open Tasks a drop at <paramref name="position"/> (relative to the list) lands in: over a
     /// row's top half the gap before it, over its bottom half the gap after it, and below the rows the last gap.
+    /// A pointer inside an open Task's block (its Task row's bottom half or a Subtask row) is the gap after it.
     /// </summary>
-    public int GapAt(Windows.Foundation.Point position) => ReorderGeometry.GapAt(OpenSpans(), position.Y);
+    public int GapAt(Windows.Foundation.Point position) =>
+        ViewModel.TaskGapOfRowGap(ReorderGeometry.GapAt(OpenRowSpans(), position.Y));
 
     /// <summary>
     /// Drops <paramref name="dragged"/> into the gap <paramref name="gap"/> over the open rows through the view
@@ -369,12 +374,12 @@ public sealed partial class TaskListView : UserControl
     }
 
     /// <summary>
-    /// Shows the insertion line on the gap <paramref name="gap"/> while a Task is dragged: at the top of the row
-    /// after it, or under the last open row.
+    /// Shows the insertion line on the gap <paramref name="gap"/> over the open Tasks while a Task is dragged: at
+    /// the top of the row after it, or under the last open row (an open last Task's last Subtask row).
     /// </summary>
     public void ShowDropGap(int gap)
     {
-        var y = ReorderGeometry.LineOffset(OpenSpans(), gap);
+        var y = ReorderGeometry.LineOffset(OpenRowSpans(), ViewModel.RowGapOfTaskGap(gap));
         if (y is not { } top)
         {
             HideInsertionLine();

@@ -427,6 +427,44 @@ public sealed partial class MainViewModel(
         return MoveTaskAsync(from, gap > from ? gap - 1 : gap, cancellationToken);
     }
 
+    /// <summary>
+    /// The gap over the open Tasks (as <see cref="MoveTaskToGapAsync"/> takes it) that the gap
+    /// <paramref name="rowGap"/> over the open group's rows lands in. An open Task and its Subtask rows are one
+    /// block a drop never splits: a gap inside a block (after its Task row or between two of its Subtask rows)
+    /// lands after the whole block. A gap past the rows is the last gap.
+    /// </summary>
+    public int TaskGapOfRowGap(int rowGap)
+    {
+        if (rowGap <= 0)
+        {
+            return rowGap;
+        }
+
+        var blockStart = 0;
+        for (var i = 0; i < Tasks.Count; i++)
+        {
+            if (rowGap <= blockStart)
+            {
+                return i;
+            }
+
+            blockStart += 1 + Tasks[i].ShownSubtaskRows.Count;
+            if (rowGap < blockStart)
+            {
+                return i + 1;
+            }
+        }
+
+        return Tasks.Count;
+    }
+
+    /// <summary>
+    /// The gap over the open group's rows where the gap <paramref name="taskGap"/> over the open Tasks sits: before
+    /// the block of the Task after it, or after the last row for the last gap (and past it).
+    /// </summary>
+    public int RowGapOfTaskGap(int taskGap) =>
+        Tasks.Take(Math.Max(0, taskGap)).Sum(row => 1 + row.ShownSubtaskRows.Count);
+
     private bool CanAddTask() => TaskTitle.IsValid(QuickAddTitle);
 
     // ---- Completion ----

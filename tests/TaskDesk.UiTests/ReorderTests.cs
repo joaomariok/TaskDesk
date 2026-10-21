@@ -1,6 +1,7 @@
 using System.Drawing;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
+using FlaUI.Core.WindowsAPI;
 
 namespace TaskDesk.UiTests;
 
@@ -53,6 +54,59 @@ public sealed class ReorderTests : IDisposable
         _app.Restart();
 
         _app.WaitForRows(Ids.OpenTaskList, expected);
+    }
+
+    [Fact]
+    public void An_open_Task_dragged_over_another_Tasks_Subtask_rows_lands_after_that_block_with_its_own_Subtasks()
+    {
+        string[] titles = ["First", "Second", "Third"];
+        for (var i = 0; i < titles.Length; i++)
+        {
+            _app.TypeInto(Ids.QuickAddBox, titles[i], pressEnter: true);
+            _app.WaitForRows(Ids.OpenTaskList, titles[..(i + 1)]);
+        }
+
+        AddSubtasks("First", "Sub one");
+        AddSubtasks("Second", "Pack", "Book");
+        Open("First");
+        Open("Second");
+        _app.WaitForRows(
+            Ids.OpenTaskList, "First", "Subtask Sub one", "Second", "Subtask Pack", "Subtask Book", "Third");
+
+        // Drop the open "First" on the middle of Second's first Subtask row: inside Second's block.
+        AppSession.DragSlowly(Centre(Row("First")), Centre(Row("Subtask Pack")));
+
+        _app.WaitForRows(
+            Ids.OpenTaskList, "Second", "Subtask Pack", "Subtask Book", "First", "Subtask Sub one", "Third");
+
+        _app.Restart();
+
+        _app.WaitForRows(Ids.OpenTaskList, "Second", "First", "Third");
+    }
+
+    // Adds Subtasks to a Task in the detail pane; Esc closes it and gives the row back its focus.
+    private void AddSubtasks(string task, params string[] subtasks)
+    {
+        _app.SelectRow(Ids.OpenTaskList, task);
+        AppSession.Press(VirtualKeyShort.RETURN);
+        foreach (var subtask in subtasks)
+        {
+            _app.TypeInto(Ids.NewSubtaskBox, subtask, pressEnter: true);
+        }
+
+        AppSession.WaitUntil(
+            () => _app.TextBox(Ids.NewSubtaskBox).Text.Length == 0, () => $"The Subtasks of '{task}' were not added.");
+        AppSession.Press(VirtualKeyShort.ESCAPE);
+    }
+
+    // Opens a Task's Subtask rows with the Right key on its selected row.
+    private void Open(string task)
+    {
+        _app.SelectRow(Ids.OpenTaskList, task);
+        AppSession.Press(VirtualKeyShort.RIGHT);
+        AppSession.WaitUntil(
+            () => Row(task).Patterns.ExpandCollapse.Pattern.ExpandCollapseState.Value == ExpandCollapseState.Expanded,
+            () => $"'{task}' did not open.");
     }
 
     private AutomationElement Row(string title) =>

@@ -58,6 +58,7 @@ Mark each item with the date and result.
 
 - [ ] Drag a Task to reorder it in a List; the order survives restart. Reordering is off in Smart Views, Tag filters and search.
 - [ ] Drag a Task above and below a row by half: the accent insertion line shows the gap it will land in (and hides on drop or when the drag leaves the list); then drop it on its own gap (just above or below itself) and nothing changes.
+- [ ] Drag an open Task: its Subtask rows move with it and stay open under it. Drag a Task over another open Task's Subtask rows (or the bottom half of its Task row): the insertion line shows only under that block's last Subtask row, never between a Task and its Subtasks, and the drop lands after the whole block.
 - [ ] Drag Lists in the navigation pane to reorder; rename, color and delete from the right-click menu.
 - [ ] Creating a List (new list box, Enter) and tagging a Task (new tag box, Enter). **(automated)**
 - [ ] Click a Tag in the navigation pane to filter; click again to clear.
