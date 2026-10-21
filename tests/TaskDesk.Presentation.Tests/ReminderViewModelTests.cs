@@ -233,8 +233,8 @@ public class ReminderViewModelTests
 
         await SelectWithRemindersAsync(s, Utc(20, 12), Utc(20, 14));
 
-        var past = s.Vm.DetailReminders[0];
-        var ahead = s.Vm.DetailReminders[1];
+        var ahead = s.Vm.DetailReminders[0];
+        var past = s.Vm.DetailReminders[1];
         Assert.True(past.IsPast);
         Assert.False(ahead.IsPast);
         Assert.Equal("Reminder Today 09:00, past", past.AccessibleName);
@@ -321,6 +321,111 @@ public class ReminderViewModelTests
         Assert.Equal(33, s.Vm.DetailReminders.Count);
         Assert.Equal(33, s.Tasks.All[0].Reminders.Count);
         Assert.Null(s.Vm.ErrorMessage);
+    }
+
+    // ---- Detail pane: the order of the rows and keeping it current ----
+
+    [Fact]
+    public async Task Future_Reminders_come_first_soonest_on_top_then_past_ones_most_recent_first()
+    {
+        var s = await StartAsync("a");
+
+        // Local Tue 20 Oct 10:00: Thu 22 and Sun 25 are ahead; today 09:00 and Mon 5 Oct have passed.
+        await SelectWithRemindersAsync(s, Utc(20, 12), Utc(25, 12), Utc(5, 12), Utc(22, 12));
+
+        Assert.Equal([Utc(22, 12), Utc(25, 12), Utc(20, 12), Utc(5, 12)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
+        Assert.Equal([false, false, true, true], s.Vm.DetailReminders.Select(r => r.IsPast));
+    }
+
+    [Fact]
+    public async Task A_Reminder_whose_moment_arrives_takes_the_past_look_and_moves_to_the_top_of_the_past_block()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(20, 12), Utc(20, 16), Utc(20, 14));
+
+        s.Clock.Advance(TimeSpan.FromHours(1) - TimeSpan.FromSeconds(1)); // 13:59:59, a second before 14:00
+
+        Assert.Equal([Utc(20, 14), Utc(20, 16), Utc(20, 12)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
+        Assert.Equal([false, false, true], s.Vm.DetailReminders.Select(r => r.IsPast));
+
+        s.Clock.Advance(TimeSpan.FromSeconds(1));
+
+        Assert.Equal([Utc(20, 16), Utc(20, 14), Utc(20, 12)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
+        Assert.Equal([false, true, true], s.Vm.DetailReminders.Select(r => r.IsPast));
+
+        s.Clock.Advance(TimeSpan.FromHours(2)); // 16:00, the last one
+
+        Assert.Equal([Utc(20, 16), Utc(20, 14), Utc(20, 12)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
+        Assert.All(s.Vm.DetailReminders, r => Assert.True(r.IsPast));
+        Assert.False(s.Vm.IsReminderRowTimerArmed, "A timer is left with no Reminder ahead.");
+    }
+
+    [Fact]
+    public async Task Editing_a_Reminder_aims_the_timer_at_its_new_moment()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(20, 16));
+
+        var editor = Edit(s, 0);
+        editor.Time = new TimeSpan(11, 0, 0); // 14:00 UTC, three hours earlier
+        await SaveAsync(s);
+        s.Clock.Advance(TimeSpan.FromHours(1));
+
+        Assert.True(Assert.Single(s.Vm.DetailReminders).IsPast);
+        Assert.False(s.Vm.IsReminderRowTimerArmed);
+    }
+
+    [Fact]
+    public async Task Selecting_another_Task_leaves_no_timer_for_the_first_one()
+    {
+        var s = await StartAsync("a", "b");
+        await SelectWithRemindersAsync(s, Utc(20, 14));
+        var a = s.Vm.SelectedTask!;
+        Assert.True(s.Vm.IsReminderRowTimerArmed);
+
+        s.Vm.SelectedTask = s.Vm.Tasks.Single(t => t != a);
+        var changes = 0;
+        s.Vm.DetailReminders.CollectionChanged += (_, _) => changes++;
+        s.Clock.Advance(TimeSpan.FromHours(2));
+
+        Assert.False(s.Vm.IsReminderRowTimerArmed, "Switching Tasks left the first Task's timer.");
+        Assert.Empty(s.Vm.DetailReminders);
+        Assert.Equal(0, changes);
+
+        s.Vm.SelectedTask = a;
+
+        Assert.True(Assert.Single(s.Vm.DetailReminders).IsPast);
+    }
+
+    [Fact]
+    public async Task Closing_the_pane_stops_the_timer_and_reopening_it_shows_the_rows_as_of_now()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(20, 14), Utc(20, 18));
+
+        s.Vm.CloseDetailPaneCommand.Execute(null);
+
+        Assert.False(s.Vm.IsReminderRowTimerArmed, "Closing the pane left its timer.");
+
+        s.Clock.Advance(TimeSpan.FromHours(2));
+        s.Vm.OpenDetailPane();
+
+        Assert.Equal([Utc(20, 18), Utc(20, 14)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
+        Assert.Equal([false, true], s.Vm.DetailReminders.Select(r => r.IsPast));
+        Assert.True(s.Vm.IsReminderRowTimerArmed, "Reopening the pane armed no timer for 18:00.");
+    }
+
+    [Fact]
+    public async Task Stopping_the_view_model_stops_the_Reminder_row_timer()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(20, 14));
+
+        await s.Vm.StopAsync();
+        s.Clock.Advance(TimeSpan.FromHours(2));
+
+        Assert.False(s.Vm.IsReminderRowTimerArmed);
+        Assert.False(Assert.Single(s.Vm.DetailReminders).IsPast);
     }
 
     // ---- Detail pane: the flyout editor ----

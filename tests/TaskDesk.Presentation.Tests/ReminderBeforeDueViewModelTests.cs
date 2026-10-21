@@ -112,7 +112,8 @@ public class ReminderBeforeDueViewModelTests
             Task.FromResult<IReadOnlyList<TaskItem>>([.. tasks.All]);
     }
 
-    private sealed record Setup(FakeTaskService Tasks, FakeServices Services, MainViewModel Vm, FakeSettingsStore Settings);
+    private sealed record Setup(
+        FakeTaskService Tasks, FakeServices Services, MainViewModel Vm, FakeSettingsStore Settings, FakeTimeProvider Clock);
 
     // One Task "a", due on Thursday (date-only) unless told otherwise, selected in the pane.
     private static async Task<Setup> StartAsync(DateOnly? due = null, TimeOnly? time = null, bool withDue = true)
@@ -133,7 +134,7 @@ public class ReminderBeforeDueViewModelTests
             settingsStore: settings);
         await vm.LoadAsync(Ct);
         vm.SelectedTask = vm.Tasks[0];
-        return new Setup(tasks, services, vm, settings);
+        return new Setup(tasks, services, vm, settings, clock);
     }
 
     private static ReminderEditorViewModel AddBeforeDue(Setup s)
@@ -361,6 +362,47 @@ public class ReminderBeforeDueViewModelTests
     }
 
     [Fact]
+    public async Task A_Due_change_that_moves_a_before_Due_Reminder_ahead_moves_its_row_into_the_future_block()
+    {
+        var s = await StartAsync();
+        var id = s.Tasks.All[0].Id;
+        await s.Services.AddReminderAsync(id, ReminderValue.Fixed(Utc(19, 12)), Ct);
+        await s.Services.AddReminderAsync(id, ReminderValue.BeforeDue(2, ReminderUnit.Days), Ct); // Tue 20 09:00
+        await s.Services.AddReminderAsync(id, ReminderValue.Fixed(Utc(20, 17)), Ct);
+        await s.Vm.LoadAsync(Ct);
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        Assert.Equal([Utc(20, 17), Utc(20, 12), Utc(19, 12)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
+
+        s.Vm.DetailDueDate = new DateTime(2026, 10, 23);
+        await s.Vm.PendingSave;
+
+        Assert.Equal([Utc(20, 17), Utc(21, 12), Utc(19, 12)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
+        Assert.Equal([false, false, true], s.Vm.DetailReminders.Select(r => r.IsPast));
+    }
+
+    [Fact]
+    public async Task Rows_with_the_same_moment_keep_their_order_ahead_and_once_past()
+    {
+        var s = await StartAsync();
+        var id = s.Tasks.All[0].Id;
+        await s.Services.AddReminderAsync(id, ReminderValue.Fixed(Utc(21, 12)), Ct);
+        await s.Services.AddReminderAsync(id, ReminderValue.BeforeDue(1, ReminderUnit.Days), Ct); // Wed 21 09:00 too
+        await s.Vm.LoadAsync(Ct);
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+        var order = s.Vm.DetailReminders.Select(r => r.Id).ToList();
+
+        s.Vm.SelectedTask = null;
+        s.Vm.SelectedTask = s.Vm.Tasks[0];
+
+        Assert.Equal(order, s.Vm.DetailReminders.Select(r => r.Id));
+
+        s.Clock.Advance(TimeSpan.FromDays(1)); // Wed 21 10:00: both have passed
+
+        Assert.All(s.Vm.DetailReminders, r => Assert.True(r.IsPast));
+        Assert.Equal(order, s.Vm.DetailReminders.Select(r => r.Id));
+    }
+
+    [Fact]
     public async Task Rows_follow_the_default_Reminder_time_setting()
     {
         var s = await StartAsync();
@@ -383,19 +425,20 @@ public class ReminderBeforeDueViewModelTests
         await s.Vm.LoadAsync(Ct);
         s.Vm.SelectedTask = s.Vm.Tasks[0];
 
-        s.Vm.DetailReminders[1].EditCommand.Execute(null);
+        // Both have passed (Mon 19 and Tue 20 Oct 09:00), so the more recent one, 2 days before, is on top.
+        s.Vm.DetailReminders[0].EditCommand.Execute(null);
         var preset = s.Vm.ReminderEditor;
         Assert.True(preset.IsEditing);
         Assert.Equal(ReminderEditorViewModel.BeforeDueMode, preset.ModeIndex);
         Assert.Equal(PresetIndex("2 days"), preset.OffsetIndex);
 
-        s.Vm.DetailReminders[0].EditCommand.Execute(null);
+        s.Vm.DetailReminders[1].EditCommand.Execute(null);
         var custom = s.Vm.ReminderEditor;
         Assert.True(custom.IsCustom);
         Assert.Equal(3, custom.CustomAmount);
         Assert.Equal(2, custom.CustomUnitIndex);
 
-        var edited = s.Vm.DetailReminders[0].Id;
+        var edited = s.Vm.DetailReminders[1].Id;
         custom.CustomAmount = 4;
         await SaveAsync(s);
 
@@ -403,7 +446,7 @@ public class ReminderBeforeDueViewModelTests
         Assert.Equal(
             [ReminderValue.BeforeDue(4, ReminderUnit.Days), ReminderValue.BeforeDue(2, ReminderUnit.Days)],
             s.Tasks.All[0].Reminders.Select(r => r.Value));
-        Assert.StartsWith("4 days before · ", s.Vm.DetailReminders[0].Text);
+        Assert.StartsWith("4 days before · ", s.Vm.DetailReminders[1].Text);
     }
 
     [Fact]

@@ -10,9 +10,22 @@ namespace TaskDesk.Presentation;
 public sealed partial class MainViewModel
 {
     private ReminderEditorViewModel? _reminderEditor;
+    private ITimer? _reminderRowTimer;
 
-    /// <summary>The selected Task's Reminders, the one that fires first first.</summary>
+    // Each armed timer takes a version; a tick that was already posted runs only if no re-arm or stop came after it.
+    private int _reminderRowVersion;
+
+    // The longest wait a timer accepts (about 49.7 days); a moment further away is reached by re-arming on the way.
+    private static readonly TimeSpan MaxTimerWait = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
+
+    /// <summary>
+    /// The selected Task's Reminders by closeness to now: those ahead first, soonest on top, then the past
+    /// ones, the most recent first.
+    /// </summary>
     public System.Collections.ObjectModel.ObservableCollection<ReminderRowViewModel> DetailReminders { get; } = [];
+
+    /// <summary>True while a timer waits for the next moment of a Reminder listed in the open pane.</summary>
+    public bool IsReminderRowTimerArmed => _reminderRowTimer is not null;
 
     /// <summary>True while the selected Task has a Reminder: the Reminders box shows only then.</summary>
     public bool HasDetailReminders => DetailReminders.Count > 0;
@@ -52,6 +65,7 @@ public sealed partial class MainViewModel
         DetailReminders.Clear();
         if (task is null)
         {
+            StopReminderRowTimer();
             OnPropertyChanged(nameof(HasDetailReminders));
             return;
         }
@@ -62,7 +76,8 @@ public sealed partial class MainViewModel
         var rows = task.Reminders
             .Select(r => (Reminder: r, At: ReminderCalculator.MomentOf(r, task, rules)))
             .Where(r => r.At is not null)
-            .OrderBy(r => r.At)
+            .OrderBy(r => r.At <= now) // ahead first, then past
+            .ThenBy(r => r.At <= now ? -r.At!.Value.Ticks : r.At!.Value.Ticks) // nearest to now first in each
             .ThenBy(r => r.Reminder.Id);
         foreach (var (reminder, at) in rows)
         {
@@ -78,6 +93,56 @@ public sealed partial class MainViewModel
         }
 
         OnPropertyChanged(nameof(HasDetailReminders));
+        ArmReminderRowTimer(DetailReminders.Where(r => !r.IsPast).Select(r => (DateTime?)r.FiresAtUtc).Min());
+    }
+
+    // While the pane is open, one timer waits for the next moment of a listed Reminder; its tick rebuilds the
+    // rows, so that row takes the past look and moves into the past block, and the rebuild aims the timer at
+    // the moment after it. Nothing ticks in between.
+    private void ArmReminderRowTimer(DateTime? nextUtc)
+    {
+        StopReminderRowTimer();
+        if (nextUtc is not { } next || !IsDetailPaneOpen || _lifetime.IsStopped)
+        {
+            return;
+        }
+
+        _uiContext ??= SynchronizationContext.Current; // the UI thread in the app; none in tests
+        var wait = next - _clock.GetUtcNow().UtcDateTime;
+        var version = _reminderRowVersion;
+        _reminderRowTimer = _clock.CreateTimer(
+            _ => OnUiThread(_ => OnReminderRowTimer(version)), null,
+            wait > MaxTimerWait ? MaxTimerWait : wait, Timeout.InfiniteTimeSpan);
+    }
+
+    private void OnReminderRowTimer(int version)
+    {
+        if (version != _reminderRowVersion || _lifetime.IsStopped)
+        {
+            return; // re-armed, stopped, or the view model has stopped since this tick was posted
+        }
+
+        LoadReminderRows(DetailTask?.Item);
+    }
+
+    private void StopReminderRowTimer()
+    {
+        _reminderRowVersion++;
+        _reminderRowTimer?.Dispose();
+        _reminderRowTimer = null;
+    }
+
+    // Closed, the pane keeps no timer; reopened, its rows are rebuilt, current as of now, and the timer re-armed.
+    partial void OnIsDetailPaneOpenChanged(bool value)
+    {
+        if (value)
+        {
+            LoadReminderRows(DetailTask?.Item);
+        }
+        else
+        {
+            StopReminderRowTimer();
+        }
     }
 
     // The local rules the Due is read in, read each time, so a Settings change applies without a restart.

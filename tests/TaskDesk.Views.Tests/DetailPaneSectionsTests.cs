@@ -214,13 +214,14 @@ public sealed class DetailPaneSectionsTests
         {
             var pane = await OpenPaneAsync(window, "Call the bank");
             await UiWait.UntilAsync(() => ReminderRows(pane).Count == 2, () => "The Reminders have no rows.", Ct);
+            // The Reminder ahead is listed first, the past one below it.
             var names = ReminderRows(pane).Select(AutomationProperties.GetName).ToList();
-            StringAssert.EndsWith(names[0], ", past");
-            Assert.IsFalse(names[1].Contains("past", StringComparison.Ordinal), names[1]);
+            StringAssert.EndsWith(names[1], ", past");
+            Assert.IsFalse(names[0].Contains("past", StringComparison.Ordinal), names[0]);
 
             // The past row looks like a completed Task: dimmed and struck through, with no "past" word.
-            var past = RowText(ReminderRows(pane)[0]);
-            var ahead = RowText(ReminderRows(pane)[1]);
+            var ahead = RowText(ReminderRows(pane)[0]);
+            var past = RowText(ReminderRows(pane)[1]);
             Assert.AreEqual(Windows.UI.Text.TextDecorations.Strikethrough, past.TextDecorations);
             Assert.IsLessThan(1.0, past.Opacity, "The past row is not dimmed.");
             Assert.AreEqual(Windows.UI.Text.TextDecorations.None, ahead.TextDecorations);
@@ -233,7 +234,7 @@ public sealed class DetailPaneSectionsTests
             }
 
             // A past row still opens the flyout on its Reminder.
-            var (flyout, _) = await OpenReminderFlyoutAsync(pane, ReminderRows(pane)[0]);
+            var (flyout, _) = await OpenReminderFlyoutAsync(pane, ReminderRows(pane)[1]);
             Assert.IsTrue(viewModel.ReminderEditor.IsEditing, "The past row did not open its Reminder.");
             flyout.Hide();
             await UiWait.UntilAsync(() => !viewModel.ReminderEditor.IsOpen, () => "Closing kept the editor open.", Ct);
