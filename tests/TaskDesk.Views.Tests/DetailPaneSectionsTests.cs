@@ -923,6 +923,52 @@ public sealed class DetailPaneSectionsTests
         }
     }
 
+    [UITestMethod]
+    public async Task A_stale_Reminder_row_whose_x_runs_leaves_the_focus_on_a_valid_control()
+    {
+        using var db = await DatabaseAsync();
+        var id = await AddAsync(db, "Call the bank");
+        var reminders = db.Get<IReminderService>();
+        var now = db.Clock.GetUtcNow().UtcDateTime;
+        foreach (var hours in new[] { 1, 3 })
+        {
+            await reminders.AddReminderAsync(id, ReminderValue.Fixed(now.AddHours(hours)), Ct);
+        }
+
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Call the bank");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 2, () => "The Reminders have no rows.", Ct);
+            var stale = viewModel.DetailReminders[0];
+            var staleRemove = Named<Button>(pane, stale.RemoveName);
+
+            // The rows are rebuilt when the first Reminder passes: the held row is no longer listed.
+            db.Clock.Advance(TimeSpan.FromHours(1));
+            await UiWait.UntilAsync(
+                () => viewModel.DetailReminders.All(r => r != stale) && ReminderRows(pane).Count == 2,
+                () => "The rows were not rebuilt.", Ct);
+            var current = viewModel.DetailReminders.Single(r => r.Id == stale.Id);
+            Named<Button>(pane, current.RemoveName).Focus(FocusState.Keyboard);
+
+            // The x of the row that is no longer listed runs, as a click queued before the rebuild would.
+            Invoke(staleRemove);
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 1, () => "The Reminder kept its row.", Ct);
+            await UiWait.UntilAsync(
+                () => FocusManager.GetFocusedElement(pane.XamlRoot) is Button { Name: "AddReminderButton" }
+                    or Button { DataContext: ReminderRowViewModel },
+                () => $"The focus went to {Describe(FocusManager.GetFocusedElement(pane.XamlRoot))}.", Ct);
+
+            // The save queue turns an exception from the rebuild's handlers into the pane's error.
+            await viewModel.FlushPendingSaveAsync();
+            Assert.IsNull(viewModel.ErrorMessage, "Removing through a stale row failed.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     // True when the focus is on the listed row's button (column 0) or x (column 1) of the given Reminder.
     private static bool FocusIsOnRow(DetailPane pane, Guid reminder, int column) =>
         FocusManager.GetFocusedElement(pane.XamlRoot) is Button { DataContext: ReminderRowViewModel row } button

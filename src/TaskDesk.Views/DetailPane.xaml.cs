@@ -256,8 +256,13 @@ public sealed partial class DetailPane : UserControl
             return;
         }
 
+        // A row that is no longer listed (the rows were rebuilt since) has no place to hand the focus on from.
         var removed = (row.Id, row.TaskId, ViewModel.DetailReminders.IndexOf(row));
-        _removedReminder = removed;
+        if (removed.Item3 >= 0)
+        {
+            _removedReminder = removed;
+        }
+
         try
         {
             await row.RemoveCommand.ExecuteAsync(null);
@@ -322,7 +327,7 @@ public sealed partial class DetailPane : UserControl
         {
             var rows = ViewModel.DetailReminders;
             target = removed?.Id == focused.Id && rows.Count > 0
-                ? ReminderRowControl(rows[Math.Min(removed.Value.Index, rows.Count - 1)].Id, focused.Column)
+                ? ReminderRowControl(rows[Math.Clamp(removed.Value.Index, 0, rows.Count - 1)].Id, focused.Column)
                 : null;
             target ??= AddReminderButton;
         }
