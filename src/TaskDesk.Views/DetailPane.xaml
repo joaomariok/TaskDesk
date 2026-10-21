@@ -251,7 +251,7 @@
                                Text="{x:Bind ViewModel.DueError, Mode=OneWay}"
                                Visibility="{x:Bind local:DetailPane.ShownWithText(ViewModel.DueError), Mode=OneWay, FallbackValue=Collapsed}" />
 
-                    <!-- Reminders: one row per Reminder, the first to fire first. A click on a row opens the flyout
+                    <!-- Reminders: one row per Reminder, those ahead first, then the past ones. A click on a row opens the flyout
                          on it, its × removes it, and "Add reminder" opens the flyout on a new one. -->
                     <StackPanel x:Name="ReminderSection">
                         <FlyoutBase.AttachedFlyout>

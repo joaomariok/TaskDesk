@@ -27,8 +27,18 @@ public sealed partial class DetailPane : UserControl
         Repeat = viewModel.Repeat;
         ReminderEditor = viewModel.ReminderEditor;
         InitializeComponent();
-        Loaded += (_, _) => ReminderEditor.PropertyChanged += OnReminderEditorChanged;
-        Unloaded += (_, _) => ReminderEditor.PropertyChanged -= OnReminderEditorChanged;
+        Loaded += (_, _) =>
+        {
+            ReminderEditor.PropertyChanged += OnReminderEditorChanged;
+            ViewModel.ReminderRowsRebuilding += OnReminderRowsRebuilding;
+            ViewModel.ReminderRowsRebuilt += OnReminderRowsRebuilt;
+        };
+        Unloaded += (_, _) =>
+        {
+            ReminderEditor.PropertyChanged -= OnReminderEditorChanged;
+            ViewModel.ReminderRowsRebuilding -= OnReminderRowsRebuilding;
+            ViewModel.ReminderRowsRebuilt -= OnReminderRowsRebuilt;
+        };
     }
 
     public MainViewModel ViewModel { get; }
@@ -218,10 +228,54 @@ public sealed partial class DetailPane : UserControl
             return; // shown again since: the editor and the focus belong to that showing
         }
 
-        ReminderEditor.CancelCommand.Execute(null);
-        var target = _reminderOpener is { IsLoaded: true } opener ? opener : AddReminderButton;
+        // The focus goes back before the editor closes: closing it can rebuild the rows (an update that waited for
+        // the flyout), and the rebuild then hands the focus from the old row to that Reminder's new one. Save has
+        // closed the editor already, so a row opener is found again by its Reminder.
+        Control target = _reminderOpener switch
+        {
+            { DataContext: ReminderRowViewModel row } => ReminderRowControl(row.Id, column: 0) ?? AddReminderButton,
+            { IsLoaded: true } opener => opener,
+            _ => AddReminderButton,
+        };
         _reminderOpener = null;
         target.Focus(FocusState.Programmatic);
+        ReminderEditor.CancelCommand.Execute(null);
+    }
+
+    // The Reminder whose row (column 0) or × (column 1) had the focus when the rows began a rebuild.
+    private (Guid Id, int Column, FocusState State)? _focusedReminder;
+
+    private void OnReminderRowsRebuilding(object? sender, EventArgs e) =>
+        _focusedReminder = XamlRoot is { } root
+            && FocusManager.GetFocusedElement(root) is Button { DataContext: ReminderRowViewModel row } button
+                ? (row.Id, Grid.GetColumn(button), button.FocusState)
+                : null;
+
+    // A rebuild replaces every row, the focused one too: the focus goes to that Reminder's new row, when it has one.
+    private void OnReminderRowsRebuilt(object? sender, EventArgs e)
+    {
+        if (_focusedReminder is not { } focused)
+        {
+            return;
+        }
+
+        _focusedReminder = null;
+        ReminderRowControl(focused.Id, focused.Column)
+            ?.Focus(focused.State == FocusState.Unfocused ? FocusState.Programmatic : focused.State);
+    }
+
+    // The row button (column 0) or × (column 1) of a listed Reminder; null when it has no row.
+    private Button? ReminderRowControl(Guid id, int column)
+    {
+        if (ViewModel.DetailReminders.FirstOrDefault(r => r.Id == id) is not { } row)
+        {
+            return null;
+        }
+
+        ReminderList.UpdateLayout(); // realizes the new rows' containers
+        return ReminderList.ContainerFromItem(row) is { } container
+            ? VisualTreeWalk.Descendants(container).OfType<Button>().FirstOrDefault(b => Grid.GetColumn(b) == column)
+            : null;
     }
 
     /// <summary>The picked Repeat end day; clearing the picker removes the end.</summary>

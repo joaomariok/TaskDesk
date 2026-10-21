@@ -126,6 +126,11 @@ public sealed partial class MainViewModel
     private async Task RefreshDueStateAsync()
     {
         var today = DueCalculator.LocalToday(_clock.GetUtcNow(), _clock.LocalTimeZone);
+        if (today != _loadedToday)
+        {
+            RefreshReminderRows(); // "Today" and "Tomorrow" on the Reminder rows name other days now
+        }
+
         // Which Tasks a Smart View holds depends on the date (and, for Overdue, on the time): reload it.
         if (CurrentView == SmartView.Overdue
             || (today != _loadedToday && CurrentView is SmartView.Today or SmartView.Upcoming))

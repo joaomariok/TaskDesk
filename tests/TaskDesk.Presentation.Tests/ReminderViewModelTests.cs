@@ -361,6 +361,56 @@ public class ReminderViewModelTests
     }
 
     [Fact]
+    public async Task A_Reminder_that_passes_while_the_rows_are_built_is_reached_at_once()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(20, 14), Utc(20, 14, 1));
+
+        // From now on every read of the clock moves it a minute on, as time passes while the rows are built: the
+        // 14:01 row is ahead when the 14:00 tick builds the rows and behind when the tick aims the next timer.
+        s.Clock.AutoAdvanceAmount = TimeSpan.FromMinutes(1);
+        s.Clock.Advance(TimeSpan.FromHours(1));
+
+        Assert.All(s.Vm.DetailReminders, r => Assert.True(r.IsPast));
+        Assert.False(s.Vm.IsReminderRowTimerArmed);
+    }
+
+    [Fact]
+    public async Task A_moment_that_arrives_while_the_flyout_is_open_updates_the_rows_once_it_closes()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(20, 14), Utc(20, 16));
+        var editor = Edit(s, 1);
+        var changes = 0;
+        s.Vm.DetailReminders.CollectionChanged += (_, _) => changes++;
+
+        s.Clock.Advance(TimeSpan.FromHours(1)); // 14:00 passes while the 16:00 Reminder is being edited
+
+        Assert.Equal(0, changes);
+        Assert.True(editor.IsOpen, "The update closed the flyout.");
+        Assert.Equal(s.Vm.DetailReminders[1].Id, editor.EditingId);
+
+        editor.CancelCommand.Execute(null);
+
+        Assert.Equal([Utc(20, 16), Utc(20, 14)], s.Vm.DetailReminders.Select(r => r.FiresAtUtc));
+        Assert.Equal([false, true], s.Vm.DetailReminders.Select(r => r.IsPast));
+        Assert.True(s.Vm.IsReminderRowTimerArmed, "No timer waits for 16:00 after the flyout closed.");
+    }
+
+    [Fact]
+    public async Task At_local_midnight_a_Tomorrow_row_reads_Today()
+    {
+        var s = await StartAsync("a");
+        await SelectWithRemindersAsync(s, Utc(21, 12)); // local Wed 21 Oct 09:00
+        Assert.Equal("Tomorrow 09:00", Assert.Single(s.Vm.DetailReminders).Text);
+
+        s.Clock.Advance(TimeSpan.FromHours(14)); // 03:00 UTC, local midnight
+        await s.Vm.DueRefresh;
+
+        Assert.Equal("Today 09:00", Assert.Single(s.Vm.DetailReminders).Text);
+    }
+
+    [Fact]
     public async Task Editing_a_Reminder_aims_the_timer_at_its_new_moment()
     {
         var s = await StartAsync("a");

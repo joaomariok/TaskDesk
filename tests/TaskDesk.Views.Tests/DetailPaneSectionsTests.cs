@@ -655,6 +655,74 @@ public sealed class DetailPaneSectionsTests
         }
     }
 
+    [UITestMethod]
+    public async Task The_focus_stays_on_its_Reminder_row_when_a_Reminder_passes()
+    {
+        using var db = await DatabaseAsync();
+        var id = await AddAsync(db, "Call the bank");
+        var reminders = db.Get<IReminderService>();
+        var now = db.Clock.GetUtcNow().UtcDateTime;
+        foreach (var hours in new[] { 1, 2, 3 })
+        {
+            await reminders.AddReminderAsync(id, ReminderValue.Fixed(now.AddHours(hours)), Ct);
+        }
+
+        var (window, viewModel) = await OpenAsync(db);
+        try
+        {
+            var pane = await OpenPaneAsync(window, "Call the bank");
+            await UiWait.UntilAsync(() => ReminderRows(pane).Count == 3, () => "The Reminders have no rows.", Ct);
+            var second = viewModel.DetailReminders[1].Id;
+            bool FocusIsOn(Guid reminder) =>
+                FocusManager.GetFocusedElement(pane.XamlRoot) is Button { Content: TextBlock, DataContext: ReminderRowViewModel row }
+                && row.Id == reminder && ReminderRows(pane).Any(b => b.DataContext == row);
+
+            // A row with the keyboard focus keeps it while the first Reminder passes and the rows are rebuilt.
+            ReminderRows(pane)[1].Focus(FocusState.Keyboard);
+            db.Clock.Advance(TimeSpan.FromHours(1));
+            await UiWait.UntilAsync(() => viewModel.DetailReminders[0].Id == second,
+                () => "The first Reminder did not move to the past block.", Ct);
+            await UiWait.UntilAsync(() => FocusIsOn(second),
+                () => $"The focus went to {FocusManager.GetFocusedElement(pane.XamlRoot)}, not the same Reminder's row.", Ct);
+
+            // A Reminder that passes while its flyout is open leaves the edit alone; closing it returns the focus to
+            // that Reminder's row.
+            var (flyout, _) = await OpenReminderFlyoutAsync(pane, ReminderRows(pane)[0]);
+            db.Clock.Advance(TimeSpan.FromHours(1));
+            await UiWait.UntilAsync(() => !viewModel.IsReminderRowTimerArmed, () => "The 2nd Reminder did not pass.", Ct);
+            Assert.IsTrue(flyout.IsOpen && viewModel.ReminderEditor.IsOpen, "The update closed the flyout.");
+            Assert.AreEqual(second, viewModel.ReminderEditor.EditingId);
+
+            flyout.Hide();
+            await UiWait.UntilAsync(() => viewModel.DetailReminders.Count(r => r.IsPast) == 2,
+                () => "Closing the flyout did not update the rows.", Ct);
+            await UiWait.UntilAsync(() => FocusIsOn(second),
+                () => $"The focus went to {Describe(FocusManager.GetFocusedElement(pane.XamlRoot))}, not the edited Reminder's row.", Ct);
+
+            // The same when the edit is saved: the rows catch up as the editor closes, and again once the save lands.
+            var third = viewModel.DetailReminders[0].Id;
+            (flyout, var editor) = await OpenReminderFlyoutAsync(pane, ReminderRows(pane)[0]);
+            db.Clock.Advance(TimeSpan.FromHours(1));
+            await UiWait.UntilAsync(() => !viewModel.IsReminderRowTimerArmed, () => "The 3rd Reminder did not pass.", Ct);
+            Invoke(VisualTree.Find<Button>(editor, "SaveReminderButton"));
+            await UiWait.UntilAsync(() => !flyout.IsOpen, () => "Save did not close the flyout.", Ct);
+            await viewModel.PendingSave;
+            await UiWait.UntilAsync(() => FocusIsOn(third),
+                () => $"The focus went to {Describe(FocusManager.GetFocusedElement(pane.XamlRoot))}, not the saved Reminder's row.", Ct);
+            Assert.IsNull(viewModel.ErrorMessage);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // Names a focused element for a failure message: its AutomationId or name, and the Reminder row it belongs to.
+    private static string Describe(object? focused) => focused is FrameworkElement element
+        ? $"{element.GetType().Name} '{AutomationProperties.GetAutomationId(element)}{AutomationProperties.GetName(element)}'"
+            + (element.DataContext is ReminderRowViewModel row ? $" of the row {row.Text} (loaded: {element.IsLoaded})" : "")
+        : focused?.ToString() ?? "nothing";
+
     // The realized row buttons of the Reminders list, which open the flyout on their Reminder.
     private static List<Button> ReminderRows(DetailPane pane)
     {

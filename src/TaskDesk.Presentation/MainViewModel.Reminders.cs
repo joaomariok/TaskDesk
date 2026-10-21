@@ -15,6 +15,9 @@ public sealed partial class MainViewModel
     // Each armed timer takes a version; a tick that was already posted runs only if no re-arm or stop came after it.
     private int _reminderRowVersion;
 
+    // Set when a live update of the rows waits for the Reminder flyout to close.
+    private bool _reminderRowsBehind;
+
     // The longest wait a timer accepts (about 49.7 days); a moment further away is reached by re-arming on the way.
     private static readonly TimeSpan MaxTimerWait = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
 
@@ -24,6 +27,15 @@ public sealed partial class MainViewModel
     /// </summary>
     public System.Collections.ObjectModel.ObservableCollection<ReminderRowViewModel> DetailReminders { get; } = [];
 
+    /// <summary>
+    /// Raised before <see cref="DetailReminders"/> is rebuilt, while the old rows are still listed: a view notes
+    /// which row has the focus here, and gives it to that Reminder's new row on <see cref="ReminderRowsRebuilt"/>.
+    /// </summary>
+    public event EventHandler? ReminderRowsRebuilding;
+
+    /// <summary>Raised once <see cref="DetailReminders"/> has been rebuilt.</summary>
+    public event EventHandler? ReminderRowsRebuilt;
+
     /// <summary>True while a timer waits for the next moment of a Reminder listed in the open pane.</summary>
     public bool IsReminderRowTimerArmed => _reminderRowTimer is not null;
 
@@ -31,7 +43,20 @@ public sealed partial class MainViewModel
     public bool HasDetailReminders => DetailReminders.Count > 0;
 
     /// <summary>The Reminder flyout, opened by "Add reminder" or a click on a row.</summary>
-    public ReminderEditorViewModel ReminderEditor => _reminderEditor ??= new(DefaultReminderTime, SaveReminder);
+    public ReminderEditorViewModel ReminderEditor => _reminderEditor ??= CreateReminderEditor();
+
+    private ReminderEditorViewModel CreateReminderEditor()
+    {
+        var editor = new ReminderEditorViewModel(DefaultReminderTime, SaveReminder);
+        editor.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ReminderEditorViewModel.IsOpen) && !editor.IsOpen && _reminderRowsBehind)
+            {
+                LoadReminderRows(DetailTask?.Item);
+            }
+        };
+        return editor;
+    }
 
     /// <summary>"Snoozed until ..." in local time for the selected Task; null when it is not snoozed.</summary>
     [ObservableProperty]
@@ -60,13 +85,31 @@ public sealed partial class MainViewModel
         LoadSnoozeDetail(task);
     }
 
+    // A live update of the rows: a Reminder's moment arriving, or local midnight renaming the days. It rebuilds
+    // the rows, unless the Reminder flyout is open: then the rows wait until it closes, so the update never pulls
+    // the row the editor came from out from under the user.
+    private void RefreshReminderRows()
+    {
+        if (ReminderEditor.IsOpen)
+        {
+            _reminderRowsBehind = true;
+            StopReminderRowTimer();
+            return;
+        }
+
+        LoadReminderRows(DetailTask?.Item);
+    }
+
     private void LoadReminderRows(TaskItem? task)
     {
+        _reminderRowsBehind = false;
+        ReminderRowsRebuilding?.Invoke(this, EventArgs.Empty);
         DetailReminders.Clear();
         if (task is null)
         {
             StopReminderRowTimer();
             OnPropertyChanged(nameof(HasDetailReminders));
+            ReminderRowsRebuilt?.Invoke(this, EventArgs.Empty);
             return;
         }
 
@@ -93,6 +136,7 @@ public sealed partial class MainViewModel
         }
 
         OnPropertyChanged(nameof(HasDetailReminders));
+        ReminderRowsRebuilt?.Invoke(this, EventArgs.Empty);
         ArmReminderRowTimer(DetailReminders.Where(r => !r.IsPast).Select(r => (DateTime?)r.FiresAtUtc).Min());
     }
 
@@ -108,11 +152,12 @@ public sealed partial class MainViewModel
         }
 
         _uiContext ??= SynchronizationContext.Current; // the UI thread in the app; none in tests
+        // The clock has moved on since the rows were built, so the moment may have passed already: then tick at once.
         var wait = next - _clock.GetUtcNow().UtcDateTime;
         var version = _reminderRowVersion;
         _reminderRowTimer = _clock.CreateTimer(
             _ => OnUiThread(_ => OnReminderRowTimer(version)), null,
-            wait > MaxTimerWait ? MaxTimerWait : wait, Timeout.InfiniteTimeSpan);
+            wait < TimeSpan.Zero ? TimeSpan.Zero : wait > MaxTimerWait ? MaxTimerWait : wait, Timeout.InfiniteTimeSpan);
     }
 
     private void OnReminderRowTimer(int version)
@@ -122,7 +167,7 @@ public sealed partial class MainViewModel
             return; // re-armed, stopped, or the view model has stopped since this tick was posted
         }
 
-        LoadReminderRows(DetailTask?.Item);
+        RefreshReminderRows();
     }
 
     private void StopReminderRowTimer()
