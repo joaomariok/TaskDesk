@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Shapes;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using TaskDesk.Core.Lists;
@@ -706,10 +707,12 @@ public sealed class SidebarListsAndTagsTests
 
             foreach (var row in rows)
             {
+                // The row's hover and selection background is what must match the Smart View's highlight: the
+                // ListViewItemPresenter draws it inset from the row's sides, so the row is that much wider.
                 var name = AutomationProperties.GetName(row);
-                Assert.AreEqual(LeftOf(highlight, root), LeftOf(row, root), 1, $"{name}: row left");
-                Assert.AreEqual(highlight.ActualWidth, row.ActualWidth, 1, $"{name}: row width");
-                Assert.AreEqual(highlight.ActualHeight, row.ActualHeight, 1, $"{name}: row height");
+                Assert.AreEqual(LeftOf(highlight, root), LeftOf(row, root) + ListViewItemBackgroundInset, 1, $"{name}: background left");
+                Assert.AreEqual(highlight.ActualWidth, row.ActualWidth - 2 * ListViewItemBackgroundInset, 1, $"{name}: background width");
+                Assert.AreEqual(highlight.ActualHeight, row.ActualHeight, 1, $"{name}: background height");
 
                 // The List's square: the icon's size, centred where the icon is centred in its row.
                 var square = VisibleRectangle(row);
@@ -726,6 +729,118 @@ public sealed class SidebarListsAndTagsTests
             window.Close();
         }
     }
+
+    [UITestMethod]
+    public async Task Switching_to_and_from_the_rail_does_not_replay_the_rows_entrance_but_adding_and_reordering_still_animate()
+    {
+        using var db = new TempDatabase();
+        var (window, viewModel, lists) = NewWindow(db);
+        lists.Lists.Add(NewList("Work", 0, null));
+        viewModel.Tags.Add(new Tag { Id = Guid.NewGuid(), Name = "home" });
+        try
+        {
+            window.Activate();
+            await RowsAsync(window, "ListsList", 1);
+            // The rail swaps the Lists' row template, which realizes every row again; ListView's default entrance and
+            // content transitions then slide them all up, as on first load. Leaving the rail shows the Tags again.
+            foreach (var (rail, listsId) in new[] { (false, "ListsList"), (true, "RailListsList"), (false, "ListsList") })
+            {
+                window.Navigation.SetRail(rail);
+                await RowsAsync(window, listsId, 1);
+                foreach (var id in new[] { listsId, "TagList" })
+                {
+                    var transitions = ((ListView)WithId(window.Content, id)!).ItemContainerTransitions.Select(t => t.GetType()).ToList();
+                    CollectionAssert.DoesNotContain(transitions, typeof(EntranceThemeTransition), $"{id}: entrance");
+                    CollectionAssert.DoesNotContain(transitions, typeof(ContentThemeTransition), $"{id}: content");
+                    CollectionAssert.Contains(transitions, typeof(AddDeleteThemeTransition), $"{id}: add and delete");
+                    CollectionAssert.Contains(transitions, typeof(ReorderThemeTransition), $"{id}: reorder");
+                }
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task The_rails_Tags_open_beside_the_rail_like_a_Smart_Views_children_with_rows_of_its_size()
+    {
+        var ct = TestContext.CancellationToken;
+        using var db = new TempDatabase();
+        var (window, viewModel, _) = NewWindow(db);
+        viewModel.Tags.Add(new Tag { Id = Guid.NewGuid(), Name = "home" });
+        viewModel.Tags.Add(new Tag { Id = Guid.NewGuid(), Name = "work" });
+        try
+        {
+            window.Activate();
+            window.Navigation.SetRail(true);
+            var root = window.Content;
+            await UiWait.UntilAsync(
+                () => WithId(root, "RailTagsButton") is { ActualWidth: > 0 } && WithId(root, "SmartViewToday") is { ActualWidth: > 0 },
+                () => "The rail did not lay out.", ct);
+            var button = (Button)WithId(root, "RailTagsButton")!;
+            var flyout = (Flyout)button.Flyout;
+            var tagList = (ListView)flyout.Content;
+            var today = (NavigationViewItem)WithId(root, "SmartViewToday")!;
+            var highlight = VisualTree.Descendants(today).OfType<Grid>().First(g => g.Name == "LayoutRoot");
+            // A Smart View's highlight sits NavigationViewItemButtonMargin in from its item: 2 px from its top, 2 px from
+            // the next item's highlight. The # button is that highlight.
+            var highlightMargin = (Thickness)Application.Current.Resources["NavigationViewItemButtonMargin"];
+            List<ListViewItem> Rows() => [.. VisualTree.Descendants(tagList).OfType<ListViewItem>().Where(r => r.ActualHeight > 0)];
+
+            // Opened, closed, then opened again after the full sidebar and back.
+            var buttonTop = TopOf(button, root);
+            for (var opening = 1; opening <= 2; opening++)
+            {
+                flyout.ShowAt(button);
+                await UiWait.UntilAsync(() => Rows().Count == 2, () => $"The Tags flyout shows {Rows().Count} rows.", ct);
+                var presenter = FlyoutPresenterOf(tagList);
+
+                // NavigationView's own flyout for a rail item's children (ChildrenFlyout): at the rail's edge,
+                // ChildrenFlyoutRise above the item; its padding and corners; its rows the Smart Views' height and pitch.
+                Assert.AreEqual(LeftOf(today, root) + today.ActualWidth, LeftOf(presenter, root), 1, $"Opening {opening}: flyout left");
+                Assert.AreEqual(TopOf(button, root) - highlightMargin.Top - ChildrenFlyoutRise, TopOf(presenter, root), 1, $"Opening {opening}: flyout top");
+                Assert.AreEqual(Application.Current.Resources["NavigationViewItemChildrenMenuFlyoutPadding"], presenter.Padding);
+                Assert.AreEqual(Application.Current.Resources["OverlayCornerRadius"], presenter.CornerRadius);
+                var rows = Rows();
+                Assert.AreEqual(highlight.ActualHeight, rows[0].ActualHeight, 1, "Row height");
+                Assert.AreEqual(highlight.ActualHeight + highlightMargin.Top + highlightMargin.Bottom,
+                    TopOf(rows[1], root) - TopOf(rows[0], root), 1, "Row pitch");
+                Assert.AreEqual(presenter.ActualWidth - 2 * presenter.BorderThickness.Left, rows[0].ActualWidth, 1,
+                    "A row spans the flyout, its background ListViewItemBackgroundInset in from each side as the rail's.");
+
+                flyout.Hide();
+                await UiWait.UntilAsync(() => !flyout.IsOpen, () => "The Tags flyout did not close.", ct);
+                window.Navigation.SetRail(false);
+                window.Navigation.SetRail(true);
+                await UiWait.UntilAsync(() => Math.Abs(TopOf(button, root) - buttonTop) < 0.5,
+                    () => $"The # button came back at {TopOf(button, root)}, not {buttonTop}.", ct);
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static FlyoutPresenter FlyoutPresenterOf(DependencyObject content)
+    {
+        var node = content;
+        while (node is not FlyoutPresenter)
+        {
+            node = VisualTreeHelper.GetParent(node) ?? throw new AssertFailedException("The content is not in a FlyoutPresenter.");
+        }
+
+        return (FlyoutPresenter)node;
+    }
+
+    // NavigationView's ChildrenFlyout (WinUI 1.8) opens 4 px above its item: a literal top margin in its template.
+    private const double ChildrenFlyoutRise = 4;
+
+    // The ListViewItemPresenter (WinUI 1.8) draws a row's hover and selection background 4 px in from each side of
+    // the row, and full height. Measured in the running app: a 40 px rail row hovers 32 px wide.
+    private const double ListViewItemBackgroundInset = 4;
 
     private static ListItemViewModel NewList(string name, int openTasks, string? colour) =>
         new(new ListSummary(new TaskList { Id = Guid.NewGuid(), Name = name, ColorHex = colour }, openTasks));

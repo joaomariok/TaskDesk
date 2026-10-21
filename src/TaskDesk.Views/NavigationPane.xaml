@@ -32,16 +32,33 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="12,0,12,0" />
         </Style>
-        <!-- The rail's List row: a compact Smart View item's footprint (NavigationViewItemButtonMargin and
-             NavigationViewItemOnLeftMinHeight), with the List's square where the Smart Views' icons sit. -->
+        <!-- The rail's List row: hovered or selected, it fills a compact Smart View item's highlight
+             (NavigationViewItemOnLeftMinHeight tall, 2 px apart), with the List's square where the Smart Views' icons
+             sit. The row spans the rail: the ListViewItemPresenter already draws its background 4 px in from each side,
+             as NavigationViewItemButtonMargin does for the Smart Views. -->
         <Style x:Key="RailListItem" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="MinHeight" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
             <Setter Property="Height" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
-            <Setter Property="Margin" Value="{ThemeResource NavigationViewItemButtonMargin}" />
+            <Setter Property="Margin" Value="0,2" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Padding" Value="0" />
+        </Style>
+        <!-- The rail's Tags flyout, as NavigationView's own flyout for a rail item's children (ChildrenFlyout): 2 px
+             padding, overlay corners, and 6 px up, to the top of a Smart View item (4 px above it, whose highlight
+             is 2 px in from its top) when the # button is that highlight. -->
+        <Style x:Key="RailTagsFlyoutPresenter" TargetType="FlyoutPresenter" BasedOn="{StaticResource DefaultFlyoutPresenterStyle}">
+            <Setter Property="Padding" Value="{ThemeResource NavigationViewItemChildrenMenuFlyoutPadding}" />
+            <Setter Property="Margin" Value="0,-6,0,0" />
+            <Setter Property="CornerRadius" Value="{ThemeResource OverlayCornerRadius}" />
+        </Style>
+        <!-- A Tag in the rail's flyout: a Smart View row's height, 2 px apart; its background is 4 px in from the
+             flyout's sides, as NavigationViewItemButtonMargin puts a child item's. -->
+        <Style x:Key="RailTagItem" TargetType="ListViewItem" BasedOn="{StaticResource SidebarListItem}">
+            <Setter Property="MinHeight" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
+            <Setter Property="Height" Value="{ThemeResource NavigationViewItemOnLeftMinHeight}" />
+            <Setter Property="Margin" Value="0,2" />
         </Style>
         <Style x:Key="SidebarSectionHeader" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongText}">
             <Setter Property="Margin" Value="16,12,0,4" />
@@ -217,7 +234,16 @@
                                   ContainerContentChanging="OnListContainerContentChanging"
                                   SelectionChanged="OnListSelectionChanged" ItemClick="OnListItemClick" KeyDown="OnListKeyDown"
                                   DragItemsStarting="OnListDragStarting" DragItemsCompleted="OnListDragCompleted"
-                                  DragOver="OnListDragOver" DragLeave="OnListDragLeave" Drop="OnListDrop" />
+                                  DragOver="OnListDragOver" DragLeave="OnListDragLeave" Drop="OnListDrop">
+                            <!-- ListView's defaults without the entrance and content transitions, which slide every
+                                 row up again when the rail swaps the row template (ShowCompact). -->
+                            <ListView.ItemContainerTransitions>
+                                <TransitionCollection>
+                                    <AddDeleteThemeTransition />
+                                    <ReorderThemeTransition />
+                                </TransitionCollection>
+                            </ListView.ItemContainerTransitions>
+                        </ListView>
                         <Rectangle x:Name="ListInsertionLine" Height="2" RadiusX="1" RadiusY="1" VerticalAlignment="Top"
                                    Fill="{ThemeResource AccentFillColorDefaultBrush}" IsHitTestVisible="False"
                                    Visibility="Collapsed" />
@@ -247,7 +273,15 @@
                                   ScrollViewer.VerticalScrollMode="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                   AutomationProperties.Name="Tags" AutomationProperties.AutomationId="TagList"
                                   ContainerContentChanging="OnTagContainerContentChanging"
-                                  SelectionChanged="OnTagSelectionChanged" KeyDown="OnTagKeyDown" />
+                                  SelectionChanged="OnTagSelectionChanged" KeyDown="OnTagKeyDown">
+                            <!-- As the Lists': the section shows again on leaving the rail, without the rows sliding up. -->
+                            <ListView.ItemContainerTransitions>
+                                <TransitionCollection>
+                                    <AddDeleteThemeTransition />
+                                    <ReorderThemeTransition />
+                                </TransitionCollection>
+                            </ListView.ItemContainerTransitions>
+                        </ListView>
                     </StackPanel>
                     <!-- The rail's Tags: a # button whose flyout lists them. -->
                     <Button x:Name="RailTagsButton" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}"
@@ -255,10 +289,11 @@
                             ToolTipService.ToolTip="Tags"
                             AutomationProperties.Name="Tags" AutomationProperties.AutomationId="RailTagsButton">
                         <Button.Flyout>
-                            <Flyout x:Name="TagsFlyout" Placement="RightEdgeAlignedTop">
+                            <Flyout x:Name="TagsFlyout" Placement="RightEdgeAlignedTop"
+                                    FlyoutPresenterStyle="{StaticResource RailTagsFlyoutPresenter}">
                                 <ListView x:Name="RailTagList" MinWidth="160"
                                           ItemsSource="{x:Bind ViewModel.Tags, Mode=OneTime}"
-                                          ItemContainerStyle="{StaticResource SidebarListItem}"
+                                          ItemContainerStyle="{StaticResource RailTagItem}"
                                           ItemTemplate="{StaticResource TagRowTemplate}"
                                           SelectionMode="Single"
                                           AutomationProperties.Name="Tags" AutomationProperties.AutomationId="RailTagList"
