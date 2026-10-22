@@ -175,7 +175,23 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
         var top = subject.Rows[0].TransformToVisual(host.Surface).TransformPoint(new Point(0, 0));
         _pressOffset = new Point(at.X - top.X, at.Y - top.Y);
 
-        var image = await PictureOfAsync(subject.Rows);
+        Image image;
+        try
+        {
+            image = await PictureOfAsync(subject.Rows);
+        }
+        catch (COMException)
+        {
+            // A row that left the list (a reload, a Task saved or completed elsewhere) cannot be rendered. The press
+            // ends quietly: an exception here would escape the pointer handler and end the app.
+            if (press == _pressCount && ReferenceEquals(_subject, subject))
+            {
+                End();
+            }
+
+            return;
+        }
+
         if (press != _pressCount || !ReferenceEquals(_subject, subject))
         {
             return;
