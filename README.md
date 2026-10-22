@@ -73,14 +73,14 @@ To install TaskDesk, use `Setup.exe` (see [Install](#install)). The publish fold
 
 ## Release
 
-Pushing a tag `vX.Y.Z` cuts a release (decision: [ADR 0005](docs/adr/0005-velopack-installer.md)):
+Write the version's section in [`CHANGELOG.md`](CHANGELOG.md) first (`## [0.2.0] - YYYY-MM-DD`, with `### Added`, `### Changed` and `### Fixed` as needed, newest release first, no Unreleased section) and merge it. Then pushing a tag `vX.Y.Z` cuts a release (decision: [ADR 0005](docs/adr/0005-velopack-installer.md)):
 
 ```powershell
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The `Release` workflow (`.github/workflows/release.yml`) takes the version from the tag, runs the gate, packs with `scripts/pack-installer.ps1` (which first downloads the previous release, so a delta package is made against it) and uploads `TaskDesk.App-win-Setup.exe`, the full and delta packages and the feed to a GitHub Release with the workflow's `GITHUB_TOKEN`. If the gate fails, no release is created. A tag that is not exactly three numbers (`v1.2.3`) fails. Builds are unsigned.
+The `Release` workflow (`.github/workflows/release.yml`) takes the version from the tag, first checks that `CHANGELOG.md` has a section for it (a tag with no section fails before anything else runs), runs the gate, packs with `scripts/pack-installer.ps1` (which first downloads the previous release, so a delta package is made against it) and uploads `TaskDesk.App-win-Setup.exe`, the full and delta packages and the feed to a GitHub Release with the workflow's `GITHUB_TOKEN`. The version's CHANGELOG section is packed as the release notes, and Velopack makes it the GitHub release body. `scripts/pack-installer.ps1` does the same for a local pack, and packs without notes when the version has no section. If the gate fails, no release is created. A tag that is not exactly three numbers (`v1.2.3`) fails. Builds are unsigned.
 
 ## Data location
 
@@ -120,6 +120,7 @@ Sandbox mode keeps the test run away from your Run key. Measured results and met
 
 - `scripts/gate.ps1`: build with warnings as errors, then run all tests; exit 0 is green.
 - Workflow audit: CI's `workflow-audit` job runs zizmor on `.github/workflows` and fails on any finding; run it locally with `uvx zizmor@1.30.1 --offline .github/workflows`. The gate does not need it.
+- `scripts/get-changelog-section.ps1`: print the `CHANGELOG.md` section of a version (`-Version <x.y.z>`), nothing when it has none; the release workflow and the pack script use it.
 - `scripts/pack-installer.ps1`: build a local `Setup.exe` and release packages for a version (`-Version <x.y.z> [-OutputDir <dir>] [-DownloadFrom <repo url>]`), see [Install](#install). The gate does not need it.
 - `scripts/integrate-worktree.ps1`: apply a worktree's uncommitted diff onto a clean checkout and run the gate (see `docs/agents/implement-spec.md`).
 - `scripts/measure-startup.ps1`: measure cold start and `--minimized` working set of a publish against fresh sample data (`-Publish <dir> [-Runs 7] [-Tasks 5000] [-Label <name>]`).

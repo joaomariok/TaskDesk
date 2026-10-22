@@ -7,6 +7,7 @@
 #                        vpk also writes a delta package against it (the release workflow, #91). With no release
 #                        yet nothing is downloaded and only a full package is made. The token comes from
 #                        $env:GITHUB_TOKEN when set.
+# The CHANGELOG.md section for -Version, when there is one, is passed to vpk as the release notes (#144).
 # The package id is TaskDesk.App, never TaskDesk: uninstall deletes %LOCALAPPDATA%\<package id>, and
 # %LOCALAPPDATA%\TaskDesk is the data folder (InstallerGuardrailTests). Only a Start-menu shortcut is made.
 param(
@@ -45,7 +46,7 @@ try {
         if ($env:GITHUB_TOKEN) { $download += @('--token', $env:GITHUB_TOKEN) }
         Invoke-Checked $download
     }
-    Invoke-Checked @('tool', 'run', 'vpk', '--', 'pack',
+    $pack = @('tool', 'run', 'vpk', '--', 'pack',
         '--packId', 'TaskDesk.App',
         '--packTitle', 'TaskDesk',
         '--packVersion', $Version,
@@ -55,6 +56,23 @@ try {
         '--icon', $icon,
         '--shortcuts', 'StartMenuRoot',
         '--outputDir', $OutputDir)
+    # The CHANGELOG.md section of this version becomes the release notes (#144); a version with no section
+    # packs without notes.
+    $notes = & (Join-Path $PSScriptRoot 'get-changelog-section.ps1') -Version $Version
+    if ($notes) {
+        $notesFile = Join-Path ([System.IO.Path]::GetTempPath()) "taskdesk-release-notes-$([guid]::NewGuid().ToString('N')).md"
+        Set-Content -Path $notesFile -Value $notes -Encoding utf8NoBOM
+        $pack += @('--releaseNotes', $notesFile)
+    }
+    else {
+        Write-Host "CHANGELOG.md has no section for $Version; packing without release notes."
+    }
+    try {
+        Invoke-Checked $pack
+    }
+    finally {
+        if ($notesFile) { Remove-Item $notesFile -Force -ErrorAction SilentlyContinue }
+    }
 }
 finally {
     Pop-Location

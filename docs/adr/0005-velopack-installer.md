@@ -4,6 +4,8 @@
 
 **Update (2026-10-20, #99).** The apply at start now runs in `LaunchGate` (it was `StartupUpdate`), which the App calls after reading the launch activation and before building the host. The gate claims the single-instance guard, forwards a launch that finds another copy and ends it, and otherwise applies under the conditions below, unchanged; `LaunchGate.RestartedFlag` replaces `StartupUpdate.RestartedFlag`. A failed apply is part of the gate's outcome, and the App logs it once the host's logger exists. `InstallerGuardrailTests` now checks that the App asks the gate before it builds the host; the gate's own tests check that nothing applies when another copy runs.
 
+**Update (2026-10-22, #144).** A release needs a `CHANGELOG.md` section for its version (Keep a Changelog 1.1.0). The release workflow checks for it first, before the gate, and fails without it; the pack script passes the section to `vpk pack --releaseNotes`, and Velopack 1.2.161 uses the packaged notes as the GitHub release body when `vpk upload github` creates the release. The 0.0.x test releases were kept and get no CHANGELOG entries; 0.1.0 is the first entry.
+
 TaskDesk was a published folder that the owner copied by hand. v1 had "installer/MSIX, auto-update" out of scope. The owner now wants a `Setup.exe` that installs for the current user, shows up in Apps & features and can be released by pushing a tag. This record covers the tool, the rules that keep user data safe, and what the go/no-go on the owner's machine found.
 
 ## Decision

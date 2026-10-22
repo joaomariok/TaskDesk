@@ -33,6 +33,17 @@ jobs:
               throw "The tag '$tag' is not vX.Y.Z; a release tag has three numbers and no suffix."
           }
           "version=$($Matches['version'])" >> $env:GITHUB_OUTPUT
+      # Before the gate, the pack and the upload: a version with no CHANGELOG.md section is not released (#144).
+      # The pack passes the same section to Velopack, which makes it the GitHub release body on upload.
+      - name: Check the CHANGELOG
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $notes = pwsh scripts/get-changelog-section.ps1 -Version $env:RELEASE_VERSION
+          if (-not $notes) {
+              throw "CHANGELOG.md has no '## [$env:RELEASE_VERSION] - YYYY-MM-DD' section; write it before tagging."
+          }
       # The same display setup as ci.yml: the in-process WinUI tests open windows, and the docked-pane
       # tests need a 1200 px wide screen. A failing gate stops the job here, before anything is published.
       - name: Set display resolution

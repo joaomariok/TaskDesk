@@ -224,6 +224,93 @@ public sealed partial class InstallerGuardrailTests
         Assert.Contains("--publish", workflow, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Release_workflow_checks_the_changelog_before_the_gate_the_pack_and_the_upload()
+    {
+        var steps = StepNames().ToList();
+        var workflow = ReadWorkflow();
+
+        Assert.Contains("Check the CHANGELOG", steps);
+        Assert.True(steps.IndexOf("Check the CHANGELOG") < steps.IndexOf("Run gate"));
+        Assert.True(steps.IndexOf("Check the CHANGELOG") < steps.IndexOf("Pack"));
+        Assert.True(steps.IndexOf("Check the CHANGELOG") < steps.IndexOf("Upload the GitHub Release"));
+        // It reads the section with the script the pack uses, and throws when there is none.
+        Assert.Contains("scripts/get-changelog-section.ps1 -Version $env:RELEASE_VERSION", workflow,
+            StringComparison.Ordinal);
+        Assert.Matches(@"(?s)get-changelog-section\.ps1.{0,400}throw ", workflow);
+    }
+
+    [Fact]
+    public void Pack_script_passes_the_changelog_section_to_velopack_as_release_notes()
+    {
+        var script = File.ReadAllText(Path.Combine(FindRepoRoot(), PackScript));
+
+        Assert.Contains("get-changelog-section.ps1", script, StringComparison.Ordinal);
+        // The notes are an option of vpk pack, added only when the version has a section.
+        Assert.Matches(@"'--releaseNotes',\s*\$\w+", script);
+        Assert.True(script.IndexOf("--releaseNotes", StringComparison.Ordinal)
+            > script.IndexOf("get-changelog-section.ps1", StringComparison.Ordinal));
+        Assert.Matches(@"if\s*\(\$notes\)", script);
+    }
+
+    [Fact]
+    public void Release_workflow_leaves_the_release_body_to_velopack_which_takes_it_from_the_package_notes()
+    {
+        // Velopack 1.2.161 creates the draft release with the latest package's release notes as its body
+        // (GitReleaseUploadCommandRunner, #144), so the upload needs no body of its own.
+        var workflow = ReadWorkflow();
+
+        Assert.DoesNotContain("gh release", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("--notes", workflow, StringComparison.Ordinal);
+    }
+
+    // "## [x.y.z] - YYYY-MM-DD" headings, and the "### " headings under them.
+    [GeneratedRegex(@"^## \[(?<version>[^\]]+)\] - (?<date>\d{4}-\d{2}-\d{2})$", RegexOptions.Multiline)]
+    private static partial Regex ChangelogReleaseHeading();
+
+    [Fact]
+    public void Changelog_has_release_sections_in_the_format_newest_first_with_three_number_versions()
+    {
+        var changelog = File.ReadAllText(Path.Combine(FindRepoRoot(), "CHANGELOG.md"));
+        var all = Regex.Matches(changelog, @"^## .*$", RegexOptions.Multiline).Select(m => m.Value).ToList();
+        var releases = ChangelogReleaseHeading().Matches(changelog).ToList();
+
+        // Every "## " heading is a release heading, so there is no Unreleased section.
+        Assert.NotEmpty(releases);
+        Assert.Equal(all.Count, releases.Count);
+        Assert.DoesNotContain("Unreleased", changelog, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("## [0.1.0] - 2026-10-23", all);
+        Assert.DoesNotContain(releases, m => m.Groups["version"].Value is "0.0.1" or "0.0.2");
+
+        var versions = releases.Select(m => m.Groups["version"].Value).ToList();
+        Assert.All(versions, v => Assert.Matches(@"^\d+\.\d+\.\d+$", v));
+        Assert.Equal(versions.Count, versions.Distinct().Count());
+        Assert.Equal(versions.OrderByDescending(Version.Parse), versions.Select(Version.Parse).Select(v => v.ToString()));
+        var dates = releases.Select(m => DateOnly.ParseExact(m.Groups["date"].Value, "yyyy-MM-dd")).ToList();
+        Assert.Equal(dates.OrderByDescending(d => d), dates);
+
+        // Inside a release: Added, Changed and Fixed only, each with at least one bullet.
+        var sections = Regex.Split(changelog, @"^## ", RegexOptions.Multiline).Skip(1);
+        foreach (var section in sections)
+        {
+            var kinds = Regex.Matches(section, @"^### (?<kind>.+)$", RegexOptions.Multiline)
+                .Select(m => m.Groups["kind"].Value).ToList();
+            Assert.NotEmpty(kinds);
+            Assert.All(kinds, k => Assert.Contains(k, new[] { "Added", "Changed", "Fixed" }));
+            Assert.Matches(@"(?m)^- \S", section);
+        }
+    }
+
+    [Fact]
+    public void Changelog_section_script_prints_one_version_and_nothing_for_an_unknown_one()
+    {
+        var script = File.ReadAllText(Path.Combine(FindRepoRoot(), "scripts", "get-changelog-section.ps1"));
+
+        Assert.Contains(@"'^## \[' + [regex]::Escape($Version) + '\] - \d{4}-\d{2}-\d{2}\s*$'", script,
+            StringComparison.Ordinal);
+        Assert.Contains("if ($line -match '^## ') { break }", script, StringComparison.Ordinal);
+    }
+
     private static string Argument(Regex pattern)
     {
         var script = File.ReadAllText(Path.Combine(FindRepoRoot(), PackScript));
