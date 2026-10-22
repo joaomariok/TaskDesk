@@ -36,7 +36,7 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
         OpenTaskList.Items.VectorChanged += OnRowsChanged;
         OpenTaskList.Tapped += OnTaskListTapped;
 
-        TaskDrag = new ReorderDrag(this, viewModel.Clock);
+        TaskDrag = new ReorderDrag(this, viewModel);
         TaskDrag.ListenToPointer();
         _dragScroll = new DragScroller(TaskDrag);
         OpenTaskList.Loaded += OnTaskListLoaded;
@@ -184,12 +184,11 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
         return false;
     }
 
-    // Space and Delete act on a focused row. A row's own checkbox handles Space itself. Esc cancels a drag
-    // wherever the focus is in the list.
+    // Space and Delete act on a focused row. A row's own checkbox handles Space itself. Esc during a drag is the
+    // window's (MainWindow.TryShortcut), wherever the focus is.
     private void OnTaskListPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if ((e.OriginalSource is ListViewItem || (e.Key == VirtualKey.Escape && TaskDrag.IsDragging))
-            && TryShortcut(e.Key, KeyboardModifiers.Current()))
+        if (e.OriginalSource is ListViewItem && TryShortcut(e.Key, KeyboardModifiers.Current()))
         {
             e.Handled = true;
         }

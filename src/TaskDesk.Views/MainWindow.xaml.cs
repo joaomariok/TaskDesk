@@ -49,6 +49,8 @@ public sealed partial class MainWindow : Window
         {
             // A closed window has no handle or size to measure.
             _closed = true;
+            // A drag never outlives its window: its picture and timers go now.
+            CancelDrags();
             // Stops the view models' deferred work now: each stop latches and cancels before it returns, so a text
             // change delivered after Closed or a tick already queued starts nothing, and a search or load still running
             // stops before the caller lets the database go. Not awaited: the cancelled work ends on its own, quietly.
@@ -59,11 +61,10 @@ public sealed partial class MainWindow : Window
         {
             if (e.WindowActivationState == WindowActivationState.Deactivated)
             {
-                View.TaskList.TaskDrag.Cancel();
-                Navigation.ListDrag.Cancel();
+                CancelDrags();
             }
         };
-        // Ctrl+comma opens Settings from anywhere in the window, before a text box sees the key.
+        // Ctrl+comma opens Settings, and Esc cancels a drag, from anywhere in the window, before a text box sees the key.
         Navigation.PreviewKeyDown += OnPreviewKeyDown;
         // The quick-add box has the initial focus of the window.
         View.Loaded += (_, _) => View.FocusQuickAdd();
@@ -112,6 +113,12 @@ public sealed partial class MainWindow : Window
         return StopViewModelsAsync();
     }
 
+    private void CancelDrags()
+    {
+        View.TaskList.TaskDrag.Cancel();
+        Navigation.ListDrag.Cancel();
+    }
+
     // The page's view model and the sidebar's Lists; both stops are idempotent.
     private Task StopViewModelsAsync() => Task.WhenAll(ViewModel.StopAsync(), Lists?.StopAsync() ?? Task.CompletedTask);
 
@@ -153,11 +160,19 @@ public sealed partial class MainWindow : Window
     private double Scale() => WindowScale.Of(this);
 
     /// <summary>
-    /// Runs the window-wide shortcut for a key: Ctrl+comma opens Settings. Returns false when the key is not it.
-    /// A keyboard accelerator would not do: one for the comma key (VK_OEM_COMMA) was never invoked on a real key press.
+    /// Runs the window-wide shortcut for a key: Ctrl+comma opens Settings, and Esc during a Task or List drag cancels
+    /// it. Returns false when the key is not one, or Esc with no drag on. A keyboard accelerator would not do: one
+    /// for the comma key (VK_OEM_COMMA) was never invoked on a real key press.
     /// </summary>
     public bool TryShortcut(VirtualKey key, VirtualKeyModifiers modifiers)
     {
+        if ((key, modifiers) == (VirtualKey.Escape, VirtualKeyModifiers.None))
+        {
+            var dragging = View.TaskList.TaskDrag.IsDragging || Navigation.ListDrag.IsDragging;
+            CancelDrags();
+            return dragging;
+        }
+
         if ((key, modifiers) != (SettingsKey, VirtualKeyModifiers.Control))
         {
             return false;
@@ -172,7 +187,7 @@ public sealed partial class MainWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == SettingsKey && TryShortcut(e.Key, KeyboardModifiers.Current()))
+        if (e.Key is SettingsKey or VirtualKey.Escape && TryShortcut(e.Key, KeyboardModifiers.Current()))
         {
             e.Handled = true;
         }

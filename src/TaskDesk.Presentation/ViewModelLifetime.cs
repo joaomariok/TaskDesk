@@ -63,6 +63,28 @@ public sealed class ViewModelLifetime
     }
 
     /// <summary>
+    /// Arms a timer on <paramref name="clock"/> whose <paramref name="tick"/> runs only until the stop; returns null
+    /// once stopped, when no timer is armed. The tick runs where the clock fires it, which may be off the UI thread.
+    /// </summary>
+    public ITimer? CreateTimer(TimeProvider clock, Action tick, TimeSpan dueTime, TimeSpan period)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(tick);
+        if (IsStopped)
+        {
+            return null;
+        }
+
+        return clock.CreateTimer(_ =>
+        {
+            if (!IsStopped)
+            {
+                tick();
+            }
+        }, null, dueTime, period);
+    }
+
+    /// <summary>
     /// Ends the lifetime: no job starts from now on, and the running ones are cancelled. The latch and the cancel
     /// happen before this returns. Idempotent; every call completes once the jobs running at the stop have ended,
     /// however they ended.

@@ -27,6 +27,7 @@ public sealed partial class NavigationPane : IReorderDragHost
     private ListItemViewModel? _menuList;
     private Tag? _menuTag;
     private bool _dragCheckQueued;
+    private ListViewItem? _menulessRow;
 
     // True from a key pressed on the Lists to the next press: a click or selection then comes from the keyboard,
     // never from the release of a drag.
@@ -168,8 +169,11 @@ public sealed partial class NavigationPane : IReorderDragHost
         };
         ShowTags();
         ListDrag.ListenToPointer();
+        ListDrag.LiftedAfterHold += OnListLiftedAfterHold;
         _dragScroll.Attach(SidebarScroll);
-        ListsList.AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) => _keyInput = false), true);
+        ListsList.AddHandler(PointerPressedEvent, new PointerEventHandler(OnListPointerPressed), true);
+        ListsList.AddHandler(PointerReleasedEvent, new PointerEventHandler((_, _) => RestoreRowMenu()), true);
+        ListsList.AddHandler(PointerCanceledEvent, new PointerEventHandler((_, _) => RestoreRowMenu()), true);
         // A drag never carries over to another page.
         ViewModel.PropertyChanged += (_, e) =>
         {
@@ -280,8 +284,8 @@ public sealed partial class NavigationPane : IReorderDragHost
         }
     }
 
-    // Each row gets its context menu (on the row, so Shift+F10 and the Menu key on a focused row open it) and its
-    // accessible name, which the UI tests find it by.
+    // Each row gets its context menu (on the row, so Shift+F10 and the Menu key on a focused row open it; a touch
+    // hold does not, OnListPointerPressed) and its accessible name, which the UI tests find it by.
     private void OnListContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
         if (!args.InRecycleQueue && args.Item is ListItemViewModel item)
@@ -496,6 +500,56 @@ public sealed partial class NavigationPane : IReorderDragHost
 
     bool IReorderDragHost.ScrollBy(double dy) => _dragScroll.ScrollBy(dy);
 
+    // A touch or pen hold on a List is the start of its drag, so the hold opens no context menu: the menu's
+    // light-dismiss layer would take the pointer and cancel the drag. The row WinUI would open it on (at the hold,
+    // before any handler sees the request) has no menu until the press ends. Right click, Shift+F10 and the Menu key
+    // open it as before.
+    private void OnListPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _keyInput = false;
+        RestoreRowMenu();
+        if (e.Pointer.PointerDeviceType is Microsoft.UI.Input.PointerDeviceType.Touch or Microsoft.UI.Input.PointerDeviceType.Pen
+            && RowOf(e.OriginalSource as DependencyObject) is { } row)
+        {
+            row.ContextFlyout = null;
+            _menulessRow = row;
+        }
+    }
+
+    private void RestoreRowMenu()
+    {
+        if (_menulessRow is { } row)
+        {
+            row.ContextFlyout = (FlyoutBase)Resources["ListMenu"];
+            _menulessRow = null;
+        }
+    }
+
+    // The List row an element is in, or null outside the rows.
+    private static ListViewItem? RowOf(DependencyObject? element)
+    {
+        for (; element is not null and not ListView; element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is ListViewItem row)
+            {
+                return row;
+            }
+        }
+
+        return null;
+    }
+
+    // A hold lifted without a slide opens the List's context menu where the finger lifted, as a hold did before
+    // Lists dragged by touch.
+    private void OnListLiftedAfterHold(object? sender, HeldLift lift)
+    {
+        RestoreRowMenu();
+        if (ListsList.ContainerFromItem(lift.Item) is FrameworkElement { ContextFlyout: { } menu } row)
+        {
+            menu.ShowAt(row, new FlyoutShowOptions { Position = ListsList.TransformToVisual(row).TransformPoint(lift.At) });
+        }
+    }
+
     // A reload clears the Lists and adds them again, so whether the dragged List is gone is checked once it ends.
     private void QueueCancelDragOfGoneList()
     {
@@ -515,13 +569,7 @@ public sealed partial class NavigationPane : IReorderDragHost
         });
     }
 
-    // Esc cancels a drag wherever the focus is in the Lists; any key makes the next click or selection the keyboard's.
-    private void OnListPreviewKeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        _keyInput = true;
-        if (e.Key == VirtualKey.Escape && TryShortcut(e.Key, KeyboardModifiers.Current()))
-        {
-            e.Handled = true;
-        }
-    }
+    // Any key makes the next click or selection the keyboard's. Esc during a drag is the window's
+    // (MainWindow.TryShortcut), wherever the focus is.
+    private void OnListPreviewKeyDown(object sender, KeyRoutedEventArgs e) => _keyInput = true;
 }

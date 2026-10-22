@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Time.Testing;
+
 namespace TaskDesk.Presentation.Tests;
 
 public sealed class ViewModelLifetimeTests
@@ -141,5 +143,25 @@ public sealed class ViewModelLifetimeTests
         }, caller.Token);
 
         Assert.True(cancelled);
+    }
+
+    [Fact]
+    public async Task A_timer_ticks_until_the_stop_and_none_is_armed_after_it()
+    {
+        var lifetime = new ViewModelLifetime();
+        var clock = new FakeTimeProvider();
+        var ticks = 0;
+        var timer = lifetime.CreateTimer(clock, () => ticks++, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Equal(2, ticks);
+
+        await lifetime.StopAsync();
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Equal(2, ticks);
+        Assert.NotNull(timer);
+        Assert.Null(lifetime.CreateTimer(clock, () => ticks++, TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan));
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Equal(2, ticks);
     }
 }

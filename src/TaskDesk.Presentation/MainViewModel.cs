@@ -31,8 +31,16 @@ public sealed partial class MainViewModel(
     // Required, so a test can never arm a real timer by leaving the clock out.
     private readonly TimeProvider _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
-    /// <summary>The clock the view model's timers run on; the Task list's drag scrolls on it too.</summary>
+    /// <summary>The clock the view model's timers run on; the drags' timers run on it too.</summary>
     public TimeProvider Clock => _clock;
+
+    /// <summary>
+    /// Arms a timer for a view's deferred work (a drag's hold and edge scroll) through the view model's lifetime: none
+    /// once the view model has stopped, and a tick after the stop does nothing. <paramref name="clock"/> is normally
+    /// <see cref="Clock"/>.
+    /// </summary>
+    public ITimer? CreateViewTimer(TimeProvider clock, Action tick, TimeSpan dueTime, TimeSpan period) =>
+        _lifetime.CreateTimer(clock, tick, dueTime, period);
 
     // Needed for Due edits and Smart Views only.
     private IDueService Due => dueService

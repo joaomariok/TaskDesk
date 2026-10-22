@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using TaskDesk.Core.Shell;
+using TaskDesk.Presentation;
 using Windows.Foundation;
 
 namespace TaskDesk.Views;
@@ -16,6 +17,9 @@ namespace TaskDesk.Views;
 /// open Task, its Subtask rows after it).
 /// </summary>
 public sealed record DragSubject(object Item, IReadOnlyList<FrameworkElement> Rows);
+
+/// <summary>A touch or pen press held for the hold time and lifted without a drag: its item and where it lifted.</summary>
+public sealed record HeldLift(object Item, Point At);
 
 /// <summary>
 /// The list side of a <see cref="ReorderDrag"/>. Every point is relative to <see cref="Surface"/>, in DIPs.
@@ -64,8 +68,10 @@ public interface IReorderDragHost
 /// the line keeps to the gap under the pointer.
 /// A touch or pen press drags only once held for <see cref="DragRules.HoldTime"/>; a move past the threshold
 /// before that is a swipe, which scrolls the list and never drags.
+/// Both timers run through <paramref name="owner"/>'s lifetime (<see cref="MainViewModel.CreateViewTimer"/>), so after
+/// its stop neither scrolls nor holds; the window cancels the drag when it closes.
 /// </summary>
-public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider clock)
+public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel owner)
 {
     /// <summary>How often the edge-scroll timer steps.</summary>
     public static readonly TimeSpan EdgeScrollInterval = TimeSpan.FromMilliseconds(10);
@@ -89,9 +95,11 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
     private int _edgeStepQueued;
     private DragPointer _pointerKind;
     private ITimer? _holdTimer;
+    // The pointer whose press the drag follows; the others' moves, releases and cancels do not reach it.
+    private uint _pointerId;
 
     /// <summary>The clock the edge-scroll and hold timers run on; replaceable so tests need not wait.</summary>
-    public TimeProvider Clock { get; set; } = clock;
+    public TimeProvider Clock { get; set; } = owner.Clock;
 
     /// <summary>True once a touch or pen press has been held long enough to drag, until its release or cancel.</summary>
     public bool IsHeld { get; private set; }
@@ -109,6 +117,9 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
 
     /// <summary>The drag picture while it shows, null otherwise.</summary>
     public Popup? Picture { get; private set; }
+
+    /// <summary>Raised when a held touch or pen press lifts without having dragged.</summary>
+    public event EventHandler<HeldLift>? LiftedAfterHold;
 
     /// <summary>
     /// A press at <paramref name="at"/> by <paramref name="pointer"/>. Where something drags, takes its picture
@@ -219,7 +230,7 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
             Interlocked.Exchange(ref _lastEdgeFire, Clock.GetTimestamp());
             Interlocked.Exchange(ref _pendingEdgeTime, 0);
             var ui = host.Surface.DispatcherQueue;
-            _edgeTimer = Clock.CreateTimer(_ => OnEdgeTimer(ui), null, EdgeScrollInterval, EdgeScrollInterval);
+            _edgeTimer = owner.CreateViewTimer(Clock, () => OnEdgeTimer(ui), EdgeScrollInterval, EdgeScrollInterval);
         }
     }
 
@@ -266,10 +277,16 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
     {
         var subject = _subject;
         var dragging = IsDragging;
+        var held = IsHeld;
         End();
         if (!dragging || subject is null)
         {
             drop = Task.CompletedTask;
+            if (held && subject is not null)
+            {
+                LiftedAfterHold?.Invoke(this, new HeldLift(subject.Item, at));
+            }
+
             return false;
         }
 
@@ -320,8 +337,9 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
     private void StartHold(int press, DragSubject subject)
     {
         var ui = SynchronizationContext.Current;
-        _holdTimer = Clock.CreateTimer(
-            _ =>
+        _holdTimer = owner.CreateViewTimer(
+            Clock,
+            () =>
             {
                 if (ui is null)
                 {
@@ -332,7 +350,6 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
                     ui.Post(_ => Hold(press, subject), null);
                 }
             },
-            null,
             DragRules.HoldTime,
             Timeout.InfiniteTimeSpan);
     }
@@ -408,7 +425,10 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
     /// <see cref="ListViewItem"/> rows. The mouse's left button drags, and touch and pen by press-and-hold; a press
     /// on a button inside a row (a checkbox, a chevron) does not. The surface captures the pointer once the drag
     /// starts, so the moves and the release keep coming outside it; losing the pointer, or a touch swipe that the
-    /// scrolling takes over, cancels.
+    /// scrolling takes over, cancels. The drag follows the pointer that pressed: another finger, a palm or the mouse
+    /// neither moves, drops nor cancels it, and its press is ignored while the drag is on. Before the drag starts,
+    /// another pointer's press replaces the press (nothing has captured the pointer yet, so a lost release must not
+    /// leave a press behind that blocks every later one).
     /// </summary>
     public void ListenToPointer()
     {
@@ -424,6 +444,12 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "XAML event handler; the signature requires void.")]
     private async void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (IsDragging && IsOtherPointer(e))
+        {
+            return;
+        }
+
+        _pointerId = e.Pointer.PointerId;
         var point = e.GetCurrentPoint(host.Surface);
         if (DragPointerOf(e.Pointer.PointerDeviceType) is not { } pointer
             || (pointer == DragPointer.Mouse ? !point.Properties.IsLeftButtonPressed : !point.IsInContact)
@@ -459,6 +485,11 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
 
     private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        if (IsOtherPointer(e))
+        {
+            return;
+        }
+
         var starting = !IsDragging;
         if (!Move(e.GetCurrentPoint(host.Surface).Position))
         {
@@ -476,7 +507,7 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "XAML event handler; the signature requires void.")]
     private async void OnPointerReleased(object sender, PointerRoutedEventArgs e)
     {
-        if (!TryRelease(e.GetCurrentPoint(host.Surface).Position, out var drop))
+        if (IsOtherPointer(e) || !TryRelease(e.GetCurrentPoint(host.Surface).Position, out var drop))
         {
             return;
         }
@@ -486,7 +517,16 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
         await drop;
     }
 
-    private void OnPointerLost(object sender, PointerRoutedEventArgs e) => Cancel();
+    private void OnPointerLost(object sender, PointerRoutedEventArgs e)
+    {
+        if (!IsOtherPointer(e))
+        {
+            Cancel();
+        }
+    }
+
+    // True while a press or a drag is on and the event is another pointer's.
+    private bool IsOtherPointer(PointerRoutedEventArgs e) => _subject is not null && e.Pointer.PointerId != _pointerId;
 
     // Windows' drag threshold (SM_CXDRAG, SM_CYDRAG) at the surface's display scale, in DIPs.
     private static partial class DragThreshold

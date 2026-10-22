@@ -432,8 +432,9 @@ public sealed class AppSession : IDisposable
     }
 
     /// <summary>A drag a person makes: press, move in small steps (drag and drop needs real pointer moves; the cursor
-    /// jumps of Mouse.Drag and Mouse.Position send none to WinUI), pause over the target, release.</summary>
-    public static void DragSlowly(Point from, Point to)
+    /// jumps of Mouse.Drag and Mouse.Position send none to WinUI), pause over the target, release.
+    /// <paramref name="beforeRelease"/> runs over the target, with the button still down.</summary>
+    public static void DragSlowly(Point from, Point to, Action? beforeRelease = null)
     {
         MoveTo(from);
         Thread.Sleep(100);
@@ -447,6 +448,12 @@ public sealed class AppSession : IDisposable
         }
 
         Thread.Sleep(400);
+        if (beforeRelease is not null)
+        {
+            beforeRelease();
+            Thread.Sleep(200);
+        }
+
         Mouse.Up(MouseButton.Left);
         Thread.Sleep(200);
     }

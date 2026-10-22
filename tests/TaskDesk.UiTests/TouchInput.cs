@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace TaskDesk.UiTests;
 
 /// <summary>
-/// One finger on the screen through Windows' touch injection (<c>InjectTouchInput</c>), in physical screen pixels,
+/// One finger (or two) on the screen through Windows' touch injection (<c>InjectTouchInput</c>), in physical screen pixels,
 /// with the timing a person's touch has: WinUI gets a real touch pointer, its press-and-hold and its swipes.
 /// </summary>
 internal static class TouchInput
@@ -18,41 +18,68 @@ internal static class TouchInput
     private const int PointerTypeTouch = 2;
     private const uint TouchFeedbackNone = 3;
 
+    private const uint Moving = PointerFlagUpdate | PointerFlagInRange | PointerFlagInContact;
+    private const uint First = 0;
+    private const uint Second = 1;
+
     private static bool _initialized;
 
     /// <summary>
     /// Presses at <paramref name="from"/>, holds still for <paramref name="hold"/>, then slides to
-    /// <paramref name="to"/> in small steps and lifts, as a person reordering by press-and-hold would.
+    /// <paramref name="to"/> in small steps, rests there for <paramref name="rest"/> (300 ms by default) and lifts, as
+    /// a person reordering by press-and-hold would. With <paramref name="secondFingerTap"/>, a second finger taps
+    /// there halfway through the slide while the first stays down and keeps moving.
     /// </summary>
-    public static void HoldAndDrag(Point from, Point to, TimeSpan hold)
+    public static void HoldAndDrag(Point from, Point to, TimeSpan hold, TimeSpan? rest = null, Point? secondFingerTap = null)
     {
         Initialize();
-        Inject(from, PointerFlagDown | PointerFlagInRange | PointerFlagInContact);
+        Inject((First, from, PointerFlagDown | PointerFlagInRange | PointerFlagInContact));
         var held = System.Diagnostics.Stopwatch.StartNew();
         while (held.Elapsed < hold)
         {
             Thread.Sleep(StepInterval);
-            Inject(from, PointerFlagUpdate | PointerFlagInRange | PointerFlagInContact);
+            Inject((First, from, Moving));
         }
 
         const int Steps = 40;
         for (var i = 1; i <= Steps; i++)
         {
             Thread.Sleep(StepInterval);
-            Inject(
-                new Point(from.X + (to.X - from.X) * i / Steps, from.Y + (to.Y - from.Y) * i / Steps),
-                PointerFlagUpdate | PointerFlagInRange | PointerFlagInContact);
+            var at = new Point(from.X + (to.X - from.X) * i / Steps, from.Y + (to.Y - from.Y) * i / Steps);
+            if (i == Steps / 2 && secondFingerTap is { } tap)
+            {
+                TapWithSecondFinger(at, tap);
+            }
+            else
+            {
+                Inject((First, at, Moving));
+            }
         }
 
         // Rest on the target a moment, as the mouse drag does, so the last move lands before the lift.
-        for (var i = 0; i < 20; i++)
+        var resting = System.Diagnostics.Stopwatch.StartNew();
+        while (resting.Elapsed < (rest ?? TimeSpan.FromMilliseconds(300)))
         {
             Thread.Sleep(StepInterval);
-            Inject(to, PointerFlagUpdate | PointerFlagInRange | PointerFlagInContact);
+            Inject((First, to, Moving));
         }
 
-        Inject(to, PointerFlagUp);
+        Inject((First, to, PointerFlagUp));
         Thread.Sleep(200);
+    }
+
+    // The second finger lands, stays a few frames and lifts; the first, at firstAt, stays down in every frame.
+    private static void TapWithSecondFinger(Point firstAt, Point tap)
+    {
+        Inject((First, firstAt, Moving), (Second, tap, PointerFlagDown | PointerFlagInRange | PointerFlagInContact));
+        for (var i = 0; i < 5; i++)
+        {
+            Thread.Sleep(StepInterval);
+            Inject((First, firstAt, Moving), (Second, tap, Moving));
+        }
+
+        Thread.Sleep(StepInterval);
+        Inject((First, firstAt, Moving), (Second, tap, PointerFlagUp));
     }
 
     private static void Initialize()
@@ -62,7 +89,7 @@ internal static class TouchInput
             return;
         }
 
-        if (!InitializeTouchInjection(1, TouchFeedbackNone))
+        if (!InitializeTouchInjection(2, TouchFeedbackNone))
         {
             throw new InvalidOperationException($"Touch injection is unavailable (error {Marshal.GetLastWin32Error()}).");
         }
@@ -70,19 +97,21 @@ internal static class TouchInput
         _initialized = true;
     }
 
-    private static void Inject(Point at, uint flags)
+    // One frame: every finger that is down, each by its own pointer id.
+    private static void Inject(params (uint Id, Point At, uint Flags)[] fingers)
     {
-        var location = new NativePoint { X = at.X, Y = at.Y };
-        var contact = new PointerTouchInfo
+        var contacts = fingers.Select(f => new PointerTouchInfo
         {
             PointerType = PointerTypeTouch,
-            PointerFlags = flags,
-            PixelLocation = location,
-            Contact = new NativeRect { Left = at.X, Top = at.Y, Right = at.X, Bottom = at.Y },
-        };
-        if (!InjectTouchInput(1, [contact]))
+            PointerId = f.Id,
+            PointerFlags = f.Flags,
+            PixelLocation = new NativePoint { X = f.At.X, Y = f.At.Y },
+            Contact = new NativeRect { Left = f.At.X, Top = f.At.Y, Right = f.At.X, Bottom = f.At.Y },
+        }).ToArray();
+        if (!InjectTouchInput((uint)contacts.Length, contacts))
         {
-            throw new InvalidOperationException($"Touch injection failed at {at} (error {Marshal.GetLastWin32Error()}).");
+            throw new InvalidOperationException(
+                $"Touch injection failed at {fingers[0].At} (error {Marshal.GetLastWin32Error()}).");
         }
     }
 
