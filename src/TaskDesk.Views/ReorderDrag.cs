@@ -52,9 +52,11 @@ public interface IReorderDragHost
 /// of the pressed rows, taken at the press, follows the pointer (also outside the window) with the press point
 /// under it, and the host's insertion line follows the gaps. A release over the list drops through the host; a
 /// release outside it, or <see cref="Cancel"/>, moves nothing. The rows and the selection are never touched.
-/// While the pointer is near the list's top or bottom edge, a timer on <paramref name="clock"/> scrolls the list
+/// While the pointer is near the list's top or bottom edge, a timer on <see cref="Clock"/> scrolls the list
 /// (<see cref="DragRules.EdgeScrollSpeed"/>); the host calls <see cref="ListScrolled"/> when the list scrolls, so
 /// the line keeps to the gap under the pointer.
+/// A touch or pen press drags only once held for <see cref="DragRules.HoldTime"/>; a move past the threshold
+/// before that is a swipe, which scrolls the list and never drags.
 /// </summary>
 public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider clock)
 {
@@ -77,6 +79,14 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
     private long _lastEdgeFire;
     private long _pendingEdgeTime;
     private int _edgeStepQueued;
+    private DragPointer _pointerKind;
+    private ITimer? _holdTimer;
+
+    /// <summary>The clock the edge-scroll and hold timers run on; replaceable so tests need not wait.</summary>
+    public TimeProvider Clock { get; set; } = clock;
+
+    /// <summary>True once a touch or pen press has been held long enough to drag, until its release or cancel.</summary>
+    public bool IsHeld { get; private set; }
 
     /// <summary>True from the move past the threshold to the release or cancel.</summary>
     public bool IsDragging { get; private set; }
@@ -93,10 +103,11 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
     public Popup? Picture { get; private set; }
 
     /// <summary>
-    /// A press at <paramref name="at"/>. Where something drags, takes its picture (completing when it is ready);
-    /// the drag itself starts only on a move past the threshold.
+    /// A press at <paramref name="at"/> by <paramref name="pointer"/>. Where something drags, takes its picture
+    /// (completing when it is ready); the drag itself starts only on a move past the threshold, for touch and pen
+    /// once the press is held.
     /// </summary>
-    public async Task PressAsync(Point at)
+    public async Task PressAsync(Point at, DragPointer pointer = DragPointer.Mouse)
     {
         End();
         LastPressDragged = false;
@@ -108,6 +119,12 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
 
         _subject = subject;
         _press = at;
+        _pointerKind = pointer;
+        if (DragRules.StartsByHold(pointer))
+        {
+            StartHold(press, subject);
+        }
+
         var top = subject.Rows[0].TransformToVisual(host.Surface).TransformPoint(new Point(0, 0));
         _pressOffset = new Point(at.X - top.X, at.Y - top.Y);
 
@@ -138,9 +155,13 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
         if (!IsDragging)
         {
             var (thresholdX, thresholdY) = DragThreshold.Of(host.Surface);
-            if (!DragRules.HasPassedThreshold(at.X - _press.X, at.Y - _press.Y, thresholdX, thresholdY))
+            switch (DragRules.StartOnMove(_pointerKind, IsHeld, at.X - _press.X, at.Y - _press.Y, thresholdX, thresholdY))
             {
-                return false;
+                case DragStart.Wait:
+                    return false;
+                case DragStart.Abandon:
+                    End(); // A swipe: the list scrolls, and this press never drags.
+                    return false;
             }
 
             IsDragging = true;
@@ -181,10 +202,10 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
 
         if (_edgeTimer is null)
         {
-            Interlocked.Exchange(ref _lastEdgeFire, clock.GetTimestamp());
+            Interlocked.Exchange(ref _lastEdgeFire, Clock.GetTimestamp());
             Interlocked.Exchange(ref _pendingEdgeTime, 0);
             var ui = host.Surface.DispatcherQueue;
-            _edgeTimer = clock.CreateTimer(_ => OnEdgeTimer(ui), null, EdgeScrollInterval, EdgeScrollInterval);
+            _edgeTimer = Clock.CreateTimer(_ => OnEdgeTimer(ui), null, EdgeScrollInterval, EdgeScrollInterval);
         }
     }
 
@@ -196,7 +217,7 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
 
     private void OnEdgeTimer(Microsoft.UI.Dispatching.DispatcherQueue ui)
     {
-        var now = clock.GetTimestamp();
+        var now = Clock.GetTimestamp();
         Interlocked.Add(ref _pendingEdgeTime, now - Interlocked.Exchange(ref _lastEdgeFire, now));
         if (Interlocked.Exchange(ref _edgeStepQueued, 1) == 0 && !ui.TryEnqueue(EdgeStep))
         {
@@ -209,7 +230,7 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
     {
         Interlocked.Exchange(ref _edgeStepQueued, 0);
         var elapsed = TimeSpan.FromSeconds(
-            (double)Interlocked.Exchange(ref _pendingEdgeTime, 0) / clock.TimestampFrequency);
+            (double)Interlocked.Exchange(ref _pendingEdgeTime, 0) / Clock.TimestampFrequency);
         if (_edgeTimer is null || !IsDragging || host.Surface.XamlRoot is null)
         {
             return;
@@ -257,6 +278,9 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
         }
 
         IsDragging = false;
+        IsHeld = false;
+        _holdTimer?.Dispose();
+        _holdTimer = null;
         _subject = null;
         _image = null;
         if (Picture is { } picture)
@@ -265,6 +289,39 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
             picture.Child = null;
             Picture = null;
         }
+    }
+
+    // The hold runs on the clock and lands on the UI thread. Once held, the list's scrolling lets go of the
+    // pointer, so the move that follows drags the row instead of panning the list.
+    private void StartHold(int press, DragSubject subject)
+    {
+        var ui = SynchronizationContext.Current;
+        _holdTimer = Clock.CreateTimer(
+            _ =>
+            {
+                if (ui is null)
+                {
+                    Hold(press, subject);
+                }
+                else
+                {
+                    ui.Post(_ => Hold(press, subject), null);
+                }
+            },
+            null,
+            DragRules.HoldTime,
+            Timeout.InfiniteTimeSpan);
+    }
+
+    private void Hold(int press, DragSubject subject)
+    {
+        if (press != _pressCount || !ReferenceEquals(_subject, subject))
+        {
+            return; // The press ended (released, cancelled or swiped) before the hold.
+        }
+
+        IsHeld = true;
+        subject.Rows[0].CancelDirectManipulations();
     }
 
     private void ShowPicture(Point at)

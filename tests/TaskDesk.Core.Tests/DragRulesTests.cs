@@ -22,6 +22,32 @@ public class DragRulesTests
         Assert.True(DragRules.HasPassedThreshold(0, 3, thresholdX: 6, thresholdY: 2));
     }
 
+    // Windows' press-and-hold: WinUI raised Holding 500 ms after an injected touch press on this setup (#136).
+    [Fact]
+    public void The_hold_time_is_Windows_half_second() =>
+        Assert.Equal(TimeSpan.FromMilliseconds(500), DragRules.HoldTime);
+
+    // The mouse drags past the threshold; touch and pen drag past it only once held, and a move past it before the
+    // hold is a swipe that scrolls and never drags.
+    [Theory]
+    [InlineData(DragPointer.Mouse, false, 2, DragStart.Wait)]
+    [InlineData(DragPointer.Mouse, false, 10, DragStart.Drag)]
+    [InlineData(DragPointer.Touch, false, 2, DragStart.Wait)]
+    [InlineData(DragPointer.Touch, false, 10, DragStart.Abandon)]
+    [InlineData(DragPointer.Touch, true, 2, DragStart.Wait)]
+    [InlineData(DragPointer.Touch, true, 10, DragStart.Drag)]
+    [InlineData(DragPointer.Pen, false, 10, DragStart.Abandon)]
+    [InlineData(DragPointer.Pen, true, 10, DragStart.Drag)]
+    public void A_move_starts_a_drag_by_the_pointers_rule(DragPointer pointer, bool held, double dy, DragStart expected) =>
+        Assert.Equal(expected, DragRules.StartOnMove(pointer, held, 0, dy, thresholdX: 4, thresholdY: 4));
+
+    [Theory]
+    [InlineData(DragPointer.Mouse, false)]
+    [InlineData(DragPointer.Touch, true)]
+    [InlineData(DragPointer.Pen, true)]
+    public void Touch_and_pen_start_a_drag_by_press_and_hold(DragPointer pointer, bool expected) =>
+        Assert.Equal(expected, DragRules.StartsByHold(pointer));
+
     [Theory]
     [InlineData(10, 10, DragRelease.Drop)]
     [InlineData(0, 0, DragRelease.Drop)]

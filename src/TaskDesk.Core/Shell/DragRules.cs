@@ -10,6 +10,32 @@ public enum DragRelease
     Cancel,
 }
 
+/// <summary>The kind of pointer pressing a row.</summary>
+public enum DragPointer
+{
+    /// <summary>A mouse.</summary>
+    Mouse,
+
+    /// <summary>A finger.</summary>
+    Touch,
+
+    /// <summary>A pen.</summary>
+    Pen,
+}
+
+/// <summary>What a move after a press does to the drag.</summary>
+public enum DragStart
+{
+    /// <summary>Nothing yet: the press may still become a drag.</summary>
+    Wait,
+
+    /// <summary>The drag starts.</summary>
+    Drag,
+
+    /// <summary>The press never drags: a swipe before the hold, which scrolls the list.</summary>
+    Abandon,
+}
+
 /// <summary>
 /// The rules of the app's own reordering drag (ADR 0007), in device-independent pixels: when a press becomes a
 /// drag, whether a release drops or cancels, and how much of a dragged block its picture shows.
@@ -21,6 +47,31 @@ public static class DragRules
 
     // The share of a faded picture's height, at its bottom, over which it fades out.
     private const double FadeShare = 0.4;
+
+    /// <summary>
+    /// How long a touch or pen press is held before it can drag: Windows' own press-and-hold, after which WinUI
+    /// raises <c>Holding</c> (measured at 500 ms by injecting a touch press).
+    /// </summary>
+    public static readonly TimeSpan HoldTime = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>True when the <paramref name="pointer"/> starts a drag by press-and-hold (touch and pen).</summary>
+    public static bool StartsByHold(DragPointer pointer) => pointer != DragPointer.Mouse;
+
+    /// <summary>
+    /// What a move (<paramref name="dx"/>, <paramref name="dy"/>) from the press point does: the mouse drags past
+    /// the threshold; touch and pen drag past it once <paramref name="held"/>, and before that a move past it is a
+    /// swipe that never drags.
+    /// </summary>
+    public static DragStart StartOnMove(
+        DragPointer pointer, bool held, double dx, double dy, double thresholdX, double thresholdY)
+    {
+        if (!HasPassedThreshold(dx, dy, thresholdX, thresholdY))
+        {
+            return DragStart.Wait;
+        }
+
+        return !StartsByHold(pointer) || held ? DragStart.Drag : DragStart.Abandon;
+    }
 
     /// <summary>
     /// True when the pointer has moved (<paramref name="dx"/>, <paramref name="dy"/>) from the press point past the

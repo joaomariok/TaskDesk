@@ -44,6 +44,8 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
         OpenTaskList.AddHandler(PointerReleasedEvent, new PointerEventHandler(OnDragPointerReleased), true);
         OpenTaskList.AddHandler(PointerCaptureLostEvent, new PointerEventHandler(OnDragPointerCaptureLost), true);
         OpenTaskList.Loaded += OnTaskListLoaded;
+        // A touch swipe that the list's scrolling takes over cancels the pointer: that press never drags.
+        OpenTaskList.AddHandler(PointerCanceledEvent, new PointerEventHandler(OnDragPointerCaptureLost), true);
         // A reload replaces the rows, and a deleted or completed Task leaves them: either way its drag ends.
         viewModel.Tasks.CollectionChanged += (_, _) => CancelDragOfGoneTask();
     }
@@ -551,20 +553,30 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
         TaskDrag.ListScrolled();
     }
 
-    // The mouse's left button drags (touch and pen do not yet); a press on a row's checkbox or chevron does not.
+    // The mouse's left button drags, and touch and pen by press-and-hold; a press on a row's checkbox or chevron
+    // does not.
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "XAML event handler; the signature requires void.")]
     private async void OnDragPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         var point = e.GetCurrentPoint(OpenTaskList);
-        if (e.Pointer.PointerDeviceType != Microsoft.UI.Input.PointerDeviceType.Mouse
-            || !point.Properties.IsLeftButtonPressed || IsOnButton(e.OriginalSource as DependencyObject))
+        if (DragPointerOf(e.Pointer.PointerDeviceType) is not { } pointer
+            || (pointer == DragPointer.Mouse ? !point.Properties.IsLeftButtonPressed : !point.IsInContact)
+            || IsOnButton(e.OriginalSource as DependencyObject))
         {
             TaskDrag.Cancel();
             return;
         }
 
-        await TaskDrag.PressAsync(point.Position);
+        await TaskDrag.PressAsync(point.Position, pointer);
     }
+
+    private static DragPointer? DragPointerOf(Microsoft.UI.Input.PointerDeviceType device) => device switch
+    {
+        Microsoft.UI.Input.PointerDeviceType.Mouse => DragPointer.Mouse,
+        Microsoft.UI.Input.PointerDeviceType.Touch => DragPointer.Touch,
+        Microsoft.UI.Input.PointerDeviceType.Pen => DragPointer.Pen,
+        _ => null,
+    };
 
     private static bool IsOnButton(DependencyObject? element)
     {
@@ -619,6 +631,6 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
         }
     }
 
-    // Losing the pointer (Windows took it, say) ends the drag as a cancel.
+    // Losing the pointer (Windows took it, or the list's scrolling did) ends the press or the drag as a cancel.
     private void OnDragPointerCaptureLost(object sender, PointerRoutedEventArgs e) => TaskDrag.Cancel();
 }
