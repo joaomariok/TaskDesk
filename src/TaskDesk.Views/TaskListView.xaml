@@ -102,6 +102,15 @@
                   ContainerContentChanging="OnRowContainerChanging"
                   SelectionChanged="OnTaskSelectionChanged"
                   PreviewKeyDown="OnTaskListPreviewKeyDown">
+            <!-- ListView's defaults without the add and delete fade: a move is a removal and an insertion, which
+                 the fade plays in stages that leave the moved rows' place blank for most of a second. -->
+            <ListView.ItemContainerTransitions>
+                <TransitionCollection>
+                    <ContentThemeTransition />
+                    <ReorderThemeTransition />
+                    <EntranceThemeTransition IsStaggeringEnabled="False" />
+                </TransitionCollection>
+            </ListView.ItemContainerTransitions>
             <ListView.ItemsPanel>
                 <ItemsPanelTemplate>
                     <ItemsStackPanel AreStickyGroupHeadersEnabled="False" />

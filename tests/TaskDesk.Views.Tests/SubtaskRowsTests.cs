@@ -3,7 +3,9 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
 using TaskDesk.Core.Lists;
 using TaskDesk.Core.Tags;
@@ -11,6 +13,7 @@ using TaskDesk.Core.Tasks;
 using TaskDesk.Data;
 using TaskDesk.Data.Tests;
 using TaskDesk.Presentation;
+using Windows.Foundation.Collections;
 using Windows.System;
 using Windows.UI.Text;
 
@@ -285,6 +288,75 @@ public sealed class SubtaskRowsTests
 
             Assert.AreEqual(12, glyph.FontSize);
             Assert.AreEqual(soft, ((SolidColorBrush)glyph.Foreground).Color);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Reordering_an_open_Tasks_Subtasks_in_the_pane_moves_only_its_Subtask_rows_and_resets_nothing()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "trip", "pack", "go");
+        await AddAsync(db, "other");
+        var (window, viewModel) = Open(db);
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            var trip = viewModel.Tasks.Single(t => t.Title == "trip");
+            viewModel.OpenTask(trip);
+            viewModel.OpenDetailPane(trip);
+            var list = await WaitForRowsAsync(window, "trip", "Subtask pack", "Subtask go", "other");
+            var kept = new[] { "trip", "other" }.ToDictionary(name => name, name => Container(list, name));
+            var changes = new List<CollectionChange>();
+            var view = (ICollectionView)list.ItemsSource;
+            view.VectorChanged += (_, e) => changes.Add(e.CollectionChange);
+
+            await viewModel.MoveSubtaskDownCommand.ExecuteAsync(viewModel.SubtaskItems[0]);
+
+            await WaitForRowsAsync(window, "trip", "Subtask go", "Subtask pack", "other");
+            // A reset would make the list drop and realise every row again: the whole list blanks for a moment.
+            CollectionAssert.DoesNotContain(changes, CollectionChange.Reset);
+            foreach (var (name, container) in kept)
+            {
+                Assert.AreSame(container, Container(list, name), $"{name}: its row was realised again.");
+            }
+
+            // A selected Subtask row moved up leaves the list for a moment and is selected again where it lands.
+            var pack = trip.SubtaskRows.Single(s => s.Title == "pack");
+            list.SelectedItem = pack;
+            await viewModel.MoveSubtaskUpCommand.ExecuteAsync(viewModel.SubtaskItems.Single(s => s.Title == "pack"));
+            await WaitForRowsAsync(window, "trip", "Subtask pack", "Subtask go", "other");
+            await UiWait.UntilAsync(() => ReferenceEquals(list.SelectedItem, pack),
+                () => $"The list selected {(list.SelectedItem as ITaskListRow)?.Title ?? "nothing"}.", Ct);
+            Assert.AreSame(pack, viewModel.SelectedRow);
+            CollectionAssert.DoesNotContain(changes, CollectionChange.Reset);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Rows_come_go_and_move_in_the_Task_list_without_the_add_and_delete_fade()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "trip", "pack");
+        var (window, viewModel) = Open(db);
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            var list = await WaitForRowsAsync(window, "trip");
+            // The fade plays a move (a removal, then an insertion) in stages that leave the moved rows' place blank.
+            var transitions = list.ItemContainerTransitions.Select(t => t.GetType()).ToList();
+
+            CollectionAssert.DoesNotContain(transitions, typeof(AddDeleteThemeTransition), "add and delete");
+            CollectionAssert.Contains(transitions, typeof(ContentThemeTransition), "content");
+            CollectionAssert.Contains(transitions, typeof(ReorderThemeTransition), "reorder");
+            CollectionAssert.Contains(transitions, typeof(EntranceThemeTransition), "entrance");
         }
         finally
         {

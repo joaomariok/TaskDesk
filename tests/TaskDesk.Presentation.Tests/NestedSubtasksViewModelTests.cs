@@ -290,6 +290,27 @@ public class NestedSubtasksViewModelTests
     }
 
     [Fact]
+    public async Task Reordering_Subtasks_in_the_pane_removes_and_inserts_the_moved_row_and_never_moves_it()
+    {
+        // A grouped list resets on a move: every row of the list would blank and be realised again.
+        var (_, vm) = await StartAsync("book hotel", "pack");
+        var trip = RowOf(vm, "trip");
+        vm.OpenDetailPane(trip);
+        vm.OpenTask(trip);
+        var group = vm.Groups.Single();
+        var changes = new List<(NotifyCollectionChangedAction Action, int Index)>();
+        group.CollectionChanged += (_, e) => changes.Add(
+            (e.Action, e.Action == NotifyCollectionChangedAction.Remove ? e.OldStartingIndex : e.NewStartingIndex));
+
+        await vm.MoveSubtaskDownCommand.ExecuteAsync(vm.SubtaskItems[0]);
+
+        Assert.Equal(["trip", "- pack", "- book hotel", "other"], Rows(vm, TaskGroupKind.Open));
+        Assert.Equal(
+            [(NotifyCollectionChangedAction.Remove, 2), (NotifyCollectionChangedAction.Add, 1)],
+            changes);
+    }
+
+    [Fact]
     public async Task Adding_deleting_renaming_reordering_and_ticking_in_the_pane_updates_the_open_Tasks_rows()
     {
         var (_, vm) = await StartAsync("book hotel", "pack");

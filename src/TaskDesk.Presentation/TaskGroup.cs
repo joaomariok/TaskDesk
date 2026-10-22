@@ -172,7 +172,8 @@ public sealed class TaskGroup : ObservableCollection<ITaskListRow>
         return end;
     }
 
-    // Opening, closing or a Subtask change touches only that Task's Subtask rows: a row that stays is kept.
+    // Opening, closing or a Subtask change touches only that Task's Subtask rows: a row that stays in place is kept,
+    // and one whose place changed is removed and inserted again (the list then selects it again if it was selected).
     private void OnRowChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(TaskRowViewModel.ShownSubtaskRows) || !_isExpanded
@@ -205,14 +206,14 @@ public sealed class TaskGroup : ObservableCollection<ITaskListRow>
                 continue;
             }
 
+            // A row already in the block sits further down; it is taken out and put back rather than moved, as a
+            // grouped list resets on a move and every row of the list blanks and is realised again.
             if (from >= 0)
             {
-                Move(from, index);
+                RemoveAt(from);
             }
-            else
-            {
-                Insert(index, wanted[i]);
-            }
+
+            Insert(index, wanted[i]);
         }
     }
 
