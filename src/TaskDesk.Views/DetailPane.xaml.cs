@@ -248,10 +248,20 @@ public sealed partial class DetailPane : UserControl
     // rebuild that drops it, or until its removal ends without one (refused, or nothing stored).
     private (Guid Id, Guid TaskId, int Index)? _removedReminder;
 
+    // An × keeps the row it is built for in its Tag: WinUI may clear a removed row's DataContext before a click
+    // queued on its × arrives, and the click must still remove that Reminder.
+    private void OnRemoveReminderDataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
+    {
+        if (args.NewValue is ReminderRowViewModel row)
+        {
+            sender.Tag = row;
+        }
+    }
+
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnRemoveReminderClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: ReminderRowViewModel row } || !row.RemoveCommand.CanExecute(null))
+        if (sender is not FrameworkElement { Tag: ReminderRowViewModel row } || !row.RemoveCommand.CanExecute(null))
         {
             return;
         }

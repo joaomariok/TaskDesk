@@ -391,6 +391,7 @@
                                             <Button Grid.Column="1" Style="{StaticResource SmallIconButton}"
                                                     ToolTipService.ToolTip="Remove reminder"
                                                     AutomationProperties.Name="{x:Bind RemoveName, Mode=OneTime}"
+                                                    DataContextChanged="OnRemoveReminderDataContextChanged"
                                                     Click="OnRemoveReminderClick">
                                                 <FontIcon Glyph="&#xE711;" FontSize="12" />
                                             </Button>
