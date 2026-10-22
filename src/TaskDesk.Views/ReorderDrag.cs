@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
 using TaskDesk.Core.Shell;
 using TaskDesk.Presentation;
 using Windows.Foundation;
@@ -44,8 +45,14 @@ public interface IReorderDragHost
     /// <summary>What a press at <paramref name="at"/> would drag, or null where nothing drags.</summary>
     DragSubject? SubjectAt(Point at);
 
-    /// <summary>Shows the insertion line on the gap under <paramref name="at"/>, or hides it outside the list.</summary>
-    void ShowDragAt(Point at);
+    /// <summary>The insertion line's colour.</summary>
+    Brush LineFill { get; }
+
+    /// <summary>
+    /// Shows the insertion line on the gap under <paramref name="at"/>, or hides it outside the list. Returns the
+    /// line's bounds relative to <see cref="Surface"/> while it shows, null once hidden.
+    /// </summary>
+    Rect? ShowDragAt(Point at);
 
     /// <summary>Hides the insertion line.</summary>
     void HideDragLine();
@@ -64,7 +71,8 @@ public interface IReorderDragHost
 /// The app's own reordering drag (ADR 0007), shared by the lists that reorder. The list's pointer events feed it a
 /// press, moves, a release and cancels, as points. A press past Windows' drag threshold starts the drag: a picture
 /// of the pressed rows, taken at the press, follows the pointer (also outside the window) with the press point
-/// under it, and the host's insertion line follows the gaps. A release over the list drops through the host; a
+/// under it, and the host's insertion line follows the gaps, drawn again over the picture where the picture covers
+/// it (<see cref="LineOverPicture"/>). A release over the list drops through the host; a
 /// release outside it, or <see cref="Cancel"/>, moves nothing. The rows and the selection are never touched.
 /// While the pointer is near the list's top or bottom edge, a timer on <see cref="Clock"/> scrolls the list
 /// (<see cref="DragRules.EdgeScrollSpeed"/>); the host calls <see cref="ListScrolled"/> when the list scrolls, so
@@ -92,6 +100,8 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
     private int _pressCount;
     // The pointer relative to the viewport, which stays put while the list scrolls (the surface may scroll with it).
     private Point _pointer;
+    // The insertion line's bounds relative to the surface while it shows, null otherwise.
+    private Rect? _line;
     private ITimer? _edgeTimer;
     private long _lastEdgeFire;
     private long _pendingEdgeTime;
@@ -100,6 +110,8 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
     private ITimer? _holdTimer;
     // The pointer whose press the drag follows; the others' moves, releases and cancels do not reach it.
     private uint _pointerId;
+    // The element that holds the pointer for a moment as the drag starts (TakePointer), while it lets go of it.
+    private UIElement? _handOff;
 
     /// <summary>The clock the edge-scroll and hold timers run on; replaceable so tests need not wait.</summary>
     public TimeProvider Clock { get; set; } = owner.Clock;
@@ -120,6 +132,9 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
 
     /// <summary>The drag picture while it shows, null otherwise.</summary>
     public Popup? Picture { get; private set; }
+
+    /// <summary>The insertion line drawn again over the picture, where the line crosses it; null otherwise.</summary>
+    public Popup? LineOverPicture { get; private set; }
 
     /// <summary>Raised when a press that would drag starts, before its hold and its picture.</summary>
     public event EventHandler<DragPress>? Pressed;
@@ -201,8 +216,8 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
         }
 
         _pointer = InViewport(at);
+        _line = host.ShowDragAt(at);
         ShowPicture(at);
-        host.ShowDragAt(at);
         UpdateEdgeTimer();
         return true;
     }
@@ -212,9 +227,10 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
     {
         if (IsDragging)
         {
-            host.ShowDragAt(ReferenceEquals(host.Viewport, host.Surface)
+            _line = host.ShowDragAt(ReferenceEquals(host.Viewport, host.Surface)
                 ? _pointer
                 : host.Viewport.TransformToVisual(host.Surface).TransformPoint(_pointer));
+            ShowLineOverPicture();
         }
     }
 
@@ -338,6 +354,14 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
         var ended = _subject is not null;
         _subject = null;
         _image = null;
+        _line = null;
+        if (LineOverPicture is { } lineOverPicture)
+        {
+            lineOverPicture.IsOpen = false;
+            lineOverPicture.Child = null;
+            LineOverPicture = null;
+        }
+
         if (Picture is { } picture)
         {
             picture.IsOpen = false;
@@ -401,7 +425,69 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
         };
         Picture.HorizontalOffset = inWindow.X - _pressOffset.X;
         Picture.VerticalOffset = inWindow.Y - _pressOffset.Y;
-        Picture.IsOpen = true;
+        if (!Picture.IsOpen)
+        {
+            Picture.IsOpen = true;
+            // A popup opened later draws above one opened earlier: the line opens again, over the picture.
+            HideLineOverPicture();
+        }
+
+        ShowLineOverPicture();
+    }
+
+    /// <summary>
+    /// The bounds, relative to <paramref name="surface"/>, of an insertion line that sits at the top of its parent,
+    /// placed by its margin and stretched across it.
+    /// </summary>
+    public static Rect LineBounds(Shape line, UIElement surface)
+    {
+        var parent = (FrameworkElement)VisualTreeHelper.GetParent(line);
+        var margin = line.Margin;
+        var topLeft = parent.TransformToVisual(surface).TransformPoint(new Point(margin.Left, margin.Top));
+        return new Rect(topLeft.X, topLeft.Y, Math.Max(0, parent.ActualWidth - margin.Left - margin.Right), line.Height);
+    }
+
+    // The picture sits over the gap, where the line would show through it like a strikethrough, so the line is drawn
+    // again on top of it, at full strength, across the part of the picture it crosses. It goes when the line hides.
+    private void ShowLineOverPicture()
+    {
+        if (Picture is not { IsOpen: true } picture || _image is null || _line is not { } line)
+        {
+            HideLineOverPicture();
+            return;
+        }
+
+        var at = host.Surface.TransformToVisual(null).TransformPoint(new Point(line.X, line.Y));
+        var left = Math.Max(at.X, picture.HorizontalOffset);
+        var right = Math.Min(at.X + line.Width, picture.HorizontalOffset + _image.Width);
+        if (right <= left || at.Y + line.Height <= picture.VerticalOffset || at.Y >= picture.VerticalOffset + _image.Height)
+        {
+            HideLineOverPicture();
+            return;
+        }
+
+        LineOverPicture ??= new Popup
+        {
+            XamlRoot = host.Surface.XamlRoot,
+            ShouldConstrainToRootBounds = false,
+            IsHitTestVisible = false,
+            Child = new Rectangle { RadiusX = 1, RadiusY = 1, IsHitTestVisible = false },
+        };
+        var shape = (Rectangle)LineOverPicture.Child;
+        shape.Fill = host.LineFill;
+        shape.Width = right - left;
+        shape.Height = line.Height;
+        LineOverPicture.HorizontalOffset = left;
+        LineOverPicture.VerticalOffset = at.Y;
+        LineOverPicture.IsOpen = true;
+    }
+
+    private void HideLineOverPicture()
+    {
+        if (LineOverPicture is { } line)
+        {
+            line.IsOpen = false;
+        }
     }
 
     // The rows as they look in the list, over the solid backing, capped with a fade, at the picture's opacity and
@@ -536,7 +622,7 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
 
         if (starting)
         {
-            host.Surface.CapturePointer(e.Pointer);
+            TakePointer(e);
         }
 
         e.Handled = true;
@@ -555,8 +641,31 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
         await drop;
     }
 
+    // The surface takes the pointer as the drag starts. Under its capture, the row the pointer was over never sees
+    // it leave, and would keep its pointer-over background after the drag, until it is rebuilt. So the element under
+    // the pointer captures it and lets go of it first: that loss, which reaches the row on its way up, clears the
+    // row's pointer-over state. Touch shows none.
+    private void TakePointer(PointerRoutedEventArgs e)
+    {
+        var surface = host.Surface;
+        if (_pointerKind != DragPointer.Touch && e.OriginalSource is UIElement under && !ReferenceEquals(under, surface)
+            && under.CapturePointer(e.Pointer))
+        {
+            _handOff = under;
+            under.ReleasePointerCapture(e.Pointer);
+            _handOff = null;
+        }
+
+        surface.CapturePointer(e.Pointer);
+    }
+
     private void OnPointerLost(object sender, PointerRoutedEventArgs e)
     {
+        if (_handOff is not null && ReferenceEquals(e.OriginalSource, _handOff))
+        {
+            return; // The hand-off to the surface (TakePointer), not a lost pointer.
+        }
+
         if (!IsOtherPointer(e))
         {
             Cancel();

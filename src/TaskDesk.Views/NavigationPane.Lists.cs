@@ -461,7 +461,7 @@ public sealed partial class NavigationPane : IReorderDragHost
     }
 
     // Over Lists scrolled out of the sidebar's sight there is no gap to show.
-    void IReorderDragHost.ShowDragAt(Windows.Foundation.Point at)
+    Windows.Foundation.Rect? IReorderDragHost.ShowDragAt(Windows.Foundation.Point at)
     {
         if (ReorderGeometry.HasLeft(at.X, at.Y, ListsList.ActualWidth, ListsList.ActualHeight))
         {
@@ -475,7 +475,13 @@ public sealed partial class NavigationPane : IReorderDragHost
         {
             ShowListDropGap(GapAt(at));
         }
+
+        return ListInsertionLine.Visibility == Visibility.Visible
+            ? ReorderDrag.LineBounds(ListInsertionLine, ListsList)
+            : null;
     }
+
+    Brush IReorderDragHost.LineFill => ListInsertionLine.Fill;
 
     // The drag ended: a scroll step it left in flight no longer counts.
     void IReorderDragHost.HideDragLine()

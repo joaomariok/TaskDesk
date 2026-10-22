@@ -484,7 +484,9 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
         return new DragSubject(row, rows);
     }
 
-    void IReorderDragHost.ShowDragAt(Windows.Foundation.Point at)
+    Brush IReorderDragHost.LineFill => TaskInsertionLine.Fill;
+
+    Windows.Foundation.Rect? IReorderDragHost.ShowDragAt(Windows.Foundation.Point at)
     {
         if (ReorderGeometry.HasLeft(at.X, at.Y, OpenTaskList.ActualWidth, OpenTaskList.ActualHeight))
         {
@@ -494,6 +496,10 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
         {
             ShowDropGap(GapAt(at));
         }
+
+        return TaskInsertionLine.Visibility == Visibility.Visible
+            ? ReorderDrag.LineBounds(TaskInsertionLine, OpenTaskList)
+            : null;
     }
 
     // The drag ended: a scroll step it left in flight no longer counts.
