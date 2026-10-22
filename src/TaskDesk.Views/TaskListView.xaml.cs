@@ -21,8 +21,7 @@ namespace TaskDesk.Views;
 /// </summary>
 public sealed partial class TaskListView : UserControl, IReorderDragHost
 {
-    private ScrollViewer? _listScroll;
-    private double? _edgeScrollTarget;
+    private readonly DragScroller _dragScroll;
 
     public TaskListView(MainViewModel viewModel)
     {
@@ -37,15 +36,10 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
         OpenTaskList.Items.VectorChanged += OnRowsChanged;
         OpenTaskList.Tapped += OnTaskListTapped;
 
-        // The row containers handle the press and the release themselves, so the drag listens to handled ones too.
         TaskDrag = new ReorderDrag(this, viewModel.Clock);
-        OpenTaskList.AddHandler(PointerPressedEvent, new PointerEventHandler(OnDragPointerPressed), true);
-        OpenTaskList.AddHandler(PointerMovedEvent, new PointerEventHandler(OnDragPointerMoved), true);
-        OpenTaskList.AddHandler(PointerReleasedEvent, new PointerEventHandler(OnDragPointerReleased), true);
-        OpenTaskList.AddHandler(PointerCaptureLostEvent, new PointerEventHandler(OnDragPointerCaptureLost), true);
+        TaskDrag.ListenToPointer();
+        _dragScroll = new DragScroller(TaskDrag);
         OpenTaskList.Loaded += OnTaskListLoaded;
-        // A touch swipe that the list's scrolling takes over cancels the pointer: that press never drags.
-        OpenTaskList.AddHandler(PointerCanceledEvent, new PointerEventHandler(OnDragPointerCaptureLost), true);
         // A reload replaces the rows, and a deleted or completed Task leaves them: either way its drag ends.
         viewModel.Tasks.CollectionChanged += (_, _) => CancelDragOfGoneTask();
     }
@@ -462,6 +456,8 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
 
     FrameworkElement IReorderDragHost.Surface => OpenTaskList;
 
+    FrameworkElement IReorderDragHost.Viewport => OpenTaskList;
+
     Windows.UI.Color IReorderDragHost.PictureBacking => ((SolidColorBrush)DragPictureBacking.Background).Color;
 
     // Only an open Task row drags, on a List's page: never an Overdue, completed or Subtask row. Its picture is its
@@ -504,7 +500,7 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
     // The drag ended: a scroll step it left in flight no longer counts.
     void IReorderDragHost.HideDragLine()
     {
-        _edgeScrollTarget = null;
+        _dragScroll.Stop();
         HideInsertionLine();
     }
 
@@ -513,112 +509,15 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
     Task IReorderDragHost.DropAsync(object item, Windows.Foundation.Point at) =>
         DropIntoGapAsync((TaskRowViewModel)item, GapAt(at));
 
-    bool IReorderDragHost.ScrollBy(double dy)
-    {
-        if (_listScroll is not { } scroll)
-        {
-            return false;
-        }
-
-        // A step before the last one has landed goes on from where that one is headed, so no step is lost.
-        var from = _edgeScrollTarget ?? scroll.VerticalOffset;
-        var target = Math.Clamp(from + dy, 0, scroll.ScrollableHeight);
-        if (target == from || !scroll.ChangeView(null, target, null, disableAnimation: true))
-        {
-            return false;
-        }
-
-        _edgeScrollTarget = target;
-        return true;
-    }
+    bool IReorderDragHost.ScrollBy(double dy) => _dragScroll.ScrollBy(dy);
 
     // The list's own scroll: a drag scrolls it near the list's edges, and the line follows the rows as it scrolls.
     private void OnTaskListLoaded(object sender, RoutedEventArgs e)
     {
-        if (_listScroll is null
-            && VisualTreeWalk.Descendants(OpenTaskList).OfType<ScrollViewer>().FirstOrDefault() is { } scroll)
+        if (VisualTreeWalk.Descendants(OpenTaskList).OfType<ScrollViewer>().FirstOrDefault() is { } scroll)
         {
-            _listScroll = scroll;
-            scroll.ViewChanged += OnListViewChanged;
+            _dragScroll.Attach(scroll);
         }
-    }
-
-    private void OnListViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
-    {
-        if (!e.IsIntermediate)
-        {
-            _edgeScrollTarget = null;
-        }
-
-        TaskDrag.ListScrolled();
-    }
-
-    // The mouse's left button drags, and touch and pen by press-and-hold; a press on a row's checkbox or chevron
-    // does not.
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "XAML event handler; the signature requires void.")]
-    private async void OnDragPointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        var point = e.GetCurrentPoint(OpenTaskList);
-        if (DragPointerOf(e.Pointer.PointerDeviceType) is not { } pointer
-            || (pointer == DragPointer.Mouse ? !point.Properties.IsLeftButtonPressed : !point.IsInContact)
-            || IsOnButton(e.OriginalSource as DependencyObject))
-        {
-            TaskDrag.Cancel();
-            return;
-        }
-
-        await TaskDrag.PressAsync(point.Position, pointer);
-    }
-
-    private static DragPointer? DragPointerOf(Microsoft.UI.Input.PointerDeviceType device) => device switch
-    {
-        Microsoft.UI.Input.PointerDeviceType.Mouse => DragPointer.Mouse,
-        Microsoft.UI.Input.PointerDeviceType.Touch => DragPointer.Touch,
-        Microsoft.UI.Input.PointerDeviceType.Pen => DragPointer.Pen,
-        _ => null,
-    };
-
-    private static bool IsOnButton(DependencyObject? element)
-    {
-        for (; element is not null and not ListViewItem; element = VisualTreeHelper.GetParent(element))
-        {
-            if (element is ButtonBase)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    // The list captures the pointer once the drag starts, so the moves and the release keep coming outside it.
-    private void OnDragPointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        var starting = !TaskDrag.IsDragging;
-        if (!TaskDrag.Move(e.GetCurrentPoint(OpenTaskList).Position))
-        {
-            return;
-        }
-
-        if (starting)
-        {
-            OpenTaskList.CapturePointer(e.Pointer);
-        }
-
-        e.Handled = true;
-    }
-
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "XAML event handler; the signature requires void.")]
-    private async void OnDragPointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        if (!TaskDrag.TryRelease(e.GetCurrentPoint(OpenTaskList).Position, out var drop))
-        {
-            return;
-        }
-
-        e.Handled = true;
-        OpenTaskList.ReleasePointerCapture(e.Pointer);
-        await drop;
     }
 
     // The dragged Task left the open rows (deleted, completed, or the page reloaded with new rows): the drag ends
@@ -630,7 +529,4 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
             TaskDrag.Cancel();
         }
     }
-
-    // Losing the pointer (Windows took it, or the list's scrolling did) ends the press or the drag as a cancel.
-    private void OnDragPointerCaptureLost(object sender, PointerRoutedEventArgs e) => TaskDrag.Cancel();
 }

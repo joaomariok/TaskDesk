@@ -10,7 +10,6 @@ using Microsoft.UI.Xaml.Media;
 using TaskDesk.Core.Shell;
 using TaskDesk.Core.Tags;
 using TaskDesk.Presentation;
-using Windows.ApplicationModel.DataTransfer;
 using VirtualKey = Windows.System.VirtualKey;
 
 namespace TaskDesk.Views;
@@ -19,14 +18,22 @@ namespace TaskDesk.Views;
 // and Delete live on the context menu of each List and Tag (right click, Shift+F10 or the Menu key); Delete on a
 // focused List or Tag starts its deletion with the usual confirmation. In the rail the Lists show their colour squares
 // and the Tags move behind the # button.
-public sealed partial class NavigationPane
+public sealed partial class NavigationPane : IReorderDragHost
 {
     private readonly Dialogs.DialogService _dialogs;
+    private readonly DragScroller _dragScroll;
     private bool _compact;
     private bool _selectionSyncQueued;
     private ListItemViewModel? _menuList;
     private Tag? _menuTag;
-    private ListItemViewModel? _dragged;
+    private bool _dragCheckQueued;
+
+    // True from a key pressed on the Lists to the next press: a click or selection then comes from the keyboard,
+    // never from the release of a drag.
+    private bool _keyInput;
+
+    /// <summary>The drag that reorders the Lists (ADR 0007), fed by the Lists' pointer events.</summary>
+    public ReorderDrag ListDrag { get; }
 
     /// <summary>The Lists section, or null when the pane shows no Lists.</summary>
     public SidebarViewModel? Lists { get; }
@@ -99,10 +106,21 @@ public sealed partial class NavigationPane
     }
 
     /// <summary>The List drag completed or was cancelled: the line hides.</summary>
-    public void EndListDrag()
+    public void EndListDrag() => HideInsertionLine();
+
+    /// <summary>
+    /// Runs the Lists' shortcut for a key: while a List is dragged, Esc cancels the drag. Returns false when the key
+    /// is not a shortcut or there is nothing to do.
+    /// </summary>
+    public bool TryShortcut(VirtualKey key, Windows.System.VirtualKeyModifiers modifiers)
     {
-        _dragged = null;
-        HideInsertionLine();
+        if ((key, modifiers) == (VirtualKey.Escape, Windows.System.VirtualKeyModifiers.None) && ListDrag.IsDragging)
+        {
+            ListDrag.Cancel();
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -131,7 +149,11 @@ public sealed partial class NavigationPane
         {
             // A reload of the Lists (after a change, or from the quick-add window) loses their selection and may
             // have changed the counts.
-            Lists.Lists.CollectionChanged += (_, _) => QueueSelectionSync();
+            Lists.Lists.CollectionChanged += (_, _) =>
+            {
+                QueueSelectionSync();
+                QueueCancelDragOfGoneList();
+            };
         }
         else
         {
@@ -145,6 +167,17 @@ public sealed partial class NavigationPane
             QueueSelectionSync();
         };
         ShowTags();
+        ListDrag.ListenToPointer();
+        _dragScroll.Attach(SidebarScroll);
+        ListsList.AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) => _keyInput = false), true);
+        // A drag never carries over to another page.
+        ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.Page))
+            {
+                ListDrag.Cancel();
+            }
+        };
         // The rail's hamburger opens the full pane as an overlay, which shows the full Lists and Tags.
         Pane.PaneOpening += (_, _) => ShowCompact(false);
         Pane.PaneClosing += (_, _) => ShowCompact(IsRail);
@@ -171,6 +204,7 @@ public sealed partial class NavigationPane
         }
 
         _compact = compact;
+        ListDrag.Cancel(); // the rows it presses are replaced
         var full = compact || Lists is null ? Visibility.Collapsed : Visibility.Visible;
         ListsHeader.Visibility = full;
         NewListArea.Visibility = full;
@@ -213,6 +247,12 @@ public sealed partial class NavigationPane
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnListSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (IsReleaseOfDrag)
+        {
+            QueueSelectionSync(); // a drag never selects: the Lists go back to the page's List
+            return;
+        }
+
         if (ListsList.SelectedItem is ListItemViewModel item && item.Id != Sidebar.SelectedList?.Id)
         {
             await Sidebar.OpenAsync(new SidebarEntry.ListEntry(item.Id));
@@ -223,7 +263,7 @@ public sealed partial class NavigationPane
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
     private async void OnListItemClick(object sender, ItemClickEventArgs e)
     {
-        if (e.ClickedItem is ListItemViewModel item)
+        if (!IsReleaseOfDrag && e.ClickedItem is ListItemViewModel item)
         {
             await Sidebar.OpenAsync(new SidebarEntry.ListEntry(item.Id));
         }
@@ -382,51 +422,106 @@ public sealed partial class NavigationPane
         }
     }
 
-    // ---- Drag to reorder Lists: an insertion line shows the gap under the pointer, and the drop lands there ----
+    // ---- Drag to reorder Lists (ADR 0007): an insertion line shows the gap under the pointer, and the drop lands there ----
 
-    private void OnListDragStarting(object sender, DragItemsStartingEventArgs e)
+    // A click or selection that comes from the release of a drag, rather than from a click or a key.
+    private bool IsReleaseOfDrag => ListDrag.LastPressDragged && !_keyInput;
+
+    FrameworkElement IReorderDragHost.Surface => ListsList;
+
+    // The Lists scroll with "+ New List" and the Tags in the sidebar's scroll area: its edges scroll them.
+    FrameworkElement IReorderDragHost.Viewport => SidebarScroll;
+
+    Windows.UI.Color IReorderDragHost.PictureBacking => ((SolidColorBrush)ListDragPictureBacking.Background).Color;
+
+    // Every List drags, in the full pane and in the rail; its picture is its row.
+    DragSubject? IReorderDragHost.SubjectAt(Windows.Foundation.Point at)
     {
-        _dragged = e.Items.FirstOrDefault() as ListItemViewModel;
-        if (_dragged is null || Lists is null)
+        if (Lists is null || at.X < 0 || at.X >= ListsList.ActualWidth)
         {
-            e.Cancel = true;
+            return null;
+        }
+
+        var spans = RowMeasure.Spans(ListsList);
+        for (var i = 0; i < spans.Length; i++)
+        {
+            if (spans[i] is { } span && at.Y >= span.Top && at.Y < span.Top + span.Height
+                && ListsList.Items[i] is ListItemViewModel item
+                && ListsList.ContainerFromIndex(i) is FrameworkElement container)
+            {
+                return new DragSubject(item, [container]);
+            }
+        }
+
+        return null;
+    }
+
+    // Over Lists scrolled out of the sidebar's sight there is no gap to show.
+    void IReorderDragHost.ShowDragAt(Windows.Foundation.Point at)
+    {
+        if (ReorderGeometry.HasLeft(at.X, at.Y, ListsList.ActualWidth, ListsList.ActualHeight))
+        {
+            LeaveListDrag(at);
+        }
+        else if (!ListDrag.IsOverList(at))
+        {
+            HideInsertionLine();
+        }
+        else
+        {
+            ShowListDropGap(GapAt(at));
+        }
+    }
+
+    // The drag ended: a scroll step it left in flight no longer counts.
+    void IReorderDragHost.HideDragLine()
+    {
+        _dragScroll.Stop();
+        EndListDrag();
+    }
+
+    // The gap under the pointer, measured against the Lists as they are at the release. A reload since the press
+    // replaced the rows, so the dragged List is found again by its id.
+    Task IReorderDragHost.DropAsync(object item, Windows.Foundation.Point at)
+    {
+        var id = ((ListItemViewModel)item).Id;
+        if (Lists?.Lists.FirstOrDefault(l => l.Id == id) is not { } dragged)
+        {
+            HideInsertionLine();
+            return Task.CompletedTask;
+        }
+
+        return DropListAsync(dragged, GapAt(at));
+    }
+
+    bool IReorderDragHost.ScrollBy(double dy) => _dragScroll.ScrollBy(dy);
+
+    // A reload clears the Lists and adds them again, so whether the dragged List is gone is checked once it ends.
+    private void QueueCancelDragOfGoneList()
+    {
+        if (_dragCheckQueued || ListDrag.Item is null)
+        {
             return;
         }
 
-        e.Data.RequestedOperation = DataPackageOperation.Move;
+        _dragCheckQueued = true;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            _dragCheckQueued = false;
+            if (ListDrag.Item is ListItemViewModel dragged && Lists?.Lists.Any(l => l.Id == dragged.Id) != true)
+            {
+                ListDrag.Cancel();
+            }
+        });
     }
 
-    private void OnListDragOver(object sender, DragEventArgs e)
+    // Esc cancels a drag wherever the focus is in the Lists; any key makes the next click or selection the keyboard's.
+    private void OnListPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        e.AcceptedOperation = _dragged is not null ? DataPackageOperation.Move : DataPackageOperation.None;
-        e.Handled = true;
-        if (_dragged is not null)
+        _keyInput = true;
+        if (e.Key == VirtualKey.Escape && TryShortcut(e.Key, KeyboardModifiers.Current()))
         {
-            ShowListDropGap(GapAt(e.GetPosition(ListsList)));
-        }
-        else
-        {
-            HideInsertionLine();
+            e.Handled = true;
         }
     }
-
-    // Moving between rows raises a row's DragLeave too, which bubbles here.
-    private void OnListDragLeave(object sender, DragEventArgs e) => LeaveListDrag(e.GetPosition(ListsList));
-
-    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "WinUI event handler; the signature requires void.")]
-    private async void OnListDrop(object sender, DragEventArgs e)
-    {
-        var dragged = _dragged;
-        _dragged = null;
-        if (dragged is not null)
-        {
-            await DropListAsync(dragged, GapAt(e.GetPosition(ListsList)));
-        }
-        else
-        {
-            HideInsertionLine();
-        }
-    }
-
-    private void OnListDragCompleted(ListViewBase sender, DragItemsCompletedEventArgs args) => EndListDrag();
 }

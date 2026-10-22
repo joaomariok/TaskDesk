@@ -215,7 +215,8 @@
         </NavigationView.MenuItems>
         <!-- Lists, "+ New List" and Tags: one scroll area right under the Smart Views (the pane footer, whose row
              takes the rest of the pane; see FitFooterUnderMenuItems). Native lists keep the UI tests' ids and give
-             drag reordering and the rows' context menus. In the rail the Lists show their colour squares and the Tags
+             the rows' context menus; Lists reorder by the app's own drag (ReorderDrag, ADR 0007), which scrolls this
+             area near its edges. In the rail the Lists show their colour squares and the Tags
              move behind the # button. -->
         <NavigationView.PaneFooter>
             <ScrollViewer x:Name="SidebarScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -227,13 +228,12 @@
                         <ListView x:Name="ListsList"
                                   ItemContainerStyle="{StaticResource SidebarListItem}"
                                   ItemTemplate="{StaticResource ListRowTemplate}"
-                                  SelectionMode="Single" IsItemClickEnabled="True" CanDragItems="True" AllowDrop="True"
+                                  SelectionMode="Single" IsItemClickEnabled="True"
                                   ScrollViewer.VerticalScrollMode="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                   AutomationProperties.Name="Lists" AutomationProperties.AutomationId="ListsList"
                                   ContainerContentChanging="OnListContainerContentChanging"
                                   SelectionChanged="OnListSelectionChanged" ItemClick="OnListItemClick" KeyDown="OnListKeyDown"
-                                  DragItemsStarting="OnListDragStarting" DragItemsCompleted="OnListDragCompleted"
-                                  DragOver="OnListDragOver" DragLeave="OnListDragLeave" Drop="OnListDrop">
+                                  PreviewKeyDown="OnListPreviewKeyDown">
                             <!-- ListView's defaults without the entrance and content transitions, which slide every
                                  row up again when the rail swaps the row template (ShowCompact). -->
                             <ListView.ItemContainerTransitions>
@@ -246,6 +246,9 @@
                         <Rectangle x:Name="ListInsertionLine" Height="2" RadiusX="1" RadiusY="1" VerticalAlignment="Top"
                                    Fill="{ThemeResource AccentFillColorDefaultBrush}" IsHitTestVisible="False"
                                    Visibility="Collapsed" />
+                        <!-- Draws nothing: holds the theme's solid window background, the backing of a dragged List's picture. -->
+                        <Border x:Name="ListDragPictureBacking" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                Visibility="Collapsed" />
                     </Grid>
                     <StackPanel x:Name="NewListArea">
                         <!-- Takes no room until there is an error, so "+ New List" sits right under the last List. -->

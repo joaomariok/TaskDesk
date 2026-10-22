@@ -30,6 +30,8 @@ public sealed partial class NavigationPane : UserControl
         Lists = lists;
         Sidebar = lists ?? SidebarViewModel.WithoutLists(viewModel);
         _dialogs = dialogs;
+        ListDrag = new ReorderDrag(this, viewModel.Clock);
+        _dragScroll = new DragScroller(ListDrag);
         InitializeComponent();
         InitializeListsAndTags();
         _views = new()

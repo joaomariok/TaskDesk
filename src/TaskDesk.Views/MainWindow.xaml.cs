@@ -54,12 +54,13 @@ public sealed partial class MainWindow : Window
             // stops before the caller lets the database go. Not awaited: the cancelled work ends on its own, quietly.
             _ = StopViewModelsAsync();
         };
-        // Losing focus (Alt+Tab, a notification taking it) cancels a Task drag, so it never resumes unseen.
+        // Losing focus (Alt+Tab, a notification taking it) cancels a Task or List drag, so it never resumes unseen.
         Activated += (_, e) =>
         {
             if (e.WindowActivationState == WindowActivationState.Deactivated)
             {
                 View.TaskList.TaskDrag.Cancel();
+                Navigation.ListDrag.Cancel();
             }
         };
         // Ctrl+comma opens Settings from anywhere in the window, before a text box sees the key.

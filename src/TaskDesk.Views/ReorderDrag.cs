@@ -3,6 +3,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using TaskDesk.Core.Shell;
@@ -23,6 +24,12 @@ public interface IReorderDragHost
 {
     /// <summary>The list the drag runs over; a release outside it cancels.</summary>
     FrameworkElement Surface { get; }
+
+    /// <summary>
+    /// The visible area the list scrolls in: <see cref="Surface"/> itself, or the scroll area around it when the list
+    /// scrolls inside a larger one. Its top and bottom edges scroll the list, and a release outside it cancels.
+    /// </summary>
+    FrameworkElement Viewport { get; }
 
     /// <summary>The opaque colour behind the drag picture: the theme's solid window background.</summary>
     Windows.UI.Color PictureBacking { get; }
@@ -74,6 +81,7 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
     private Point _pressOffset;
     private Image? _image;
     private int _pressCount;
+    // The pointer relative to the viewport, which stays put while the list scrolls (the surface may scroll with it).
     private Point _pointer;
     private ITimer? _edgeTimer;
     private long _lastEdgeFire;
@@ -168,7 +176,7 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
             LastPressDragged = true;
         }
 
-        _pointer = at;
+        _pointer = InViewport(at);
         ShowPicture(at);
         host.ShowDragAt(at);
         UpdateEdgeTimer();
@@ -180,15 +188,21 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
     {
         if (IsDragging)
         {
-            host.ShowDragAt(_pointer);
+            host.ShowDragAt(ReferenceEquals(host.Viewport, host.Surface)
+                ? _pointer
+                : host.Viewport.TransformToVisual(host.Surface).TransformPoint(_pointer));
         }
     }
 
     private double EdgeSpeed()
     {
-        var surface = host.Surface;
-        return DragRules.EdgeScrollSpeed(_pointer.X, _pointer.Y, surface.ActualWidth, surface.ActualHeight);
+        var viewport = host.Viewport;
+        return DragRules.EdgeScrollSpeed(_pointer.X, _pointer.Y, viewport.ActualWidth, viewport.ActualHeight);
     }
+
+    // A point relative to the surface, relative to the viewport.
+    private Point InViewport(Point at) =>
+        ReferenceEquals(host.Viewport, host.Surface) ? at : host.Surface.TransformToVisual(host.Viewport).TransformPoint(at);
 
     // Runs while the pointer is in an edge band; stops outside it and when the drag ends. The clock's timer may fire
     // off the UI thread: each fire adds its time to the pending step, and one step at a time runs on the UI thread.
@@ -259,11 +273,21 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
             return false;
         }
 
-        var surface = host.Surface;
-        drop = DragRules.ReleaseAt(at.X, at.Y, surface.ActualWidth, surface.ActualHeight) == DragRelease.Drop
-            ? host.DropAsync(subject.Item, at)
-            : Task.CompletedTask;
+        drop = IsOverList(at) ? host.DropAsync(subject.Item, at) : Task.CompletedTask;
         return true;
+    }
+
+    /// <summary>
+    /// True when <paramref name="at"/> is over the part of the list that shows: inside the surface and inside the
+    /// viewport. A release there drops; elsewhere it cancels.
+    /// </summary>
+    public bool IsOverList(Point at)
+    {
+        var surface = host.Surface;
+        var viewport = host.Viewport;
+        var inViewport = InViewport(at);
+        return DragRules.ReleaseAt(at.X, at.Y, surface.ActualWidth, surface.ActualHeight) == DragRelease.Drop
+            && DragRules.ReleaseAt(inViewport.X, inViewport.Y, viewport.ActualWidth, viewport.ActualHeight) == DragRelease.Drop;
     }
 
     /// <summary>Cancels a press or a drag: the picture and the line go at once, and nothing moves.</summary>
@@ -378,6 +402,91 @@ public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider cloc
             IsHitTestVisible = false,
         };
     }
+
+    /// <summary>
+    /// Feeds the drag from the pointer events of the host's <see cref="IReorderDragHost.Surface"/>, a list of
+    /// <see cref="ListViewItem"/> rows. The mouse's left button drags, and touch and pen by press-and-hold; a press
+    /// on a button inside a row (a checkbox, a chevron) does not. The surface captures the pointer once the drag
+    /// starts, so the moves and the release keep coming outside it; losing the pointer, or a touch swipe that the
+    /// scrolling takes over, cancels.
+    /// </summary>
+    public void ListenToPointer()
+    {
+        // The row containers handle the press and the release themselves, so the drag listens to handled ones too.
+        var surface = host.Surface;
+        surface.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnPointerPressed), true);
+        surface.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(OnPointerMoved), true);
+        surface.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(OnPointerReleased), true);
+        surface.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(OnPointerLost), true);
+        surface.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler(OnPointerLost), true);
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "XAML event handler; the signature requires void.")]
+    private async void OnPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        var point = e.GetCurrentPoint(host.Surface);
+        if (DragPointerOf(e.Pointer.PointerDeviceType) is not { } pointer
+            || (pointer == DragPointer.Mouse ? !point.Properties.IsLeftButtonPressed : !point.IsInContact)
+            || IsOnButton(e.OriginalSource as DependencyObject))
+        {
+            Cancel();
+            return;
+        }
+
+        await PressAsync(point.Position, pointer);
+    }
+
+    private static DragPointer? DragPointerOf(Microsoft.UI.Input.PointerDeviceType device) => device switch
+    {
+        Microsoft.UI.Input.PointerDeviceType.Mouse => DragPointer.Mouse,
+        Microsoft.UI.Input.PointerDeviceType.Touch => DragPointer.Touch,
+        Microsoft.UI.Input.PointerDeviceType.Pen => DragPointer.Pen,
+        _ => null,
+    };
+
+    private static bool IsOnButton(DependencyObject? element)
+    {
+        for (; element is not null and not ListViewItem; element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is ButtonBase)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        var starting = !IsDragging;
+        if (!Move(e.GetCurrentPoint(host.Surface).Position))
+        {
+            return;
+        }
+
+        if (starting)
+        {
+            host.Surface.CapturePointer(e.Pointer);
+        }
+
+        e.Handled = true;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "XAML event handler; the signature requires void.")]
+    private async void OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!TryRelease(e.GetCurrentPoint(host.Surface).Position, out var drop))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        host.Surface.ReleasePointerCapture(e.Pointer);
+        await drop;
+    }
+
+    private void OnPointerLost(object sender, PointerRoutedEventArgs e) => Cancel();
 
     // Windows' drag threshold (SM_CXDRAG, SM_CYDRAG) at the surface's display scale, in DIPs.
     private static partial class DragThreshold
