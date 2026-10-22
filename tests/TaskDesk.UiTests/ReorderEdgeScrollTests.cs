@@ -31,6 +31,9 @@ public sealed class ReorderEdgeScrollTests : IDisposable
         // Without scrolling, the drop would land next to the row under the pointer at the start.
         AppSession.DragSlowly(Centre("T01"), release);
 
+        // UI Automation sees only the rows the list has realized, and the scrolled short list leaves some out: make
+        // the window tall enough for every row before reading the order.
+        _app.ResizeTo(900, 800);
         AppSession.WaitUntil(
             () => _app.Rows(Ids.OpenTaskList) is var rows && rows.Count == titles.Length && rows[0] != "T01",
             () => "T01 did not move.");
