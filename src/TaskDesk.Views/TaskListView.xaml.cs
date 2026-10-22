@@ -19,7 +19,7 @@ namespace TaskDesk.Views;
 /// The Task list area: one list over the page's groups (Overdue, open, "Completed (N)"), its keyboard shortcuts
 /// and the Undo bar. The list's one selection is the view model's selected Task, both ways.
 /// </summary>
-public sealed partial class TaskListView : UserControl
+public sealed partial class TaskListView : UserControl, IReorderDragHost
 {
     public TaskListView(MainViewModel viewModel)
     {
@@ -33,9 +33,19 @@ public sealed partial class TaskListView : UserControl
         OpenTaskList.IsTabStop = OpenTaskList.Items.Count > 0;
         OpenTaskList.Items.VectorChanged += OnRowsChanged;
         OpenTaskList.Tapped += OnTaskListTapped;
+
+        // The row containers handle the press and the release themselves, so the drag listens to handled ones too.
+        TaskDrag = new ReorderDrag(this);
+        OpenTaskList.AddHandler(PointerPressedEvent, new PointerEventHandler(OnDragPointerPressed), true);
+        OpenTaskList.AddHandler(PointerMovedEvent, new PointerEventHandler(OnDragPointerMoved), true);
+        OpenTaskList.AddHandler(PointerReleasedEvent, new PointerEventHandler(OnDragPointerReleased), true);
+        OpenTaskList.AddHandler(PointerCaptureLostEvent, new PointerEventHandler(OnDragPointerCaptureLost), true);
     }
 
     public MainViewModel ViewModel { get; }
+
+    /// <summary>The drag that reorders the open Tasks (ADR 0007), fed by the list's pointer events.</summary>
+    public ReorderDrag TaskDrag { get; }
 
     /// <summary>Windows' "Animation effects" setting; replaceable so tests need not depend on the machine.</summary>
     public Func<bool> AnimationsEnabled { get; set; } = () => new UISettings().AnimationsEnabled;
@@ -44,10 +54,17 @@ public sealed partial class TaskListView : UserControl
     /// Runs the Task list shortcut for a key: Space completes and Delete deletes the selected Task, Enter opens it
     /// in the detail pane, Right opens and Left closes its Subtask rows, Ctrl+Z undoes the last delete or
     /// completion. On a selected Subtask row, Enter opens its Task, Left selects the Task, Space ticks or unticks
-    /// the Subtask, and Delete does nothing. Returns false when the key is not a shortcut or there is nothing to do.
+    /// the Subtask, and Delete does nothing. While a Task is dragged, Esc cancels the drag. Returns false when the
+    /// key is not a shortcut or there is nothing to do.
     /// </summary>
     public bool TryShortcut(VirtualKey key, VirtualKeyModifiers modifiers)
     {
+        if ((key, modifiers) == (VirtualKey.Escape, VirtualKeyModifiers.None) && TaskDrag.IsDragging)
+        {
+            TaskDrag.Cancel();
+            return true;
+        }
+
         // Enter opens the detail pane on the selected Task and moves focus into it.
         if ((key, modifiers) == (VirtualKey.Enter, VirtualKeyModifiers.None))
         {
@@ -132,9 +149,14 @@ public sealed partial class TaskListView : UserControl
     }
 
     // A click on a row opens the detail pane on it, a click on a Subtask row on its Task (arrow keys only move the
-    // selection); a click on the row's checkbox or chevron does neither.
-    private void OnTaskListTapped(object sender, TappedRoutedEventArgs e) =>
-        OpenRowAt(e.OriginalSource as DependencyObject);
+    // selection); a click on the row's checkbox or chevron does neither, and nor does the release of a drag.
+    private void OnTaskListTapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (!TaskDrag.LastPressDragged)
+        {
+            OpenRowAt(e.OriginalSource as DependencyObject);
+        }
+    }
 
     /// <summary>
     /// What a click on <paramref name="element"/> inside the list does: on a row, opens the detail pane on its Task
@@ -160,10 +182,12 @@ public sealed partial class TaskListView : UserControl
         return false;
     }
 
-    // Space and Delete act on a focused row. A row's own checkbox handles Space itself.
+    // Space and Delete act on a focused row. A row's own checkbox handles Space itself. Esc cancels a drag
+    // wherever the focus is in the list.
     private void OnTaskListPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.OriginalSource is ListViewItem && TryShortcut(e.Key, KeyboardModifiers.Current()))
+        if ((e.OriginalSource is ListViewItem || (e.Key == VirtualKey.Escape && TaskDrag.IsDragging))
+            && TryShortcut(e.Key, KeyboardModifiers.Current()))
         {
             e.Handled = true;
         }
@@ -316,8 +340,6 @@ public sealed partial class TaskListView : UserControl
 
     // ---- Drag to reorder (the open rows, in a List view only) ----
 
-    private TaskRowViewModel? _dragged;
-
     /// <summary>
     /// The open Task row under <paramref name="position"/> (relative to the list), or null over empty space, a
     /// heading or a row of another group.
@@ -425,57 +447,112 @@ public sealed partial class TaskListView : UserControl
 
     private void HideInsertionLine() => TaskInsertionLine.Visibility = Visibility.Collapsed;
 
-    private void OnDragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
-    {
-        _dragged = null;
-        HideInsertionLine();
-    }
+    FrameworkElement IReorderDragHost.Surface => OpenTaskList;
 
-    private void OnTaskDragLeave(object sender, DragEventArgs e) => LeaveTaskDrag(e.GetPosition(OpenTaskList));
+    Windows.UI.Color IReorderDragHost.PictureBacking => ((SolidColorBrush)DragPictureBacking.Background).Color;
 
-    private void OnDragItemsStarting(object sender, DragItemsStartingEventArgs e)
+    // Only an open Task row drags, on a List's page: never an Overdue, completed or Subtask row. Its picture is its
+    // row and, while it is open, its Subtask rows.
+    DragSubject? IReorderDragHost.SubjectAt(Windows.Foundation.Point at)
     {
-        // Only an open row drags: never an Overdue or completed one.
-        if (!ViewModel.IsReorderEnabled || e.Items.Count != 1 || e.Items[0] is not TaskRowViewModel row
-            || !ViewModel.Tasks.Contains(row))
+        if (!ViewModel.IsReorderEnabled || RowAt(at) is not { } row
+            || OpenTaskList.ContainerFromItem(row) is not FrameworkElement container)
         {
-            e.Cancel = true;
-            return;
+            return null;
         }
 
-        _dragged = row;
-        e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+        var rows = new List<FrameworkElement> { container };
+        var items = OpenTaskList.Items;
+        for (var i = items.IndexOf(row) + 1;
+             i < items.Count && items[i] is SubtaskListRowViewModel subtask && subtask.TaskRow == row;
+             i++)
+        {
+            if (OpenTaskList.ContainerFromIndex(i) is FrameworkElement subtaskContainer)
+            {
+                rows.Add(subtaskContainer);
+            }
+        }
+
+        return new DragSubject(row, rows);
     }
 
-    private void OnTaskDragOver(object sender, DragEventArgs e)
+    void IReorderDragHost.ShowDragAt(Windows.Foundation.Point at)
     {
-        e.AcceptedOperation = _dragged is not null && ViewModel.IsReorderEnabled
-            ? Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move
-            : Windows.ApplicationModel.DataTransfer.DataPackageOperation.None;
-
-        if (_dragged is not null && ViewModel.IsReorderEnabled)
+        if (ReorderGeometry.HasLeft(at.X, at.Y, OpenTaskList.ActualWidth, OpenTaskList.ActualHeight))
         {
-            ShowDropGap(GapAt(e.GetPosition(OpenTaskList)));
+            LeaveTaskDrag(at);
         }
         else
         {
-            HideInsertionLine();
+            ShowDropGap(GapAt(at));
+        }
+    }
+
+    void IReorderDragHost.HideDragLine() => HideInsertionLine();
+
+    // The gap under the pointer, measured against the list as it is at the release. Below the open rows (empty
+    // space, the Completed heading, a completed row) is the last gap: the end.
+    Task IReorderDragHost.DropAsync(object item, Windows.Foundation.Point at) =>
+        DropIntoGapAsync((TaskRowViewModel)item, GapAt(at));
+
+    // The mouse's left button drags (touch and pen do not yet); a press on a row's checkbox or chevron does not.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "XAML event handler; the signature requires void.")]
+    private async void OnDragPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        var point = e.GetCurrentPoint(OpenTaskList);
+        if (e.Pointer.PointerDeviceType != Microsoft.UI.Input.PointerDeviceType.Mouse
+            || !point.Properties.IsLeftButtonPressed || IsOnButton(e.OriginalSource as DependencyObject))
+        {
+            TaskDrag.Cancel();
+            return;
+        }
+
+        await TaskDrag.PressAsync(point.Position);
+    }
+
+    private static bool IsOnButton(DependencyObject? element)
+    {
+        for (; element is not null and not ListViewItem; element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is ButtonBase)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // The list captures the pointer once the drag starts, so the moves and the release keep coming outside it.
+    private void OnDragPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        var starting = !TaskDrag.IsDragging;
+        if (!TaskDrag.Move(e.GetCurrentPoint(OpenTaskList).Position))
+        {
+            return;
+        }
+
+        if (starting)
+        {
+            OpenTaskList.CapturePointer(e.Pointer);
         }
 
         e.Handled = true;
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "XAML event handler; the signature requires void.")]
-    private async void OnTaskDrop(object sender, DragEventArgs e)
+    private async void OnDragPointerReleased(object sender, PointerRoutedEventArgs e)
     {
-        var dragged = _dragged;
-        _dragged = null;
-        if (dragged is null)
+        if (!TaskDrag.TryRelease(e.GetCurrentPoint(OpenTaskList).Position, out var drop))
         {
             return;
         }
 
-        // Below the open rows (empty space, the Completed heading, a completed row) is the last gap: the end.
-        await DropIntoGapAsync(dragged, GapAt(e.GetPosition(OpenTaskList)));
+        e.Handled = true;
+        OpenTaskList.ReleasePointerCapture(e.Pointer);
+        await drop;
     }
+
+    // Losing the pointer (Windows took it, say) ends the drag as a cancel.
+    private void OnDragPointerCaptureLost(object sender, PointerRoutedEventArgs e) => TaskDrag.Cancel();
 }

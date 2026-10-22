@@ -84,6 +84,48 @@ public sealed class ReorderTests : IDisposable
         _app.WaitForRows(Ids.OpenTaskList, "Second", "First", "Third");
     }
 
+    [Fact]
+    public void Dragging_a_row_leaves_the_selected_row_selected()
+    {
+        string[] titles = ["First", "Second", "Third"];
+        for (var i = 0; i < titles.Length; i++)
+        {
+            _app.TypeInto(Ids.QuickAddBox, titles[i], pressEnter: true);
+            _app.WaitForRows(Ids.OpenTaskList, titles[..(i + 1)]);
+        }
+
+        _app.SelectRow(Ids.OpenTaskList, "Second");
+        var target = Row("Third").BoundingRectangle;
+        AppSession.DragSlowly(
+            Centre(Row("First")), new Point(target.Left + (target.Width / 2), target.Bottom - (target.Height / 4)));
+
+        _app.WaitForRows(Ids.OpenTaskList, "Second", "Third", "First");
+        Assert.True(IsSelected("Second"), "The selected row stays selected.");
+        Assert.False(IsSelected("First"), "The dragged row is not selected by the drag.");
+    }
+
+    [Fact]
+    public void Releasing_a_drag_outside_the_list_moves_nothing()
+    {
+        string[] titles = ["First", "Second", "Third"];
+        for (var i = 0; i < titles.Length; i++)
+        {
+            _app.TypeInto(Ids.QuickAddBox, titles[i], pressEnter: true);
+            _app.WaitForRows(Ids.OpenTaskList, titles[..(i + 1)]);
+        }
+
+        // Over the sidebar, left of the list, level with "Third".
+        var list = _app.Find(Ids.OpenTaskList).BoundingRectangle;
+        var third = Row("Third").BoundingRectangle;
+        AppSession.DragSlowly(Centre(Row("First")), new Point(list.Left - 60, third.Top + (third.Height / 2)));
+        Thread.Sleep(500);
+
+        Assert.Equal(["First", "Second", "Third"], _app.Rows(Ids.OpenTaskList));
+    }
+
+    private bool IsSelected(string title) =>
+        _app.FindRow(Ids.OpenTaskList, title)?.AsListBoxItem().IsSelected == true;
+
     // Adds Subtasks to a Task in the detail pane; Esc closes it and gives the row back its focus.
     private void AddSubtasks(string task, params string[] subtasks)
     {

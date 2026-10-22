@@ -89,13 +89,11 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <!-- One list and one scroll; sticky headings are off, so a heading scrolls with its rows. -->
+        <!-- One list and one scroll; sticky headings are off, so a heading scrolls with its rows. Open Tasks
+             reorder by the app's own drag (ReorderDrag, ADR 0007), not Windows drag-and-drop. -->
         <local:TaskRowList x:Name="OpenTaskList" SelectionMode="Single" IsSynchronizedWithCurrentItem="False"
                   AutomationProperties.Name="Tasks"
                   AutomationProperties.AutomationId="OpenTaskList"
-                  CanDragItems="True" AllowDrop="True"
-                  DragItemsStarting="OnDragItemsStarting" DragItemsCompleted="OnDragItemsCompleted"
-                  DragOver="OnTaskDragOver" DragLeave="OnTaskDragLeave" Drop="OnTaskDrop"
                   ItemsSource="{x:Bind GroupsSource.View, Mode=OneTime}"
                   ItemContainerStyle="{StaticResource TaskRowContainer}"
                   ItemTemplateSelector="{StaticResource RowTemplateSelector}"
@@ -125,6 +123,9 @@
         <Rectangle x:Name="TaskInsertionLine" Height="2" RadiusX="1" RadiusY="1" VerticalAlignment="Top"
                    Fill="{ThemeResource AccentFillColorDefaultBrush}" IsHitTestVisible="False"
                    Visibility="Collapsed" />
+        <!-- Draws nothing: holds the theme's solid window background, the backing of a dragged Task's picture. -->
+        <Border x:Name="DragPictureBacking" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                Visibility="Collapsed" />
         <InfoBar x:Name="UndoBar" Grid.Row="1" IsClosable="False"
                  AutomationProperties.Name="Task deleted"
                  IsOpen="{x:Bind ViewModel.IsUndoBarVisible, Mode=OneWay}"
