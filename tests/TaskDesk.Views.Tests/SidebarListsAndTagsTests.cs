@@ -797,12 +797,19 @@ public sealed class SidebarListsAndTagsTests
             var highlightMargin = (Thickness)Application.Current.Resources["NavigationViewItemButtonMargin"];
             List<ListViewItem> Rows() => [.. VisualTree.Descendants(tagList).OfType<ListViewItem>().Where(r => r.ActualHeight > 0)];
 
-            // Opened, closed, then opened again after the full sidebar and back.
+            // Opened, closed, then opened again after the full sidebar and back. IsOpen turns false at Hide, but the
+            // flyout does not open a ShowAt made before its Closed until later, and the rows keep their height after they
+            // leave the tree: wait for Closed, then for this opening's Opened.
+            var opened = 0;
+            var closed = 0;
+            flyout.Opened += (_, _) => opened++;
+            flyout.Closed += (_, _) => closed++;
             var buttonTop = TopOf(button, root);
             for (var opening = 1; opening <= 2; opening++)
             {
                 flyout.ShowAt(button);
-                await UiWait.UntilAsync(() => Rows().Count == 2, () => $"The Tags flyout shows {Rows().Count} rows.", ct);
+                await UiWait.UntilAsync(() => flyout.IsOpen && opened == opening && Rows().Count == 2,
+                    () => $"Opening {opening}: the Tags flyout is open {flyout.IsOpen}, opened {opened} times, shows {Rows().Count} rows.", ct);
                 var presenter = FlyoutPresenterOf(tagList);
 
                 // NavigationView's own flyout for a rail item's children (ChildrenFlyout): at the rail's edge,
@@ -820,7 +827,7 @@ public sealed class SidebarListsAndTagsTests
                     "A row spans the flyout, its background ListViewItemBackgroundInset in from each side as the rail's.");
 
                 flyout.Hide();
-                await UiWait.UntilAsync(() => !flyout.IsOpen, () => "The Tags flyout did not close.", ct);
+                await UiWait.UntilAsync(() => closed == opening, () => $"Opening {opening}: the Tags flyout did not close.", ct);
                 window.Navigation.SetRail(false);
                 window.Navigation.SetRail(true);
                 await UiWait.UntilAsync(() => Math.Abs(TopOf(button, root) - buttonTop) < 0.5,
