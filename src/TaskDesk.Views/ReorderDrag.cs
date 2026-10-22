@@ -66,6 +66,9 @@ public sealed partial class ReorderDrag(IReorderDragHost host)
     /// </summary>
     public bool LastPressDragged { get; private set; }
 
+    /// <summary>What the press or the drag would move, from the press to the release or cancel; null otherwise.</summary>
+    public object? Item => _subject?.Item;
+
     /// <summary>The drag picture while it shows, null otherwise.</summary>
     public Popup? Picture { get; private set; }
 

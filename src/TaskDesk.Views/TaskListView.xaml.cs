@@ -40,6 +40,8 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
         OpenTaskList.AddHandler(PointerMovedEvent, new PointerEventHandler(OnDragPointerMoved), true);
         OpenTaskList.AddHandler(PointerReleasedEvent, new PointerEventHandler(OnDragPointerReleased), true);
         OpenTaskList.AddHandler(PointerCaptureLostEvent, new PointerEventHandler(OnDragPointerCaptureLost), true);
+        // A reload replaces the rows, and a deleted or completed Task leaves them: either way its drag ends.
+        viewModel.Tasks.CollectionChanged += (_, _) => CancelDragOfGoneTask();
     }
 
     public MainViewModel ViewModel { get; }
@@ -264,6 +266,11 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
     // (in a collapsed "Completed (N)").
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(MainViewModel.Page))
+        {
+            TaskDrag.Cancel(); // a drag never carries over to another page
+        }
+
         if (e.PropertyName == nameof(MainViewModel.SelectedRow))
         {
             var left = _shownRow;
@@ -551,6 +558,16 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
         e.Handled = true;
         OpenTaskList.ReleasePointerCapture(e.Pointer);
         await drop;
+    }
+
+    // The dragged Task left the open rows (deleted, completed, or the page reloaded with new rows): the drag ends
+    // as a cancel. A change that keeps it there, another Task added say, leaves the drag on.
+    private void CancelDragOfGoneTask()
+    {
+        if (TaskDrag.Item is TaskRowViewModel row && !ViewModel.Tasks.Contains(row))
+        {
+            TaskDrag.Cancel();
+        }
     }
 
     // Losing the pointer (Windows took it, say) ends the drag as a cancel.
