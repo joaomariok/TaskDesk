@@ -18,6 +18,9 @@ namespace TaskDesk.Views;
 /// </summary>
 public sealed record DragSubject(object Item, IReadOnlyList<FrameworkElement> Rows);
 
+/// <summary>A press that would drag: its item and the pointer that pressed.</summary>
+public sealed record DragPress(object Item, DragPointer Pointer);
+
 /// <summary>A touch or pen press held for the hold time and lifted without a drag: its item and where it lifted.</summary>
 public sealed record HeldLift(object Item, Point At);
 
@@ -118,6 +121,15 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
     /// <summary>The drag picture while it shows, null otherwise.</summary>
     public Popup? Picture { get; private set; }
 
+    /// <summary>Raised when a press that would drag starts, before its hold and its picture.</summary>
+    public event EventHandler<DragPress>? Pressed;
+
+    /// <summary>
+    /// Raised when a press or a drag ends, however it ends: a release anywhere, a swipe, a lost pointer, a cancel or
+    /// the next press.
+    /// </summary>
+    public event EventHandler? Ended;
+
     /// <summary>Raised when a held touch or pen press lifts without having dragged.</summary>
     public event EventHandler<HeldLift>? LiftedAfterHold;
 
@@ -139,6 +151,7 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
         _subject = subject;
         _press = at;
         _pointerKind = pointer;
+        Pressed?.Invoke(this, new DragPress(subject.Item, pointer));
         if (DragRules.StartsByHold(pointer))
         {
             StartHold(press, subject);
@@ -322,6 +335,7 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
         IsHeld = false;
         _holdTimer?.Dispose();
         _holdTimer = null;
+        var ended = _subject is not null;
         _subject = null;
         _image = null;
         if (Picture is { } picture)
@@ -329,6 +343,11 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
             picture.IsOpen = false;
             picture.Child = null;
             Picture = null;
+        }
+
+        if (ended)
+        {
+            Ended?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -426,9 +445,10 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
     /// on a button inside a row (a checkbox, a chevron) does not. The surface captures the pointer once the drag
     /// starts, so the moves and the release keep coming outside it; losing the pointer, or a touch swipe that the
     /// scrolling takes over, cancels. The drag follows the pointer that pressed: another finger, a palm or the mouse
-    /// neither moves, drops nor cancels it, and its press is ignored while the drag is on. Before the drag starts,
-    /// another pointer's press replaces the press (nothing has captured the pointer yet, so a lost release must not
-    /// leave a press behind that blocks every later one).
+    /// neither moves, drops nor cancels it. While the drag is on, its press reaches nothing in the list either: the
+    /// surface takes it from the row or button it pressed, so it ticks, clicks and opens nothing. Before the drag
+    /// starts, another pointer's press replaces the press (nothing has captured the pointer yet, so a lost release
+    /// must not leave a press behind that blocks every later one).
     /// </summary>
     public void ListenToPointer()
     {
@@ -446,6 +466,9 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
     {
         if (IsDragging && IsOtherPointer(e))
         {
+            // The surface takes this pointer from the row or button it pressed, so its release clicks, ticks and
+            // selects nothing there: the rows stay as they are under the drag.
+            TakeFromRow(e);
             return;
         }
 
@@ -460,6 +483,21 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
         }
 
         await PressAsync(point.Position, pointer);
+    }
+
+    // An element under the pointer (a checkbox, a chevron, the row) captured it at its press, and a capture never
+    // moves to another element: each lets go of it, from the pressed element up to the surface, which then takes it.
+    private void TakeFromRow(PointerRoutedEventArgs e)
+    {
+        var surface = host.Surface;
+        for (var element = e.OriginalSource as DependencyObject;
+             element is not null && !ReferenceEquals(element, surface);
+             element = VisualTreeHelper.GetParent(element))
+        {
+            (element as UIElement)?.ReleasePointerCapture(e.Pointer);
+        }
+
+        surface.CapturePointer(e.Pointer);
     }
 
     private static DragPointer? DragPointerOf(Microsoft.UI.Input.PointerDeviceType device) => device switch

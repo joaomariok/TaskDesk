@@ -214,6 +214,52 @@ public sealed class ListOwnDragTests
     }
 
     [UITestMethod]
+    public async Task A_touch_or_pen_press_on_a_List_takes_its_rows_menu_away_until_the_press_ends_however_it_ends()
+    {
+        using var db = await DatabaseAsync("A", "B");
+        var (window, _, _) = await OpenAsync(db, rail: false);
+        var other = new Window { Title = "Another window" };
+        try
+        {
+            var list = ListsList(window);
+            var drag = window.Navigation.ListDrag;
+            var a = Row(list, "A");
+            var menu = a.ContextFlyout;
+            Assert.IsNotNull(menu, "The row has its context menu.");
+            var at = new Point(30, Middle(a, list));
+
+            await drag.PressAsync(at);
+            Assert.AreSame(menu, a.ContextFlyout, "A mouse press keeps the row's menu.");
+            drag.Cancel();
+
+            await drag.PressAsync(at, DragPointer.Touch);
+            Assert.IsNull(a.ContextFlyout, "A touch press takes the row's menu away, so its hold opens none.");
+            other.Activate(); // the pointer's capture goes with the focus, and its release may land anywhere
+            await UiWait.UntilAsync(() => drag.Item is null, () => "Losing focus did not end the press.", Ct);
+            Assert.AreSame(menu, a.ContextFlyout, "The window losing focus gives the row its menu back.");
+
+            window.Activate();
+            await drag.PressAsync(at, DragPointer.Pen);
+            Assert.IsNull(a.ContextFlyout, "A pen press takes the row's menu away.");
+            drag.Cancel();
+            Assert.AreSame(menu, a.ContextFlyout, "A cancelled press gives the row its menu back.");
+
+            await drag.PressAsync(at, DragPointer.Touch);
+            Assert.IsFalse(drag.Move(new Point(30, Bottom(Row(list, "B"), list) - 3)), "A move before the hold is a swipe.");
+            Assert.AreSame(menu, a.ContextFlyout, "A swipe gives the row its menu back.");
+
+            await drag.PressAsync(at, DragPointer.Touch);
+            Assert.IsFalse(drag.TryRelease(new Point(-50, -50), out _), "A touch press not yet held is no drag.");
+            Assert.AreSame(menu, a.ContextFlyout, "A press released anywhere gives the row its menu back.");
+        }
+        finally
+        {
+            other.Close();
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
     public async Task The_window_losing_focus_cancels_the_List_drag()
     {
         using var db = await DatabaseAsync("A", "B");

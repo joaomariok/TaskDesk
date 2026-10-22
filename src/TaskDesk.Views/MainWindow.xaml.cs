@@ -168,9 +168,10 @@ public sealed partial class MainWindow : Window
     {
         if ((key, modifiers) == (VirtualKey.Escape, VirtualKeyModifiers.None))
         {
-            var dragging = View.TaskList.TaskDrag.IsDragging || Navigation.ListDrag.IsDragging;
+            // Each view's own Esc cancels its drag; a press not yet dragging goes too, as on focus loss.
+            var cancelled = View.TaskList.TryShortcut(key, modifiers) | Navigation.TryShortcut(key, modifiers);
             CancelDrags();
-            return dragging;
+            return cancelled;
         }
 
         if ((key, modifiers) != (SettingsKey, VirtualKeyModifiers.Control))

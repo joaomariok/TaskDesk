@@ -184,8 +184,8 @@ public sealed partial class TaskListView : UserControl, IReorderDragHost
         return false;
     }
 
-    // Space and Delete act on a focused row. A row's own checkbox handles Space itself. Esc during a drag is the
-    // window's (MainWindow.TryShortcut), wherever the focus is.
+    // Space and Delete act on a focused row. A row's own checkbox handles Space itself. Esc during a drag reaches
+    // TryShortcut through the window (MainWindow.TryShortcut), wherever the focus is.
     private void OnTaskListPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.OriginalSource is ListViewItem && TryShortcut(e.Key, KeyboardModifiers.Current()))

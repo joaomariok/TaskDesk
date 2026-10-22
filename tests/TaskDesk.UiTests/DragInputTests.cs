@@ -7,7 +7,7 @@ namespace TaskDesk.UiTests;
 
 /// <summary>
 /// The app's own drag (ADR 0007) with real input routed as Windows delivers it: Esc cancels a Task or List drag
-/// wherever the focus is; a second finger neither ends nor steers a touch drag; a touch drag scrolls the Task list at
+/// wherever the focus is; a second finger neither ends nor steers a touch drag, nor ticks a row's checkbox; a touch drag scrolls the Task list at
 /// its edge without being cancelled; and a touch hold on a List drags it without its context menu, while a hold
 /// that does not slide still opens the menu.
 /// </summary>
@@ -74,6 +74,22 @@ public sealed class DragInputTests : IDisposable
             secondFingerTap: new Point(list.Left + (list.Width / 2), list.Bottom - 40));
 
         _app.WaitForRows(Ids.OpenTaskList, "Second", "Third", "First");
+    }
+
+    [Fact]
+    public void A_second_finger_tapping_another_rows_checkbox_during_a_touch_drag_completes_nothing_and_the_drag_lands()
+    {
+        AddTasks("First", "Second", "Third");
+        var check = AppSession.Eventually(
+            () => TaskRow("Second").FindFirstDescendant(cf => cf.ByControlType(ControlType.CheckBox)),
+            "No checkbox on 'Second'.");
+
+        TouchInput.HoldAndDrag(Centre(TaskRow("First")), BottomQuarter(TaskRow("Third")), Hold,
+            secondFingerTap: Centre(check));
+
+        _app.WaitForRows(Ids.OpenTaskList, "Second", "Third", "First");
+        Thread.Sleep(1000); // past the completion hold: a completed Task would have left the open rows by now
+        Assert.Equal(["Second", "Third", "First"], _app.Rows(Ids.OpenTaskList));
     }
 
     [Fact]
