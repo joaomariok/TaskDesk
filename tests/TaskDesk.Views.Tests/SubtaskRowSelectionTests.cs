@@ -181,6 +181,68 @@ public sealed class SubtaskRowSelectionTests
     }
 
     [UITestMethod]
+    public async Task Closing_a_Task_while_focus_is_inside_one_of_its_Subtask_rows_focuses_the_Tasks_row()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "trip", "pack", "go");
+        await AddAsync(db, "other");
+        var (window, viewModel) = await OpenAsync(db, width: 1000);
+        try
+        {
+            var trip = viewModel.Tasks.Single(t => t.Title == "trip");
+            viewModel.OpenTask(trip);
+            var list = await WaitForRowsAsync(window, "trip", "Subtask pack", "Subtask go", "other");
+
+            // The focus is on the row's own box, not on the row: by the time the selection reaches the Task, the
+            // focus is no longer on a row of the list, as when the removed row's focus has already moved on.
+            list.SelectedItem = trip.SubtaskRows[0];
+            Assert.IsTrue(VisualTree.Find<CheckBox>(Container(list, "Subtask pack"), "TickedBox")
+                .Focus(FocusState.Keyboard), "The Subtask row's box took no focus.");
+            viewModel.CloseTask(trip);
+            await WaitForRowsAsync(window, "trip", "other");
+            Assert.AreSame(trip, viewModel.SelectedRow);
+            await UiWait.UntilAsync(() => FocusedRowName(window) == "trip",
+                () => $"Focus is on '{FocusedRowName(window)}', not the closed Task's row.", Ct);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
+    public async Task Closing_a_Task_whose_Subtask_row_is_selected_leaves_a_focus_outside_the_list_where_it_is()
+    {
+        using var db = await DatabaseAsync();
+        await AddAsync(db, "trip", "pack", "go");
+        var (window, viewModel) = await OpenAsync(db, width: 1000);
+        try
+        {
+            var trip = viewModel.Tasks.Single(t => t.Title == "trip");
+            viewModel.OpenTask(trip);
+            var list = await WaitForRowsAsync(window, "trip", "Subtask pack", "Subtask go");
+
+            list.SelectedItem = trip.SubtaskRows[0];
+            var search = VisualTree.Find<TextBox>(window.View, "SearchBox");
+            Assert.IsTrue(search.Focus(FocusState.Keyboard), "The search box took no focus.");
+            viewModel.CloseTask(trip);
+            await WaitForRowsAsync(window, "trip");
+            Assert.AreSame(trip, viewModel.SelectedRow);
+            // A low-priority round trip runs after any focus move the close enqueued at normal priority.
+            var drained = new TaskCompletionSource();
+            Assert.IsTrue(window.DispatcherQueue.TryEnqueue(
+                Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, drained.SetResult));
+            await drained.Task.WaitAsync(Ct);
+            Assert.AreSame(search, FocusManager.GetFocusedElement(window.Content.XamlRoot),
+                "Closing the Task took the focus from the search box.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [UITestMethod]
     public async Task Esc_closes_the_pane_and_returns_focus_to_the_selected_Subtask_row()
     {
         using var db = await DatabaseAsync();

@@ -115,6 +115,37 @@ public class SubtaskRowSelectionViewModelTests
     }
 
     [Fact]
+    public async Task Closing_a_Task_hands_the_selection_to_it_while_its_selected_Subtask_row_is_still_listed()
+    {
+        // The list moves the keyboard focus off a selected Subtask row only while that row still has a container.
+        var (_, vm, trip) = await StartAsync();
+        _ = vm.Groups;
+        var pack = trip.SubtaskRows[0];
+        bool? listedWhenSelected = null;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.SelectedRow) && vm.SelectedRow == trip)
+            {
+                listedWhenSelected ??= vm.Groups.Any(g => g.Contains(pack));
+            }
+        };
+
+        vm.SelectedRow = pack;
+        vm.CloseTask(trip);
+
+        Assert.True(listedWhenSelected, "The selection reached the Task only after its Subtask row left the list.");
+        Assert.DoesNotContain(vm.Groups, g => g.Contains(pack));
+        Assert.Same(trip, vm.SelectedRow);
+
+        // The chevron does the same.
+        listedWhenSelected = null;
+        vm.OpenTask(trip);
+        vm.SelectedRow = trip.SubtaskRows[1];
+        vm.ToggleTaskOpenCommand.Execute(trip);
+        Assert.True(listedWhenSelected, "The chevron closed the rows before the selection moved.");
+    }
+
+    [Fact]
     public async Task Closing_another_Task_keeps_the_selected_Subtask_row()
     {
         var service = new FakeTaskService();

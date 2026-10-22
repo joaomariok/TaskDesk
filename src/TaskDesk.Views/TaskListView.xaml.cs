@@ -262,14 +262,14 @@ public sealed partial class TaskListView : UserControl
         }
     }
 
-    // A selected Subtask row that left the list (its Task closed, its Subtask deleted) handed the selection to its
-    // Task; a keyboard focus it held on a row goes to the Task's row too, not to whichever row took its place.
+    // A selected Subtask row handed the selection to its Task: its Task is closing and the row is about to leave the
+    // list (the focus may still be on it, or inside it), or its Subtask was deleted and the row has left. A keyboard
+    // focus it held goes to the Task's row once the rows have changed, not to whichever row took its place.
     private void FocusTaskAfterItsSubtaskRowWent(ITaskListRow? left)
     {
         if (left is not SubtaskListRowViewModel subtask || ViewModel.SelectedRow != subtask.TaskRow
-            || OpenTaskList.Items.Contains(subtask) || XamlRoot is not { } root
-            || FocusManager.GetFocusedElement(root) is not ListViewItem focused
-            || ItemsControl.ItemsControlFromItemContainer(focused) != OpenTaskList)
+            || XamlRoot is not { } root || RowContainerOf(FocusManager.GetFocusedElement(root)) is not { } focused
+            || (OpenTaskList.ItemFromContainer(focused) != subtask && OpenTaskList.Items.Contains(subtask)))
         {
             return;
         }
@@ -282,6 +282,22 @@ public sealed partial class TaskListView : UserControl
                 FocusRow(task, keepSubtaskRow: false);
             }
         });
+    }
+
+    // The Task list's row container that holds the focused element, the container itself or a control inside it
+    // (a row's checkbox or chevron); null when the focus is elsewhere.
+    private ListViewItem? RowContainerOf(object? focused)
+    {
+        var element = focused as DependencyObject;
+        for (; element is not null; element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is ListViewItem item)
+            {
+                return ItemsControl.ItemsControlFromItemContainer(item) == OpenTaskList ? item : null;
+            }
+        }
+
+        return null;
     }
 
     private void OnRowsChanged(IObservableVector<object> sender, IVectorChangedEventArgs e)

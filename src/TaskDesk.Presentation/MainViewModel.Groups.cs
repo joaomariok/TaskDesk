@@ -116,7 +116,26 @@ public sealed partial class MainViewModel
             }
         }
 
-        row.SetOpen(isOpen);
+        if (isOpen)
+        {
+            row.SetOpen(true);
+        }
+        else
+        {
+            Close(row);
+        }
+    }
+
+    // Closes a Task's Subtask rows. A selected Subtask row of it hands the selection to the Task first, while the
+    // row is still listed, so the list can move a keyboard focus it holds before its container goes.
+    private void Close(TaskRowViewModel row)
+    {
+        if (SelectedSubtaskRow?.TaskRow == row)
+        {
+            SelectedRow = row;
+        }
+
+        row.SetOpen(false);
     }
 
     // Called with the rows a load made: opens those matching through a Subtask title, and gives back the Tasks the
@@ -162,7 +181,7 @@ public sealed partial class MainViewModel
             return;
         }
 
-        row.SetOpen(false);
+        Close(row);
     }
 
     // The search ended: every Task it opened goes back to closed, and what the owner closed during it is forgotten.
