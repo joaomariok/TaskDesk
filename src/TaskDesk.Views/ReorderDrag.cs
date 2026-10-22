@@ -38,6 +38,12 @@ public interface IReorderDragHost
 
     /// <summary>Drops <paramref name="item"/> into the gap under <paramref name="at"/>.</summary>
     Task DropAsync(object item, Point at);
+
+    /// <summary>
+    /// Scrolls the list by <paramref name="dy"/> DIPs (negative is up), stopping at its ends. Returns false when it
+    /// is already at the end it would scroll towards.
+    /// </summary>
+    bool ScrollBy(double dy);
 }
 
 /// <summary>
@@ -46,17 +52,31 @@ public interface IReorderDragHost
 /// of the pressed rows, taken at the press, follows the pointer (also outside the window) with the press point
 /// under it, and the host's insertion line follows the gaps. A release over the list drops through the host; a
 /// release outside it, or <see cref="Cancel"/>, moves nothing. The rows and the selection are never touched.
+/// While the pointer is near the list's top or bottom edge, a timer on <paramref name="clock"/> scrolls the list
+/// (<see cref="DragRules.EdgeScrollSpeed"/>); the host calls <see cref="ListScrolled"/> when the list scrolls, so
+/// the line keeps to the gap under the pointer.
 /// </summary>
-public sealed partial class ReorderDrag(IReorderDragHost host)
+public sealed partial class ReorderDrag(IReorderDragHost host, TimeProvider clock)
 {
+    /// <summary>How often the edge-scroll timer steps.</summary>
+    public static readonly TimeSpan EdgeScrollInterval = TimeSpan.FromMilliseconds(10);
+
     /// <summary>The picture's opacity.</summary>
     public const double PictureOpacity = 0.8;
+
+    // One edge-scroll step covers at most this much time, so a stalled UI thread does not jump the list.
+    private static readonly TimeSpan MaxEdgeStep = TimeSpan.FromMilliseconds(250);
 
     private DragSubject? _subject;
     private Point _press;
     private Point _pressOffset;
     private Image? _image;
     private int _pressCount;
+    private Point _pointer;
+    private ITimer? _edgeTimer;
+    private long _lastEdgeFire;
+    private long _pendingEdgeTime;
+    private int _edgeStepQueued;
 
     /// <summary>True from the move past the threshold to the release or cancel.</summary>
     public bool IsDragging { get; private set; }
@@ -127,9 +147,79 @@ public sealed partial class ReorderDrag(IReorderDragHost host)
             LastPressDragged = true;
         }
 
+        _pointer = at;
         ShowPicture(at);
         host.ShowDragAt(at);
+        UpdateEdgeTimer();
         return true;
+    }
+
+    /// <summary>The list scrolled under the pointer: during a drag the line moves to the gap now under it.</summary>
+    public void ListScrolled()
+    {
+        if (IsDragging)
+        {
+            host.ShowDragAt(_pointer);
+        }
+    }
+
+    private double EdgeSpeed()
+    {
+        var surface = host.Surface;
+        return DragRules.EdgeScrollSpeed(_pointer.X, _pointer.Y, surface.ActualWidth, surface.ActualHeight);
+    }
+
+    // Runs while the pointer is in an edge band; stops outside it and when the drag ends. The clock's timer may fire
+    // off the UI thread: each fire adds its time to the pending step, and one step at a time runs on the UI thread.
+    private void UpdateEdgeTimer()
+    {
+        if (EdgeSpeed() == 0)
+        {
+            StopEdgeTimer();
+            return;
+        }
+
+        if (_edgeTimer is null)
+        {
+            Interlocked.Exchange(ref _lastEdgeFire, clock.GetTimestamp());
+            Interlocked.Exchange(ref _pendingEdgeTime, 0);
+            var ui = host.Surface.DispatcherQueue;
+            _edgeTimer = clock.CreateTimer(_ => OnEdgeTimer(ui), null, EdgeScrollInterval, EdgeScrollInterval);
+        }
+    }
+
+    private void StopEdgeTimer()
+    {
+        _edgeTimer?.Dispose();
+        _edgeTimer = null;
+    }
+
+    private void OnEdgeTimer(Microsoft.UI.Dispatching.DispatcherQueue ui)
+    {
+        var now = clock.GetTimestamp();
+        Interlocked.Add(ref _pendingEdgeTime, now - Interlocked.Exchange(ref _lastEdgeFire, now));
+        if (Interlocked.Exchange(ref _edgeStepQueued, 1) == 0 && !ui.TryEnqueue(EdgeStep))
+        {
+            Interlocked.Exchange(ref _edgeStepQueued, 0);
+        }
+    }
+
+    // Scrolls the list as far as the pointer's edge speed goes in the time since the last step.
+    private void EdgeStep()
+    {
+        Interlocked.Exchange(ref _edgeStepQueued, 0);
+        var elapsed = TimeSpan.FromSeconds(
+            (double)Interlocked.Exchange(ref _pendingEdgeTime, 0) / clock.TimestampFrequency);
+        if (_edgeTimer is null || !IsDragging || host.Surface.XamlRoot is null)
+        {
+            return;
+        }
+
+        var speed = EdgeSpeed();
+        if (speed != 0)
+        {
+            host.ScrollBy(speed * (elapsed < MaxEdgeStep ? elapsed : MaxEdgeStep).TotalSeconds);
+        }
     }
 
     /// <summary>
@@ -160,6 +250,7 @@ public sealed partial class ReorderDrag(IReorderDragHost host)
 
     private void End()
     {
+        StopEdgeTimer();
         if (IsDragging)
         {
             host.HideDragLine();

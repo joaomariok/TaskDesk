@@ -31,6 +31,9 @@ public sealed partial class MainViewModel(
     // Required, so a test can never arm a real timer by leaving the clock out.
     private readonly TimeProvider _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
+    /// <summary>The clock the view model's timers run on; the Task list's drag scrolls on it too.</summary>
+    public TimeProvider Clock => _clock;
+
     // Needed for Due edits and Smart Views only.
     private IDueService Due => dueService
         ?? throw new InvalidOperationException("No Due service was supplied.");

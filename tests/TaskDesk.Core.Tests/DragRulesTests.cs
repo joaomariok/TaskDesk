@@ -57,4 +57,27 @@ public class DragRulesTests
     [InlineData(100, 0.0)]
     public void A_faded_picture_fades_out_over_its_bottom_two_fifths(double y, double expected) =>
         Assert.Equal(expected, DragRules.FadeAlpha(y, height: 100), precision: 6);
+
+    // A list 200 px tall scrolls within 40 px of its top (up, negative) or bottom (down, positive) edge, at
+    // 800 DIPs a second on the edge, falling evenly to nothing at the band's inner side.
+    [Theory]
+    [InlineData(0, -800)]
+    [InlineData(10, -600)]
+    [InlineData(20, -400)]
+    [InlineData(40, 0)]
+    [InlineData(100, 0)]
+    [InlineData(160, 0)]
+    [InlineData(180, 400)]
+    [InlineData(190, 600)]
+    public void Near_an_edge_the_list_scrolls_faster_the_closer_the_pointer(double y, double expected) =>
+        Assert.Equal(expected, DragRules.EdgeScrollSpeed(50, y, width: 300, height: 200), precision: 6);
+
+    [Theory]
+    [InlineData(50, -1)]
+    [InlineData(50, 200)]
+    [InlineData(50, 230)]
+    [InlineData(-1, 5)]
+    [InlineData(300, 195)]
+    public void Outside_the_list_nothing_scrolls(double x, double y) =>
+        Assert.Equal(0, DragRules.EdgeScrollSpeed(x, y, width: 300, height: 200));
 }

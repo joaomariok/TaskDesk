@@ -36,6 +36,34 @@ public static class DragRules
     public static DragRelease ReleaseAt(double x, double y, double width, double height) =>
         ReorderGeometry.HasLeft(x, y, width, height) ? DragRelease.Cancel : DragRelease.Drop;
 
+    /// <summary>How far in from a list's top or bottom edge a drag scrolls it.</summary>
+    public const double EdgeScrollBand = 40;
+
+    /// <summary>How fast a drag scrolls a list with the pointer on its edge, in DIPs a second.</summary>
+    public const double EdgeScrollFullSpeed = 800;
+
+    /// <summary>
+    /// How fast a drag with the pointer at (<paramref name="x"/>, <paramref name="y"/>) scrolls a list of the given
+    /// size, in DIPs a second: negative (up) within <see cref="EdgeScrollBand"/> of its top edge, positive (down)
+    /// within it of its bottom edge, at <see cref="EdgeScrollFullSpeed"/> on the edge and falling evenly to nothing
+    /// at the band's inner side. Nothing scrolls elsewhere, outside the list included.
+    /// </summary>
+    public static double EdgeScrollSpeed(double x, double y, double width, double height)
+    {
+        if (ReorderGeometry.HasLeft(x, y, width, height))
+        {
+            return 0;
+        }
+
+        var fromTop = y;
+        var fromBottom = height - y;
+        return fromTop <= fromBottom
+            ? -Share(fromTop) * EdgeScrollFullSpeed
+            : Share(fromBottom) * EdgeScrollFullSpeed;
+
+        static double Share(double fromEdge) => Math.Max(0, 1 - (fromEdge / EdgeScrollBand));
+    }
+
     /// <summary>How many of a dragged block's <paramref name="rows"/> its picture shows.</summary>
     public static int PictureRows(int rows) => Math.Min(rows, PictureRowCap);
 
