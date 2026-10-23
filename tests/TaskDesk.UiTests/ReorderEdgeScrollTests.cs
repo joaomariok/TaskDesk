@@ -23,10 +23,18 @@ public sealed class ReorderEdgeScrollTests : IDisposable
         }
 
         _app.ResizeTo(900, 480);
-        var list = _app.Find(Ids.OpenTaskList).BoundingRectangle;
-        var release = new Point(list.Left + (list.Width / 2), list.Bottom - 3);
-        var under = titles.First(t => _app.FindRow(Ids.OpenTaskList, t)?.BoundingRectangle is { } r
-                                      && r.Top <= release.Y && release.Y < r.Bottom);
+        // The list lays out again after the resize: wait until a row covers the release point (#147).
+        var release = default(Point);
+        string? under = null;
+        AppSession.WaitUntil(() =>
+            {
+                var list = _app.Find(Ids.OpenTaskList).BoundingRectangle;
+                release = new Point(list.Left + (list.Width / 2), list.Bottom - 3);
+                under = titles.FirstOrDefault(t => _app.FindRow(Ids.OpenTaskList, t)?.BoundingRectangle is { } r
+                                                   && r.Top <= release.Y && release.Y < r.Bottom);
+                return under is not null;
+            },
+            () => $"No row covers the release point {release} near the list's bottom edge.");
 
         // Without scrolling, the drop would land next to the row under the pointer at the start.
         AppSession.DragSlowly(Centre("T01"), release);

@@ -281,8 +281,14 @@ public sealed class AppSession : IDisposable
     {
         var scale = GetDpiForWindow(Window.Properties.NativeWindowHandle.Value) / 96.0;
         Window.Patterns.Transform.Pattern.Resize(width * scale, height * scale);
-        WaitUntil(() => Math.Abs(Window.BoundingRectangle.Width - width * scale) < 4,
-            () => $"The window did not resize to {width} (is {Window.BoundingRectangle.Width / scale}).");
+        // Both sides: the window often already has the width, and returning on it alone left the height unchanged (#147).
+        // The window keeps its minimum size (MainWindow.MinimumWidth and MinimumHeight, 800 x 500).
+        var expectedWidth = Math.Max(width, 800) * scale;
+        var expectedHeight = Math.Max(height, 500) * scale;
+        WaitUntil(() => Math.Abs(Window.BoundingRectangle.Width - expectedWidth) < 4
+                        && Math.Abs(Window.BoundingRectangle.Height - expectedHeight) < 4,
+            () => $"The window did not resize to {width} x {height} "
+                  + $"(is {Window.BoundingRectangle.Width / scale} x {Window.BoundingRectangle.Height / scale}).");
     }
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -711,8 +717,7 @@ public sealed class AppSession : IDisposable
         start.Environment["TASKDESK_DATA_DIR"] = _dataDirectory;
         start.Environment.Remove("TASKDESK_SANDBOX");
         _app = Application.Launch(start);
-        Window = _app.GetMainWindow(_automation, TimeSpan.FromSeconds(20))
-                 ?? throw new InvalidOperationException("TaskDesk showed no main window.");
+        Window = WaitForMainWindow(_app);
         // Windows can refuse SetForeground while another app is in front, and the test's keys would then go to that
         // app. A click on the title bar is input, which always activates the window; the app still picks the element
         // that takes focus.
@@ -735,6 +740,57 @@ public sealed class AppSession : IDisposable
         // reaches the app and start-up focus stays tested.
         WaitUntil(() => FocusedAutomationId() == Ids.QuickAddBox,
             () => $"Start-up focus never reached quick add; it is on '{FocusedAutomationId()}' ({DescribeFocused()}).");
+    }
+
+    // A cold start on a busy CI runner can take well over 20 s (#147); a process that ended fails at once, with its
+    // exit code and the end of its log, so a crash is told apart from a slow start.
+    private static readonly TimeSpan MainWindowTimeout = TimeSpan.FromSeconds(60);
+
+    private Window WaitForMainWindow(Application app)
+    {
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < MainWindowTimeout)
+        {
+            if (app.HasExited)
+            {
+                throw new InvalidOperationException(
+                    $"TaskDesk exited with code 0x{app.ExitCode:X8} after {elapsed.Elapsed.TotalSeconds:0.0} s without showing "
+                    + $"its main window. Its log ends:{Environment.NewLine}{LogTail()}");
+            }
+
+            if (app.GetMainWindow(_automation, TimeSpan.FromSeconds(1)) is { } window)
+            {
+                return window;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"TaskDesk showed no main window in {MainWindowTimeout.TotalSeconds:0} s and is still running. Its log ends:"
+            + $"{Environment.NewLine}{LogTail()}");
+    }
+
+    // The last lines of the app's newest log in this session's data folder, without the database command noise.
+    private string LogTail()
+    {
+        try
+        {
+            var log = new DirectoryInfo(Path.Combine(_dataDirectory, "logs")).EnumerateFiles("*.log")
+                .OrderBy(f => f.LastWriteTimeUtc).LastOrDefault();
+            if (log is null)
+            {
+                return "(no log written)";
+            }
+
+            using var stream = new FileStream(log.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            var lines = reader.ReadToEnd().Split('\n')
+                .Where(l => l.Length > 0 && char.IsDigit(l[0]) && !l.Contains("Executed DbCommand", StringComparison.Ordinal));
+            return string.Join(Environment.NewLine, lines.TakeLast(15));
+        }
+        catch (IOException ex)
+        {
+            return $"(log unreadable: {ex.Message})";
+        }
     }
 
     internal static string AppPath()
