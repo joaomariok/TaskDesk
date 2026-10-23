@@ -98,17 +98,6 @@ public static class ReminderArguments
     public static IReadOnlyDictionary<string, string> OpenToday() =>
         new Dictionary<string, string> { [ActionKey] = OpenTodayValue };
 
-    /// <summary>The arguments that <see cref="Parse"/> reads back as <paramref name="activation"/>.</summary>
-    public static IReadOnlyDictionary<string, string> For(NotificationActivation activation) => activation.Action switch
-    {
-        ReminderAction.Open => Open(activation.TaskId),
-        ReminderAction.MarkDone => MarkDone(activation.TaskId),
-        ReminderAction.SnoozeShort => SnoozeShort(activation.TaskId),
-        ReminderAction.SnoozeLong => SnoozeLong(activation.TaskId),
-        ReminderAction.OpenToday => OpenToday(),
-        _ => throw new ArgumentOutOfRangeException(nameof(activation), activation.Action, "Unknown Reminder action."),
-    };
-
     /// <summary>The activation the arguments describe, or null when they are not a Reminder's.</summary>
     public static NotificationActivation? Parse(IEnumerable<KeyValuePair<string, string>> arguments)
     {

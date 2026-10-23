@@ -7,8 +7,8 @@ namespace TaskDesk.App.Shell;
 
 /// <summary>
 /// Brings every Reminder activation to <see cref="ReminderActivationHandler"/> on the UI thread: a click on a
-/// toast or tray balloon in the running app, the toast that launched it, and a later launch from a toast that the
-/// single-instance pipe forwards (on a background thread). A failed action is logged, never thrown.
+/// toast or tray balloon in the running app, and the toast that launched it. A failed action is logged, never
+/// thrown.
 /// </summary>
 /// <param name="runActivation">
 /// <see cref="ShellController.RunActivationAsync"/>: runs each activation that arrives in the running app with

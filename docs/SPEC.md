@@ -380,7 +380,7 @@ Settings are stored in `%LOCALAPPDATA%\TaskDesk\settings.json` (not in the datab
 
 ### 7.1 Single instance
 
-Only one TaskDesk process may run. Use a named `Mutex` (e.g., `Local\TaskDesk.SingleInstance`). If a second instance starts, it signals the first one (named pipe `TaskDesk.Activate`) to show and focus its main window, then exits. A second instance started with notification-activation arguments forwards those arguments through the same pipe.
+Only one TaskDesk process may run. Use a named `Mutex` (e.g., `Local\TaskDesk.SingleInstance`). If a second instance starts, it signals the first one (named pipe `TaskDesk.Activate`) to show and focus its main window, then exits. A toast click reaches the running instance directly through its notification registration. A second instance started by a toast click while the first one is still starting only brings that one forward: the click's action is not forwarded (an accepted race, #104).
 
 ### 7.2 Tray icon and lifetime
 

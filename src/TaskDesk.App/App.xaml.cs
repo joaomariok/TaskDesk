@@ -209,7 +209,7 @@ public partial class App : Application
         window.ViewModel.SettingsRequested += (_, _) => ShowSettings();
 
         // Rich notifications, or the tray balloon fallback with a banner explaining why (SPEC 7.3). Every
-        // Reminder activation (toast, balloon, a later launch from a toast) opens or acts on its Task.
+        // Reminder activation (toast, balloon, the toast that launched TaskDesk) opens or acts on its Task.
         var notifications = _host.Services.GetRequiredService<INotificationService>();
         if (notifications is NotificationDelivery delivery)
         {
