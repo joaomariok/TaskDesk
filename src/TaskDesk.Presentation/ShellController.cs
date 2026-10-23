@@ -47,12 +47,6 @@ public sealed class ShellController(
     public event Action? SettingsRequested;
 
     /// <summary>
-    /// Raised when a later launch was started by a click on a Reminder notification; the App hands it to
-    /// <see cref="ReminderActivationHandler"/>. May be raised on any thread.
-    /// </summary>
-    public event Action<NotificationActivation>? ActivationRequested;
-
-    /// <summary>
     /// Sets everything up in the process that owns the single-instance guard (<see cref="LaunchAsync"/> calls it): <see cref="LaunchGate"/> has claimed
     /// it and forwarded any launch that found another copy, so this only confirms ownership
     /// (<see cref="ISingleInstance.TryAcquire"/> keeps its first answer) and throws when the guard is held
@@ -371,8 +365,7 @@ public sealed class ShellController(
         singleInstance.Dispose();
     }
 
-    // A later launch: act on its Reminder notification click, or show the window unless it asked to stay
-    // minimized (a second auto-start, say).
+    // A later launch: show the window unless it asked to stay minimized (a second auto-start, say).
     private void OnSecondLaunch(IReadOnlyList<string> arguments)
     {
         if (_exiting)
@@ -381,11 +374,7 @@ public sealed class ShellController(
         }
 
         var launch = SecondLaunchArguments.Parse(arguments);
-        if (launch.Activation is { } activation)
-        {
-            ActivationRequested?.Invoke(activation);
-        }
-        else if (!launch.Minimized)
+        if (!launch.Minimized)
         {
             window.ShowAndFocus();
         }

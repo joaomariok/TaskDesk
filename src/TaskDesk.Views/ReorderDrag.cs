@@ -180,10 +180,11 @@ public sealed partial class ReorderDrag(IReorderDragHost host, MainViewModel own
         {
             image = await PictureOfAsync(subject.Rows);
         }
-        catch (COMException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            // A row that left the list (a reload, a Task saved or completed elsewhere) cannot be rendered. The press
-            // ends quietly: an exception here would escape the pointer handler and end the app.
+            // A row that left the list (a reload, a Task saved or completed elsewhere) cannot be rendered, and
+            // RenderAsync reports that as a COMException or, for E_INVALIDARG, an ArgumentException. Any failure of the
+            // picture ends the press quietly: an exception here would escape the pointer handler and end the app.
             if (press == _pressCount && ReferenceEquals(_subject, subject))
             {
                 End();

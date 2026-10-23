@@ -71,6 +71,70 @@ public sealed class DragPictureFailureTests
         }
     }
 
+    [UITestMethod]
+    public async Task A_picture_that_fails_with_a_non_COM_exception_ends_the_press_quietly()
+    {
+        using var db = new TempDatabase();
+        await db.Get<IDatabaseInitializer>().InitializeAsync(Ct);
+        foreach (var title in new[] { "A", "B", "C" })
+        {
+            await db.Get<ITaskService>().CreateTaskAsync(title, Ct);
+        }
+
+        var viewModel = new MainViewModel(
+            db.Get<ITaskService>(), db.Get<ITagService>(), db.Clock,
+            dueService: db.Get<IDueService>(), searchService: db.Get<ITaskSearchService>(),
+            listService: db.Get<IListService>());
+        var window = new MainWindow(viewModel);
+        window.Activate();
+        try
+        {
+            await viewModel.LoadAsync(Ct);
+            var list = VisualTree.Find<ListView>(window.View, "OpenTaskList");
+            await UiWait.UntilAsync(() => Shown(list).SequenceEqual(["A", "B", "C"]),
+                () => $"Rows were [{string.Join(", ", Shown(list))}].", Ct);
+
+            // The host's backing colour is read while the picture is composed, after the rows rendered. It fails the
+            // way a RenderAsync can (E_INVALIDARG surfaces as ArgumentException), which is not a COMException.
+            var drag = new ReorderDrag(new FailingPictureHost((IReorderDragHost)window.View.TaskList), viewModel);
+            var middle = Middle(Container(list, "A"), list);
+
+            await drag.PressAsync(new Point(30, middle));
+
+            Assert.IsFalse(drag.IsDragging, "No drag started.");
+            Assert.IsNull(drag.Picture, "No picture shows.");
+            Assert.IsNull(drag.Item, "The press ended.");
+            Assert.IsFalse(drag.Move(new Point(30, middle + 8)), "The pointer drags nothing.");
+            CollectionAssert.AreEqual(new[] { "A", "B", "C" }, await StoredOrderAsync(db));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // Delegates to the Task list, but its picture cannot be composed.
+    private sealed class FailingPictureHost(IReorderDragHost inner) : IReorderDragHost
+    {
+        public FrameworkElement Surface => inner.Surface;
+
+        public FrameworkElement Viewport => inner.Viewport;
+
+        public Windows.UI.Color PictureBacking => throw new ArgumentException("The picture cannot be composed.");
+
+        public DragSubject? SubjectAt(Point at) => inner.SubjectAt(at);
+
+        public Microsoft.UI.Xaml.Media.Brush LineFill => inner.LineFill;
+
+        public Rect? ShowDragAt(Point at) => inner.ShowDragAt(at);
+
+        public void HideDragLine() => inner.HideDragLine();
+
+        public Task DropAsync(object item, Point at) => inner.DropAsync(item, at);
+
+        public bool ScrollBy(double dy) => inner.ScrollBy(dy);
+    }
+
     private static double Middle(FrameworkElement row, UIElement list) =>
         row.TransformToVisual(list).TransformPoint(new Point(0, 0)).Y + (row.ActualHeight / 2);
 

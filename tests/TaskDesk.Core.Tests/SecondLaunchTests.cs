@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Shell;
 
 namespace TaskDesk.Core.Tests;
@@ -7,8 +6,6 @@ namespace TaskDesk.Core.Tests;
 public sealed class SecondLaunchTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
-
-    private static readonly Guid TaskId = Guid.Parse("0199f0a1-1111-7222-8333-444455556666");
 
     [Fact]
     public async Task A_message_round_trips_its_arguments_through_a_stream()
@@ -66,38 +63,13 @@ public sealed class SecondLaunchTests
         Assert.Empty(await SecondLaunchMessage.ReadAsync(stream, Ct));
     }
 
-    [Theory]
-    [InlineData(ReminderAction.Open)]
-    [InlineData(ReminderAction.MarkDone)]
-    [InlineData(ReminderAction.SnoozeShort)]
-    [InlineData(ReminderAction.SnoozeLong)]
-    public void A_toast_activation_is_forwarded_and_parsed_back(ReminderAction action)
-    {
-        var activation = new NotificationActivation(TaskId, action);
-
-        var parsed = SecondLaunchArguments.Parse(SecondLaunchArguments.Build(minimized: true, activation));
-
-        Assert.True(parsed.Minimized);
-        Assert.Equal(activation, parsed.Activation);
-    }
-
-    [Fact]
-    public void The_missed_Reminders_summary_activation_is_forwarded()
-    {
-        var parsed = SecondLaunchArguments.Parse(
-            SecondLaunchArguments.Build(minimized: false, NotificationActivation.OpenToday));
-
-        Assert.False(parsed.Minimized);
-        Assert.Equal(NotificationActivation.OpenToday, parsed.Activation);
-    }
-
     [Fact]
     public void A_plain_launch_forwards_nothing()
     {
-        var arguments = SecondLaunchArguments.Build(minimized: false, activation: null);
+        var arguments = SecondLaunchArguments.Build(minimized: false);
 
         Assert.Empty(arguments);
-        Assert.Equal(new SecondLaunch(false, null), SecondLaunchArguments.Parse(arguments));
+        Assert.Equal(new SecondLaunch(false), SecondLaunchArguments.Parse(arguments));
     }
 
     [Fact]
@@ -112,6 +84,6 @@ public sealed class SecondLaunchTests
         var parsed = SecondLaunchArguments.Parse(
             ["--reminder:action=done", "--reminder:taskId=not-a-guid", "--reminder:", "whatever"]);
 
-        Assert.Equal(new SecondLaunch(false, null), parsed);
+        Assert.Equal(new SecondLaunch(false), parsed);
     }
 }

@@ -16,9 +16,10 @@ public static class LaunchGate
     /// <c>--minimized</c> flag, releases the guard and returns <see cref="LaunchOutcome.ForwardAndEnd"/>; nothing is
     /// applied. A toast launch forwards without the toast's action, which is unknown before registration (an accepted
     /// race, spec #140). Otherwise applies a downloaded update (see <see cref="ApplyIfPending"/>, with
-    /// <paramref name="launchedByToast"/> from <see cref="IsToastLaunch"/>) and returns <see cref="LaunchOutcome.ApplyAndRestart"/>, or <see cref="LaunchOutcome.CarryOn"/> with the guard
-    /// held. A failed apply carries on, with the failure in <see cref="LaunchDecision.ApplyFailure"/> for the App to
-    /// log once its logger exists.
+    /// <paramref name="launchedByToast"/> from <see cref="IsToastLaunch"/>) and returns
+    /// <see cref="LaunchOutcome.ApplyAndRestart"/>, or <see cref="LaunchOutcome.CarryOn"/> with the guard held. A
+    /// failed apply carries on, with the failure in <see cref="LaunchDecision.ApplyFailure"/> for the App to log once
+    /// its logger exists.
     /// </summary>
     public static async Task<LaunchDecision> DecideAsync(
         ISingleInstance singleInstance,
@@ -34,7 +35,7 @@ public static class LaunchGate
         {
             var minimized = launchArguments.Contains(SecondLaunchArguments.MinimizedFlag, StringComparer.OrdinalIgnoreCase);
             await singleInstance.SignalExistingAsync(
-                SecondLaunchArguments.Build(minimized, activation: null), cancellationToken);
+                SecondLaunchArguments.Build(minimized), cancellationToken);
             singleInstance.Dispose();
             return new LaunchDecision(LaunchOutcome.ForwardAndEnd);
         }

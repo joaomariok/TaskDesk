@@ -75,39 +75,6 @@ public sealed class ReminderActivationTests
     }
 
     [UITestMethod]
-    public async Task A_later_launch_from_a_toast_reaches_the_running_instance_and_opens_its_Task()
-    {
-        using var db = await SystemHooksTests.DatabaseAsync();
-        await SystemHooksTests.AddAsync(db, "Book dentist");
-        var taskId = await SystemHooksTests.AddAsync(db, "Call the bank");
-        var names = SingleInstanceNames.For(db.Paths.DataDirectory);
-        var (window, shellWindow, router) = await OpenAsync(db);
-        var tray = new FakeTrayIcon();
-        using var shell = new ShellController(
-            tray, shellWindow, new NamedPipeSingleInstance(names),
-            new JsonShellSettingsStore(Path.Combine(db.Paths.DataDirectory, "settings.json")),
-            new AutoStartService(new FakeRunKey(), Sandbox), new FakeShutdown());
-        shell.ActivationRequested += router.Route;
-        try
-        {
-            Assert.IsTrue(await shell.StartAsync(minimized: true, exePath: "TaskDesk.App.exe", Ct));
-
-            using (var later = new NamedPipeSingleInstance(names))
-            {
-                Assert.IsFalse(later.TryAcquire());
-                await later.SignalExistingAsync(
-                    SecondLaunchArguments.Build(false, new NotificationActivation(taskId, ReminderAction.Open)), Ct);
-            }
-
-            await AssertPaneShowsAsync(window, shellWindow, "Call the bank");
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
-
-    [UITestMethod]
     public async Task Mark_done_from_the_toast_that_launched_the_app_is_kept_when_the_exit_starts()
     {
         using var db = await SystemHooksTests.DatabaseAsync();

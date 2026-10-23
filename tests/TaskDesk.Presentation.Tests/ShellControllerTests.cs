@@ -158,20 +158,6 @@ public sealed class ShellControllerTests
     }
 
     [Fact]
-    public async Task A_later_launch_from_a_Reminder_notification_raises_the_activation_without_showing_the_window()
-    {
-        var controller = await StartedAsync(minimized: true);
-        var activations = new List<NotificationActivation>();
-        controller.ActivationRequested += activations.Add;
-        var markDone = new NotificationActivation(Guid.NewGuid(), ReminderAction.MarkDone);
-
-        _single.OnSecondLaunch!(SecondLaunchArguments.Build(minimized: true, markDone));
-
-        Assert.Equal([markDone], activations);
-        Assert.False(_window.IsVisible);
-    }
-
-    [Fact]
     public async Task A_later_minimized_launch_leaves_the_window_hidden()
     {
         await StartedAsync(minimized: true);
@@ -187,17 +173,14 @@ public sealed class ShellControllerTests
     {
         var flush = new TaskCompletionSource();
         var controller = await LaunchedAsync(Parts(prepareWindow: () => flush.Task), minimized: true);
-        var activations = 0;
-        controller.ActivationRequested += _ => activations++;
         var exit = controller.ExitAsync();
 
         _single.OnSecondLaunch!([]);
-        _single.OnSecondLaunch!(SecondLaunchArguments.Build(false, NotificationActivation.OpenToday));
+        _single.OnSecondLaunch!(SecondLaunchArguments.Build(minimized: false));
         flush.SetResult();
         await exit;
 
         Assert.Equal(0, _window.FocusCount);
-        Assert.Equal(0, activations);
     }
 
     [Fact]

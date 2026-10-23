@@ -1,35 +1,26 @@
 using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json;
-using TaskDesk.Core.Reminders;
 
 namespace TaskDesk.Core.Shell;
 
 /// <summary>What a later launch asked the running instance to do (SPEC 7.1).</summary>
 /// <param name="Minimized">Started with <c>--minimized</c>: do not show the main window.</param>
-/// <param name="Activation">The Reminder notification click that launched it, or null.</param>
-public sealed record SecondLaunch(bool Minimized, NotificationActivation? Activation);
+public sealed record SecondLaunch(bool Minimized);
 
 /// <summary>
-/// The arguments a later launch forwards to the running instance: the <c>--minimized</c> flag and the Reminder
-/// notification activation, as <c>--reminder:key=value</c> entries read with <see cref="ReminderArguments.Parse"/>.
+/// The arguments a later launch forwards to the running instance: the <c>--minimized</c> flag.
 /// </summary>
 public static class SecondLaunchArguments
 {
     public const string MinimizedFlag = "--minimized";
-    private const string ReminderPrefix = "--reminder:";
 
-    public static IReadOnlyList<string> Build(bool minimized, NotificationActivation? activation)
+    public static IReadOnlyList<string> Build(bool minimized)
     {
         var arguments = new List<string>();
         if (minimized)
         {
             arguments.Add(MinimizedFlag);
-        }
-
-        if (activation is not null)
-        {
-            arguments.AddRange(ReminderArguments.For(activation).Select(kv => $"{ReminderPrefix}{kv.Key}={kv.Value}"));
         }
 
         return arguments;
@@ -39,21 +30,15 @@ public static class SecondLaunchArguments
     public static SecondLaunch Parse(IEnumerable<string> arguments)
     {
         var minimized = false;
-        var reminder = new List<KeyValuePair<string, string>>();
         foreach (var argument in arguments)
         {
             if (string.Equals(argument, MinimizedFlag, StringComparison.OrdinalIgnoreCase))
             {
                 minimized = true;
             }
-            else if (argument.StartsWith(ReminderPrefix, StringComparison.Ordinal)
-                && argument[ReminderPrefix.Length..].Split('=', 2) is [var key, var value])
-            {
-                reminder.Add(new(key, value));
-            }
         }
 
-        return new SecondLaunch(minimized, reminder.Count == 0 ? null : ReminderArguments.Parse(reminder));
+        return new SecondLaunch(minimized);
     }
 }
 

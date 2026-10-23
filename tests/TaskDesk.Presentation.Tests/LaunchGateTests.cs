@@ -163,7 +163,7 @@ public class LaunchGateTests
 
         await DecideAsync(Pending(version: null), [SecondLaunchArguments.MinimizedFlag], launchedByToast: true);
 
-        Assert.Equal(new SecondLaunch(true, null), SecondLaunchArguments.Parse(Assert.Single(_single.Signals)));
+        Assert.Equal(new SecondLaunch(true), SecondLaunchArguments.Parse(Assert.Single(_single.Signals)));
     }
 
     [Fact]

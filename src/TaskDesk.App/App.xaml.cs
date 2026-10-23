@@ -219,9 +219,8 @@ public partial class App : Application
 
         var activations = _host.Services.GetRequiredService<ReminderActivationRouter>();
         activations.Attach(notifications);
-        shell.ActivationRequested += activations.Route;
         notifications.Register();
-        // Read again after registration, which delivers a launching toast's arguments (#99).
+        // Read after registration, which delivers a launching toast's arguments (#99).
         var launch = notifications.GetLaunchActivation();
 
         // Launched by "Mark done" or a Snooze button on a toast: act without opening the window.
