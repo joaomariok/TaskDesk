@@ -89,6 +89,23 @@ public sealed partial class InstallerGuardrailTests
         Assert.True(gate < host, "LaunchGate.DecideAsync is not called before the host is built.");
     }
 
+    // A toast launch that reads the activation's data before notifications are registered fail-fasts in the Windows
+    // App SDK runtime (#142, #104): the launch gate learns of a toast launch from the command line instead, and the
+    // toast's action is read only after registration.
+    [Theory]
+    [InlineData("ReadLaunchActivation(")]
+    [InlineData("GetActivatedEventArgs(")]
+    [InlineData("GetLaunchActivation(")]
+    public void App_does_not_read_the_toast_s_data_before_the_launch_gate(string read)
+    {
+        var app = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "TaskDesk.App", "App.xaml.cs"));
+        var gate = app.IndexOf("LaunchGate.DecideAsync(", StringComparison.Ordinal);
+        var first = app.IndexOf(read, StringComparison.Ordinal);
+
+        Assert.True(gate >= 0, "App.xaml.cs does not ask the launch gate.");
+        Assert.True(first < 0 || first > gate, $"App.xaml.cs calls {read} before LaunchGate.DecideAsync.");
+    }
+
     [GeneratedRegex(@"\$OutputDir\s*=\s*Join-Path\s+\$repoRoot\s+'(?<value>[^']+)'")]
     private static partial Regex DefaultOutputDir();
 

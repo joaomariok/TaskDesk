@@ -14,9 +14,9 @@ public class LaunchGateTests
     private readonly FakeSingleInstance _single = new();
 
     private Task<LaunchDecision> DecideAsync(
-        FakeAppUpdates updates, IReadOnlyList<string> launchArguments, NotificationActivation? launchActivation = null) =>
+        FakeAppUpdates updates, IReadOnlyList<string> launchArguments, bool launchedByToast = false) =>
         LaunchGate.DecideAsync(
-            _single, updates, RuntimeMode.Normal, launchArguments, launchActivation, TestContext.Current.CancellationToken);
+            _single, updates, RuntimeMode.Normal, launchArguments, launchedByToast, TestContext.Current.CancellationToken);
 
     private static FakeAppUpdates Pending(string? version = "1.1.0", bool installed = true) =>
         new() { IsInstalled = installed, DownloadedVersion = version };
@@ -135,7 +135,7 @@ public class LaunchGateTests
         _single.IsFirst = false;
         var updates = Pending();
 
-        var decision = await DecideAsync(updates, [], NotificationActivation.OpenToday);
+        var decision = await DecideAsync(updates, [], launchedByToast: true);
 
         Assert.Equal(LaunchOutcome.ForwardAndEnd, decision.Outcome);
         Assert.Equal(0, updates.Restarts);
@@ -154,15 +154,16 @@ public class LaunchGateTests
         Assert.Null(decision.ApplyFailure);
     }
 
+    // The toast's action is known only after registration, which a forwarding launch never reaches: the accepted
+    // race of spec #140 (#104). The running copy comes forward; the action is not carried.
     [Fact]
-    public async Task Forwarding_carries_the_minimized_flag_and_the_toast_activation()
+    public async Task Forwarding_a_toast_launch_carries_the_minimized_flag_without_the_toast_s_action()
     {
         _single.IsFirst = false;
-        var markDone = new NotificationActivation(Guid.NewGuid(), ReminderAction.MarkDone);
 
-        await DecideAsync(Pending(version: null), [SecondLaunchArguments.MinimizedFlag], markDone);
+        await DecideAsync(Pending(version: null), [SecondLaunchArguments.MinimizedFlag], launchedByToast: true);
 
-        Assert.Equal(new SecondLaunch(true, markDone), SecondLaunchArguments.Parse(Assert.Single(_single.Signals)));
+        Assert.Equal(new SecondLaunch(true, null), SecondLaunchArguments.Parse(Assert.Single(_single.Signals)));
     }
 
     [Fact]
@@ -206,10 +207,34 @@ public class LaunchGateTests
     {
         var updates = Pending();
 
-        var decision = await DecideAsync(updates, [], NotificationActivation.OpenToday);
+        var decision = await DecideAsync(updates, [], launchedByToast: true);
 
         Assert.Equal(LaunchOutcome.CarryOn, decision.Outcome);
         Assert.Equal(0, updates.Restarts);
+    }
+
+    // A toast's COM activator starts the process with "<exe>" ----AppNotificationActivated: (Windows App SDK 1.8,
+    // AppNotificationUtility.cpp RegisterComServer); COM appends -Embedding to a local server's command line.
+    [Theory]
+    [InlineData(@"""C:\TaskDesk\TaskDesk.App.exe"" ----AppNotificationActivated:")]
+    [InlineData(@"""C:\TaskDesk\TaskDesk.App.exe"" ----AppNotificationActivated: -Embedding")]
+    [InlineData(@"""C:\TaskDesk\TaskDesk.App.exe"" --minimized ----AppNotificationActivated: -Embedding")]
+    [InlineData(@"""C:\TaskDesk\TaskDesk.App.exe"" ----AppNotificationActivated: --restarted-by-updater")]
+    public void A_command_line_with_the_toast_marker_is_a_toast_launch(string commandLine)
+    {
+        Assert.True(LaunchGate.IsToastLaunch(commandLine));
+    }
+
+    [Theory]
+    [InlineData(@"""C:\TaskDesk\TaskDesk.App.exe""")]
+    [InlineData(@"""C:\TaskDesk\TaskDesk.App.exe"" --minimized")]
+    [InlineData(@"""C:\TaskDesk\TaskDesk.App.exe"" --restarted-by-updater")]
+    [InlineData(@"""C:\TaskDesk\TaskDesk.App.exe"" --minimized --restarted-by-updater")]
+    [InlineData(@"""C:\TaskDesk\TaskDesk.App.exe"" -Embedding")]
+    [InlineData("")]
+    public void A_command_line_without_the_toast_marker_is_not_a_toast_launch(string commandLine)
+    {
+        Assert.False(LaunchGate.IsToastLaunch(commandLine));
     }
 
     [Fact]

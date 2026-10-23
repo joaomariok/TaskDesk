@@ -1,5 +1,4 @@
 using TaskDesk.Core.Paths;
-using TaskDesk.Core.Reminders;
 using TaskDesk.Core.Shell;
 
 namespace TaskDesk.Presentation;
@@ -14,10 +13,10 @@ public static class LaunchGate
 {
     /// <summary>
     /// Claims <paramref name="singleInstance"/>. When another copy holds it, signals that copy with the launch's
-    /// <c>--minimized</c> flag and <paramref name="launchActivation"/>, releases the guard and returns
-    /// <see cref="LaunchOutcome.ForwardAndEnd"/>; nothing is applied. Otherwise applies a downloaded update (see
-    /// <see cref="ApplyIfPending"/>; a non-null <paramref name="launchActivation"/> is a launch by a toast) and
-    /// returns <see cref="LaunchOutcome.ApplyAndRestart"/>, or <see cref="LaunchOutcome.CarryOn"/> with the guard
+    /// <c>--minimized</c> flag, releases the guard and returns <see cref="LaunchOutcome.ForwardAndEnd"/>; nothing is
+    /// applied. A toast launch forwards without the toast's action, which is unknown before registration (an accepted
+    /// race, spec #140). Otherwise applies a downloaded update (see <see cref="ApplyIfPending"/>, with
+    /// <paramref name="launchedByToast"/> from <see cref="IsToastLaunch"/>) and returns <see cref="LaunchOutcome.ApplyAndRestart"/>, or <see cref="LaunchOutcome.CarryOn"/> with the guard
     /// held. A failed apply carries on, with the failure in <see cref="LaunchDecision.ApplyFailure"/> for the App to
     /// log once its logger exists.
     /// </summary>
@@ -26,7 +25,7 @@ public static class LaunchGate
         IAppUpdates updates,
         RuntimeMode mode,
         IReadOnlyList<string> launchArguments,
-        NotificationActivation? launchActivation,
+        bool launchedByToast,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(singleInstance);
@@ -35,14 +34,14 @@ public static class LaunchGate
         {
             var minimized = launchArguments.Contains(SecondLaunchArguments.MinimizedFlag, StringComparer.OrdinalIgnoreCase);
             await singleInstance.SignalExistingAsync(
-                SecondLaunchArguments.Build(minimized, launchActivation), cancellationToken);
+                SecondLaunchArguments.Build(minimized, activation: null), cancellationToken);
             singleInstance.Dispose();
             return new LaunchDecision(LaunchOutcome.ForwardAndEnd);
         }
 
         try
         {
-            return ApplyIfPending(updates, mode, launchActivation is not null, launchArguments)
+            return ApplyIfPending(updates, mode, launchedByToast, launchArguments)
                 ? new LaunchDecision(LaunchOutcome.ApplyAndRestart)
                 : new LaunchDecision(LaunchOutcome.CarryOn);
         }
@@ -61,6 +60,24 @@ public static class LaunchGate
     /// again without applying (<see cref="ShellController.RestartToUpdateAsync"/>).
     /// </summary>
     public const string RestartedFlag = "--restarted-by-updater";
+
+    /// <summary>
+    /// What the Windows App SDK 1.8 runtime puts on the command line of a process a toast click starts: its COM
+    /// activator for toasts is registered as <c>"&lt;exe&gt;" ----AppNotificationActivated:</c>, and the runtime itself
+    /// looks for this string to tell a toast launch apart (#104).
+    /// </summary>
+    public const string ToastLaunchMarker = " ----AppNotificationActivated:";
+
+    /// <summary>
+    /// Whether a toast click started this process, from its raw <paramref name="commandLine"/>. Unlike reading the
+    /// activation's data, this is safe before notifications are registered: in a toast launch that read waits on an
+    /// event registration creates, and the runtime fail-fasts (#104).
+    /// </summary>
+    public static bool IsToastLaunch(string commandLine)
+    {
+        ArgumentNullException.ThrowIfNull(commandLine);
+        return commandLine.Contains(ToastLaunchMarker, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// The arguments the updater restarts the app with: <paramref name="launchArguments"/>, then

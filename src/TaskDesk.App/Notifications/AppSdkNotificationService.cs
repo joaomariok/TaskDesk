@@ -43,12 +43,12 @@ internal sealed class AppSdkNotificationService(ILogger<AppSdkNotificationServic
     public NotificationActivation? GetLaunchActivation() => ReadLaunchActivation();
 
     /// <summary>
-    /// The Reminder toast click that launched this process, or null. Needs no instance: the App reads it at the top
-    /// of start-up, before registration, for the launch gate. A toast's arguments reach a process it launched through
-    /// the COM activator that <see cref="Register"/> sets up, so only a read after registration is sure to see them
-    /// (#99).
+    /// The Reminder toast click that launched this process, or null. Read only after <see cref="Register"/>: a toast's
+    /// arguments reach the process it launched through the COM activator that registration sets up, and in a toast
+    /// launch a read before it fail-fasts in the Windows App SDK runtime, which waits on an event that registration
+    /// creates (#99, #104). The launch gate learns of a toast launch from the command line instead.
     /// </summary>
-    public static NotificationActivation? ReadLaunchActivation()
+    private static NotificationActivation? ReadLaunchActivation()
     {
         var activation = AppInstance.GetCurrent().GetActivatedEventArgs();
         return activation.Kind == ExtendedActivationKind.AppNotification

@@ -47,10 +47,9 @@ public partial class App : Application
         var arguments = Environment.GetCommandLineArgs();
         var minimizedFlag = arguments.Contains(SecondLaunchArguments.MinimizedFlag, StringComparer.OrdinalIgnoreCase);
         var mode = RuntimeMode.FromEnvironment();
-        // The Reminder toast click that launched this process, read before registration for the launch gate (to
-        // forward it, and for the "launched by a toast" condition). The launch's Mark done or Snooze reads it again
-        // after registration: see ReadLaunchActivation.
-        var gateActivation = mode.RegistersNotifications ? ReadLaunchActivation() : null;
+        // Whether a toast click started this process, from the command line: reading the toast's data before
+        // registration fail-fasts in the Windows App SDK runtime (#104). The toast's action is read after registration.
+        var launchedByToast = LaunchGate.IsToastLaunch(Environment.CommandLine);
 
         // Before any expensive start-up work: forward to a running copy and end, or apply an update downloaded by an
         // earlier run and restart (ADR 0005), or carry on owning the instance. A failed apply is logged once the
@@ -59,7 +58,7 @@ public partial class App : Application
             SingleInstanceNames.For(Environment.GetEnvironmentVariable(AppPaths.DataDirectoryVariable)));
         var appUpdates = new VelopackAppUpdates();
         var decision = await LaunchGate.DecideAsync(
-            singleInstance, appUpdates, mode, arguments[1..], gateActivation, CancellationToken.None);
+            singleInstance, appUpdates, mode, arguments[1..], launchedByToast, CancellationToken.None);
         if (decision.Outcome != LaunchOutcome.CarryOn)
         {
             // The gate released the guard after forwarding; a successful apply never returns here.
@@ -307,21 +306,6 @@ public partial class App : Application
                 updates.Start();
             },
         });
-    }
-
-    // The Reminder toast click that launched this process. Windows App SDK 1.8 hands a toast's arguments to the
-    // process it launched only through the COM activator that registration sets up, so this read, before
-    // registration, can miss them; the launch's own read stays after registration (#99).
-    private static NotificationActivation? ReadLaunchActivation()
-    {
-        try
-        {
-            return AppSdkNotificationService.ReadLaunchActivation();
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            return null; // no Windows App SDK runtime: there was no toast to forward
-        }
     }
 
     private QuickAddWindow? _quickAddWindow;
